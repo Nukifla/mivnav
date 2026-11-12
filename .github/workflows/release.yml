@@ -1,0 +1,116 @@
+# Build and publish a release when a `v*` tag is pushed (see deploy/README.md,
+# "Cutting a release"):
+#
+#   frontend  bun build of the web UI, once (plain JS — no arch)
+#   wheel     the chartcore wheel per arch, in debian:bookworm so it links
+#             against the glibc Raspberry Pi OS / OpenPlotter Bookworm has;
+#             abi3, so one wheel per arch serves any CPython >= 3.12
+#   release   one bundle per arch (deploy/build-bundle.sh), SHA256SUMS, and a
+#             GitHub Release with those + deploy/install.sh as `install.sh`
+#             (a pre-release when the tag contains `-`, e.g. v0.2.0-rc.1)
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - name: Build the web UI
+        working-directory: frontend
+        run: |
+          bun install --frozen-lockfile
+          bun run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+          if-no-files-found: error
+
+  wheel:
+    strategy:
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    container: debian:bookworm
+    steps:
+      - name: Build toolchain (C compiler, rustup, uv)
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            build-essential pkg-config curl ca-certificates git
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+            | sh -s -- -y --default-toolchain stable --profile minimal
+          curl --proto '=https' --tlsv1.2 -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - uses: actions/checkout@v4
+      - name: Build the chartcore wheel
+        working-directory: chartcore
+        run: uv build --wheel -o "$GITHUB_WORKSPACE/wheelhouse"
+      - name: Check the wheel (abi3, right arch, imports on Python 3.12)
+        run: |
+          set -eu
+          ls -l wheelhouse
+          whl="$(ls wheelhouse/chartcore-*.whl)"
+          case "$whl" in
+            *-abi3-*${{ matrix.arch }}.whl) ;;
+            *) echo "unexpected wheel name: $whl" >&2; exit 1 ;;
+          esac
+          uv run --isolated --no-project --python 3.12 --with "$whl" \
+            python -c 'import chartcore; print("chartcore imports:", chartcore.__file__)'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-${{ matrix.arch }}
+          path: wheelhouse/*.whl
+          if-no-files-found: error
+
+  release:
+    needs: [frontend, wheel]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # release-notes.sh needs history + tags
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Bundle per arch + SHA256SUMS
+        run: |
+          set -eu
+          version="${GITHUB_REF_NAME#v}"
+          mkdir -p out
+          for arch in x86_64 aarch64; do
+            deploy/build-bundle.sh "$version" "$arch" artifacts/wheel-"$arch"/chartcore-*.whl \
+              artifacts/frontend-dist out
+          done
+          (cd out && sha256sum mivnav-*.tar.gz > SHA256SUMS && cat SHA256SUMS)
+          cp deploy/install.sh out/install.sh
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          pre=""
+          case "$GITHUB_REF_NAME" in *-*) pre="--prerelease" ;; esac
+          # actions/checkout fetches a lightweight copy of the tag; refetch it
+          # so an annotated tag's message is there for the summary.
+          git fetch --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
+          deploy/release-notes.sh "$GITHUB_REF_NAME" "$GITHUB_REPOSITORY" > notes.md
+          cat notes.md
+          gh release create "$GITHUB_REF_NAME" out/* \
+            --repo "$GITHUB_REPOSITORY" --verify-tag --notes-file notes.md \
+            --title "mivnav $GITHUB_REF_NAME" $pre

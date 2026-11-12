@@ -1,0 +1,17 @@
+Trimmed recordings of real answers from the Danish Maritime Authority's
+Niord server (https://niord.dma.dk, data owner Beredskabsstyrelsen),
+fetched 2026-10-03. Public notices to mariners; used as test input only.
+
+messages.json            GET /rest/public/v1/messages (no lang -> da+en),
+                         9 of the 277 messages: point (Local Warning-224-26),
+                         multipoint (NM-403-25), coast-bounded open line
+                         (NM-842-26), polygon (NM-879-26), firing exercise
+                         with SIGNALS masts (EK D 396, no shortId), Greenland
+                         (NM-887-26), no geometry (NM-245-25), attachments +
+                         references (NM-053-26), categories (NW-375-26).
+fa.json                  ?domain=niord-fa, EK D 396 and EK R 18 only.
+almanac.json, annex.json ?domain=niord-almanac / niord-annex, one each.
+periods_2026-10-03.json  /rest/firing-schedules/search-firing-area-periods
+                         ?date=<epoch ms>&lang=da, three areas, the parent
+                         chain's coastline geometry removed.
+message_NM-567-25.json   /rest/public/v1/message/NM-567-25 (CANCELLED).

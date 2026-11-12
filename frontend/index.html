@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- viewport-fit=cover: draw under the notch/home indicator, then hold
+         the chrome clear of them with the safe-area insets (index.css).
+         interactive-widget=resizes-content: without it, Chrome defaults to
+         resizes-visual — the Android soft keyboard shrinks only the VISUAL
+         viewport, so index.css's `body { position: fixed; inset: 0 }` full-
+         bleed lock (sized to the unshrunk LAYOUT viewport) stays taller than
+         what's now visible, and the UI becomes scrollable behind the
+         keyboard. resizes-content shrinks the layout viewport itself, so
+         that same `inset: 0` lock shrinks with it instead. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content"
+    />
+    <!-- PWA. The manifest + icons are injected by vite-plugin-pwa at build.
+
+         NO theme-color, on purpose. An opaque theme-color paints the OS status
+         bar a solid slab (it was --color-accent blue), which sat OVER the chart
+         instead of letting it run edge-to-edge. theme-color's alpha is ignored
+         by browsers, so it can never be transparent, and no single opaque value
+         can track a chart that shifts day→dusk→night — so the honest answer is
+         to declare none and let the platform draw the content behind the bar:
+           - iOS: `black-translucent` below makes the status bar fully
+             transparent and shifts the web view up under it — the chart shows
+             through (this already worked; viewport-fit=cover is set above).
+           - Android: with no opaque theme-color, recent Chrome / Android 15+
+             renders the installed PWA edge-to-edge — the chart draws under a
+             thin translucent system scrim, matching iOS as closely as the OS
+             allows. Older Android falls back to a neutral system bar rather
+             than the fixed blue; either way the accent slab is gone.
+         The chrome holds itself clear of the bar with env(safe-area-inset-top)
+         (TopBand.tsx, index.css), so a transparent bar hides no widgets. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="mivnav" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <title>mivnav</title>
+  </head>
+  <body>
+    <!-- BOOT SPLASH: plain HTML + inline CSS so it paints on the very first
+         frame, before any JS or theme CSS. Styled like the chrome (tokens,
+         mono caps labels, accent hairline). Its colours are the chrome
+         tokens of the palette the app LAST ran in, cached by
+         src/core/splash.ts `rememberSplashColors` and applied by the script
+         below — the real tokens aren't available this early, and a night
+         crew must not get a day-white first frame. First-ever boot falls
+         back to the day values. Removed by `dismissSplash`. -->
+    <style>
+      #boot-splash {
+        position: fixed; inset: 0; z-index: 2147483647;
+        display: flex; align-items: center; justify-content: center;
+        background: var(--splash-chrome-2, #f1f5f9);
+        color: var(--splash-fg, #0f172a);
+        font-family: ui-sans-serif, system-ui, sans-serif;
+        transition: opacity 300ms cubic-bezier(0.32, 0.72, 0, 1);
+      }
+      #boot-splash.boot-splash-done { opacity: 0; pointer-events: none; }
+      #boot-splash .boot-splash-card {
+        display: flex; flex-direction: column; align-items: center; gap: 14px;
+        box-sizing: border-box; width: 280px; max-width: calc(100vw - 32px); padding: 22px 20px 18px;
+        background: var(--splash-chrome, #ffffff);
+        border: 1px solid var(--splash-line, #d7dee7);
+        border-radius: 12px;
+        box-shadow: 0 8px 24px var(--splash-shadow, #0f172a2e);
+      }
+      #boot-splash .boot-splash-head { display: flex; align-items: center; gap: 8px; }
+      #boot-splash .boot-splash-head svg { color: var(--splash-accent, #0284c7); }
+      #boot-splash .boot-splash-name { font-size: 17px; font-weight: 600; letter-spacing: 0.01em; }
+      #boot-splash .boot-splash-bar {
+        position: relative; width: 100%; height: 2px; overflow: hidden; border-radius: 1px;
+        background: var(--splash-line-2, #e8edf3);
+      }
+      #boot-splash .boot-splash-bar::after {
+        content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 35%;
+        background: var(--splash-accent, #0284c7);
+        animation: boot-splash-slide 1.2s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+      }
+      @keyframes boot-splash-slide { from { transform: translateX(-100%); } to { transform: translateX(290%); } }
+      @media (prefers-reduced-motion: reduce) {
+        #boot-splash .boot-splash-bar::after { animation-duration: 3s; }
+      }
+      #boot-splash-status {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+        font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+        color: var(--splash-fg-2, #64748b);
+        text-align: center;
+      }
+      #boot-splash-detail {
+        margin-top: -8px; max-width: 100%; overflow-wrap: anywhere;
+        font-size: 11px; line-height: 1.35; text-align: center;
+        color: var(--splash-fg-2, #64748b);
+      }
+      /* A fault: nothing is progressing, so nothing may look like it is. */
+      #boot-splash.boot-splash-fault .boot-splash-bar { display: none; }
+      #boot-splash.boot-splash-fault #boot-splash-status {
+        font-size: 12px; color: var(--splash-notice, #b45309);
+      }
+      #boot-splash.boot-splash-fault #boot-splash-detail { font-size: 12px; }
+      #boot-splash .boot-splash-actions { display: none; gap: 8px; width: 100%; }
+      #boot-splash.boot-splash-fault .boot-splash-actions { display: flex; }
+      #boot-splash .boot-splash-actions button {
+        flex: 1; min-height: 40px; padding: 0 10px; border-radius: 8px;
+        font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+        color: var(--splash-fg, #0f172a); background: transparent;
+        border: 1px solid var(--splash-line, #d7dee7);
+      }
+      #boot-splash .boot-splash-actions #boot-splash-retry {
+        color: var(--splash-chrome, #ffffff); background: var(--splash-accent, #0284c7);
+        border-color: var(--splash-accent, #0284c7);
+      }
+    </style>
+    <div id="boot-splash" role="status" aria-live="polite">
+      <div class="boot-splash-card">
+        <div class="boot-splash-head">
+          <!-- lucide "locate-fixed", the follow-boat glyph -->
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="2" x2="5" y1="12" y2="12"/><line x1="19" x2="22" y1="12" y2="12"/><line x1="12" x2="12" y1="2" y2="5"/><line x1="12" x2="12" y1="19" y2="22"/><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="3"/></svg>
+          <span class="boot-splash-name">mivnav</span>
+        </div>
+        <div class="boot-splash-bar" aria-hidden="true"></div>
+        <div id="boot-splash-status">Loading app…</div>
+        <div id="boot-splash-detail" hidden></div>
+        <div class="boot-splash-actions">
+          <button id="boot-splash-retry" type="button">Try again</button>
+          <button id="boot-splash-open" type="button">Open anyway</button>
+        </div>
+      </div>
+    </div>
+    <script>
+      // Paint the splash in the last-used palette (see the comment above).
+      try {
+        var c = JSON.parse(localStorage.getItem("mivnav.splashColors") || "null");
+        if (c) {
+          var r = document.documentElement.style;
+          for (var k in c) if (/^[a-z0-9-]+$/.test(k) && typeof c[k] === "string") r.setProperty("--splash-" + k, c[k]);
+          if (c.scheme) r.colorScheme = c.scheme;
+        }
+      } catch (e) {}
+      // Before the app's JS runs, only this page can say what's wrong: a
+      // script that fails to load (no server, nothing cached by the service
+      // worker) would otherwise leave "Loading app…" up forever. The app
+      // takes over the status line (core/splash.ts) once it runs, and sets
+      // `__mivnavBooted` so these stand down.
+      (function () {
+        function say(text, detail, failed) {
+          if (window.__mivnavBooted) return;
+          var s = document.getElementById("boot-splash-status");
+          var d = document.getElementById("boot-splash-detail");
+          if (s) s.textContent = text;
+          if (d) { d.textContent = detail; d.hidden = !detail; }
+          if (failed) {
+            // No app to open: "Open anyway" has nothing behind it here.
+            document.getElementById("boot-splash").classList.add("boot-splash-fault");
+            document.getElementById("boot-splash-open").hidden = true;
+            document.getElementById("boot-splash-retry").onclick = function () { location.reload(); };
+          }
+        }
+        window.addEventListener("error", function (e) {
+          var t = e.target;
+          if (t && (t.tagName === "SCRIPT" || (t.tagName === "LINK" && t.rel === "modulepreload")))
+            say("Couldn't load the app", "Can't reach the server. Are you on the boat's network? If so, check it's running.", true);
+        }, true);
+        setTimeout(function () { say("Still loading the app…", "The server is slow to answer."); }, 8000);
+      })();
+    </script>
+    <div id="root"></div>
+    <script type="module" src="/src/index.tsx"></script>
+  </body>
+</html>

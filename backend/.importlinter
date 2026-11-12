@@ -1,0 +1,205 @@
+[importlinter]
+root_package = mivnav
+# Encode the module-dependency chain so the kernel can't grow a dependency on a
+# feature. Three layers:
+#   kernel      — config, charts, rescan, geo, search, ingest (the generic
+#                 background-job spine + shared BBox type — see
+#                 mivnav.ingest.runner's docstring for why this is kernel and
+#                 not a feature since the Feature-abstraction restructuring),
+#                 feature (the Feature/FeatureCtx/DataProvider vocabulary
+#                 every feature's own runtime.py/provider.py builds against),
+#                 sidecar (the atomic-write/slug/read-with-fallback mechanics
+#                 POI's and satellite's own sidecar.py share — see that
+#                 module's docstring for why it is kernel, mirroring rescan),
+#                 system (the server's own version + release-updater
+#                 mechanics; no data provider, so not a feature)
+#   features    — mivnav.features.{poi,satellite,ocharts,weather,autopilot,
+#                 route,routing} (each self-contained: store/service lifecycle,
+#                 routes + its one Feature registration, ingest runner where
+#                 bakeable — see mivnav.feature; a config schema too, EXCEPT
+#                 autopilot, which owns no config fields of its own — see
+#                 mivnav.features.autopilot's module docstring), plus signalk
+#                 and mivnav.autopilot (now just the read-state half,
+#                 mivnav.autopilot.model — the write half moved to
+#                 mivnav.features.autopilot.client), and mivnav.collision
+#                 (the server-side CPA watch: an assessment hooked into the
+#                 signalk snapshot plus a publisher; see its docstring).
+#                 ``route`` folds in what
+#                 used to be mivnav.nav (the write/auto-advance half),
+#                 mivnav.api.routes (the HTTP surface) and mivnav.config.routes
+#                 (the store) — this was the one gap this restructuring left
+#                 unclosed, and it no longer is; see
+#                 mivnav.features.route's module docstring. Its STORE
+#                 (RouteStore) is the one exception to "each feature owns its
+#                 own runtime.py lifecycle": it stays constructor-injected on
+#                 Runtime, same as mivnav.config.profiles.ProfileStore, never
+#                 built through build_runtime — see
+#                 mivnav.features.route.store's docstring for why.
+#                 ``themes`` is the second config-less feature after
+#                 autopilot: it owns no config.py (so no
+#                 `config.model -> features.themes.config` exception below),
+#                 only package data under its own data/ plus a
+#                 config_home()/themes/ shadow — see that package's module
+#                 docstring.
+#   composition — api (+ data, the provider aggregator): wires features
+#                 together into one app. mivnav.api.deps and mivnav.api.charts
+#                 are the TWO composition-layer modules a feature's own
+#                 routes.py is allowed to import — see the second contract
+#                 below for why routes specifically need that reach.
+# Contracts run in `just check-backend-layering` and in CI; a stray import that
+# points the wrong way up the chain fails the build.
+
+[importlinter:contract:kernel-below-features]
+name = Kernel must not import features or the composition root
+type = forbidden
+source_modules =
+    mivnav.config
+    mivnav.charts
+    mivnav.rescan
+    mivnav.geo
+    mivnav.search
+    mivnav.ingest
+    mivnav.feature
+    mivnav.sidecar
+    mivnav.system
+    mivnav.plugins
+forbidden_modules =
+    mivnav.features
+    mivnav.signalk
+    mivnav.autopilot
+    mivnav.collision
+    mivnav.gnss
+    mivnav.shallow
+    mivnav.data
+    mivnav.api
+ignore_imports =
+    # DELIBERATE, documented exceptions, one per feature: Config assembles
+    # every feature's config SLICE class from that feature's own config.py
+    # (see mivnav.feature's module docstring and each *.config module's own
+    # docstring for why the schema DEFINITION moved to the feature while
+    # Config still centrally builds the one persisted JSON document from
+    # them). Each feature's config.py is deliberately a LEAF within its
+    # package — it must import nothing else from its own feature (no
+    # store.py/routes.py/ingest.py), which is what keeps this edge from
+    # becoming a real kernel dependency on feature behaviour.
+    mivnav.config.model -> mivnav.features.poi.config
+    mivnav.config.model -> mivnav.features.osm_world.config
+    mivnav.config.model -> mivnav.features.satellite.config
+    mivnav.config.model -> mivnav.features.ocharts.config
+    mivnav.config.model -> mivnav.features.weather.config
+    mivnav.config.model -> mivnav.features.route.config
+    mivnav.config.model -> mivnav.features.routing.config
+    mivnav.config.model -> mivnav.features.track.config
+    mivnav.config.model -> mivnav.features.notices.config
+    # The collision alarm's thresholds — same leaf-config.py rule.
+    mivnav.config.model -> mivnav.collision.config
+    # The GNSS-lost/connection alarms' settings — same leaf-config.py rule.
+    mivnav.config.model -> mivnav.gnss.config
+    # The shallow-water alarm's settings — same leaf-config.py rule.
+    mivnav.config.model -> mivnav.shallow.config
+    # The notices slice's retired keys (enabled/refresh_s/include_greenland)
+    # migrate into the default notices DATASET that feature defines — same
+    # leaf config.py as the edge above, no feature behaviour.
+    mivnav.config.migrate -> mivnav.features.notices.config
+    # TYPE_CHECKING-only: a legacy-credentials callable is typed by the Credentials
+    # dataclass from the ocharts shop. Type reference, no runtime import.
+    mivnav.config.store -> mivnav.features.ocharts.shop
+
+[importlinter:contract:features-below-composition]
+name = Features must not import the composition root (api) or aggregator (data)
+type = forbidden
+# allow_indirect_imports: check only DIRECT edges, same reasoning (and same
+# flag) as the feature-independence contract below. Without it, this
+# contract flags a false positive: mivnav.api.deps.Runtime.__init__ resolves
+# the static FEATURES list via a FUNCTION-LOCAL `from mivnav.api.features
+# import FEATURES` (see that method's docstring for why — it is what breaks
+# the deps<->routes.py cycle), which import-linter's static analysis still
+# counts as an edge `api.deps -> api.features` regardless of nesting. That
+# makes every feature's routes.py (which imports api.deps directly, the one
+# allowed edge) transitively "reach" api.features — a real edge in the
+# graph, but not a feature actually depending on it.
+allow_indirect_imports = true
+source_modules =
+    mivnav.features
+    mivnav.signalk
+    mivnav.autopilot
+    mivnav.collision
+    mivnav.gnss
+    mivnav.shallow
+forbidden_modules =
+    mivnav.api.app
+    mivnav.api.config
+    mivnav.api.features
+    mivnav.api.ingest
+    mivnav.api.providers
+    mivnav.api.search
+    mivnav.api.signalk
+    mivnav.data
+ignore_imports =
+    # TYPE_CHECKING-only: NavWatcher/publish type-hint the api Runtime they are
+    # handed at construction. Type reference, no runtime import.
+    mivnav.features.route.publish -> mivnav.api.deps
+    mivnav.features.route.watcher -> mivnav.api.deps
+    mivnav.collision.publisher -> mivnav.api.deps
+    mivnav.gnss.publisher -> mivnav.api.deps
+    mivnav.features.mob.publisher -> mivnav.api.deps
+# NOTE mivnav.api.deps and mivnav.api.charts are DELIBERATELY not forbidden.
+# Every feature's own mivnav/features/<name>/routes.py needs Runtime/
+# get_runtime (mivnav.api.deps) to resolve its store/service via Depends(...)
+# — there is no way around that without Runtime living inside a feature
+# package, which would make the composition root depend on the very features
+# it aggregates. POI's and satellite's routes.py additionally import the
+# shared tile-serving HTTP helpers (CACHE_CONTROL/ETag helpers) from
+# mivnav.api.charts rather than duplicating them. Both are narrow: only each
+# feature's OWN routes.py uses either edge, never store.py/config.py/
+# ingest.py/runtime.py/provider.py — see mivnav.feature's module docstring.
+
+[importlinter:contract:feature-independence]
+name = Leaf features don't directly reach into each other's internals
+type = forbidden
+# allow_indirect_imports: check only DIRECT edges. Indirect paths exist through
+# the composition root (api.deps imports everything) and through the
+# allow-listed kernel edges above, but those aren't a feature reaching into a
+# sibling's internals — a fresh `import mivnav.features.<other>` in one of
+# these is.
+allow_indirect_imports = true
+source_modules =
+    mivnav.features.ocharts
+    mivnav.features.poi
+    mivnav.features.osm_world
+    mivnav.features.satellite
+    mivnav.features.weather
+    mivnav.features.autopilot
+    mivnav.features.anchor
+    mivnav.features.route
+    mivnav.features.routing
+    mivnav.features.themes
+    mivnav.features.notices
+    mivnav.features.mob
+    mivnav.autopilot
+forbidden_modules =
+    mivnav.features.ocharts
+    mivnav.features.poi
+    mivnav.features.osm_world
+    mivnav.features.satellite
+    mivnav.features.weather
+    mivnav.features.autopilot
+    mivnav.features.anchor
+    mivnav.features.route
+    mivnav.features.routing
+    mivnav.features.themes
+    mivnav.features.notices
+    mivnav.features.mob
+    mivnav.autopilot
+# signalk is intentionally omitted from both lists: signalk.model embeds
+# autopilot.model.AutopilotState, a one-directional, documented dep. (ingest
+# used to be omitted here too, for the same reason in the other direction —
+# it no longer needs to be: the POI/satellite-specific bake code that lived
+# in mivnav.ingest moved into mivnav.features.poi/mivnav.features.satellite
+# themselves, and what remains in mivnav.ingest is kernel, not a feature —
+# see the module docstring in mivnav.ingest.runner.)
+# mivnav.autopilot (the read-state half, mivnav.autopilot.model) is kept in
+# both lists above even though it is a sibling of mivnav.features.autopilot
+# (the write half): it must still not reach into another feature's
+# internals, and nothing but signalk.model (exempted above) reaches into
+# its own.

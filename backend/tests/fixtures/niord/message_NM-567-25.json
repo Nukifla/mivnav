@@ -1,0 +1,72 @@
+{
+ "id": "71102fcb-6bd5-488e-8b31-8e5d1a5531b2",
+ "created": 1752495481000,
+ "updated": 1753088195000,
+ "messageSeries": {
+  "seriesId": "dma-nm"
+ },
+ "number": 567,
+ "shortId": "NM-567-25",
+ "mainType": "NM",
+ "type": "MISCELLANEOUS_NOTICE",
+ "status": "CANCELLED",
+ "areas": [
+  {
+   "id": 453,
+   "mrn": "urn:mrn:iho:country:dk",
+   "active": true,
+   "descs": [
+    {
+     "lang": "da",
+     "name": "Danmark"
+    },
+    {
+     "lang": "en",
+     "name": "Denmark"
+    }
+   ]
+  }
+ ],
+ "publishDateFrom": 1752496373000,
+ "publishDateTo": 1753088195000,
+ "followUpDate": 1755468000000,
+ "originalInformation": true,
+ "parts": [
+  {
+   "indexNo": 0,
+   "type": "DETAILS",
+   "eventDates": [
+    {
+     "allDay": false,
+     "fromDate": 1752496373000,
+     "toDate": 1753088195000
+    }
+   ],
+   "descs": [
+    {
+     "lang": "da",
+     "subject": "Meddelelse til alle skibe. Forstyrrelser i GNSS og AIS signaler i danske farvande",
+     "details": "<p>Skibsfarten b&oslash;r v&aelig;re opm&aelig;rksom p&aring; at der kan forekomme periodiske forstyrrelser i GNSS og AIS-signaler i danske farvande.</p>\n<p>Skibsfarten anmodes om at v&aelig;re opm&aelig;rksom p&aring; eventuelle signalforstyrrelser, der kan p&aring;virke navigation og identifikation, og opfordres til at tr&aelig;ffe de n&oslash;dvendige forholdsregler for at opretholde sikker sejlads.</p>"
+    },
+    {
+     "lang": "en",
+     "subject": "Notice to all ships. Interference to GNSS and AIS signals in Danish Waters",
+     "details": "<p>Mariners should be aware that periodic interference to GNSS and AIS signals may occur in Danish waters.</p>\n<p>Mariners are requested to be aware of possible signal interference that may affect navigation and identification, and are advised to take the necessary precautions to ensure safe navigation.</p>"
+    }
+   ],
+   "hideSubject": true
+  }
+ ],
+ "descs": [
+  {
+   "lang": "da",
+   "title": "Danmark. Meddelelse til alle skibe. Forstyrrelser i GNSS og AIS signaler i danske farvande.",
+   "source": "BRS 14. juli 2025"
+  },
+  {
+   "lang": "en",
+   "title": "Denmark. Notice to all ships. Interference to GNSS and AIS signals in Danish Waters.",
+   "source": "DEMA 14 July 2025"
+  }
+ ]
+}

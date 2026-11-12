@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "preserve",
+    "jsxImportSource": "solid-js",
+    "types": ["vite/client", "vite-plugin-pwa/client"],
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  // ../plugins: any plugin checked out under <repo>/plugins is typechecked
+  // with the app (none present: nothing extra).
+  "include": ["src", "vite.config.ts", "../plugins/*/frontend"],
+  // test files run under `bun test`, whose globals are not in @types here
+  // (same reason tools/ sits outside `include`)
+  "exclude": ["src/**/*.test.ts", "../plugins/*/frontend/**/*.test.ts", "../plugins/node_modules"]
+}

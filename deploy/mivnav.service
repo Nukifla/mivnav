@@ -1,0 +1,63 @@
+# mivnav — the boat's chart plotter, run NATIVELY on the Pi (no container).
+#
+# Written for user `pi` with the code at /home/pi/mivnav; the installers render
+# it for the installing user and the actual code location (deploy/lib.sh,
+# mivnav_render_unit):
+#   - release install (deploy/install.sh): /opt/mivnav/current, a symlink to the
+#     active prebuilt release under /opt/mivnav/releases/ (deploy/update.sh swaps it);
+#   - source install (`just deploy`, deploy/install-from-source.sh): the checkout,
+#     where `uv sync` built the chartcore wheel natively (arm64, gdal-free).
+# Either way this unit just runs the already-built backend venv; it never compiles.
+#
+# NATIVE, not containerized (deploy #GD3): GDAL is gone from the build (serve-time
+# geometry is pure Rust, `geo` + `i_overlay`; the S-57 ingest path is feature-gated out of the
+# wheel), so the old GDAL-version floor that forced an osgeo/gdal container is
+# gone. And chartcore now fetches/runs the native arm64 `oexserverd`
+# (o-charts_pi libs/oeserverd/linuxarm64), so nothing needs qemu/amd64 emulation.
+# Running natively keeps the Pi's real o-charts fingerprint — no Docker seat burn.
+#
+# NETWORKING: the backend binds :8230 directly (plain HTTP). An external,
+# user-managed reverse proxy terminates HTTPS and serves it at
+# a local HTTPS name, forwarding to :8230 — not configured here. 8230 is
+# unprivileged, so no CAP_NET_BIND_SERVICE is needed. The backend reaches
+# OpenPlotter's SignalK at localhost:3000 (the config default) directly.
+#
+# DATA (native host paths, named by the config, created by ExecStartPre below):
+#   /home/pi/.config/mivnav   config + credentials (the UI writes them)
+#   /var/lib/mivnav           charts + installed o-charts cells + S-52 tables
+#   /var/cache/mivnav         oexserverd binary + cell cache
+#   /run/mivnav               decode work dir (tmpfs)
+# The service runs as `pi` (a native host install, like the dev box, runs
+# oexserverd as the user — the DRM fingerprint is the machine's, not the uid's).
+#
+# Config/credentials are bootstrapped (never clobbered) by the installer on the
+# HOST before this starts — this unit only reads them.
+
+[Unit]
+Description=mivnav chart plotter (UI + API), native
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=pi
+Group=pi
+Restart=always
+RestartSec=5
+WorkingDirectory=/home/pi/mivnav/backend
+
+# Host data dirs. The `+` prefix runs these as root (needed to create/chown under
+# /var and /run); `-` ignores an already-present dir. Config dir is 0700 (holds
+# credentials.json); the installer bootstraps the JSON inside it.
+ExecStartPre=+-/usr/bin/install -d -o pi -g pi -m0700 /home/pi/.config/mivnav
+ExecStartPre=+-/usr/bin/install -d -o pi -g pi -m0755 /var/lib/mivnav/charts /var/lib/mivnav/ocharts/sets /var/lib/mivnav/s57data
+ExecStartPre=+-/usr/bin/install -d -o pi -g pi -m0755 /var/cache/mivnav/oexserverd
+ExecStartPre=+-/usr/bin/install -d -o pi -g pi -m0755 /run/mivnav/oex
+
+# Run the already-built venv (the installer/updater built it). --no-sync so the boot path
+# never rebuilds — it must not need cargo/network to start. Serves the SPA (at /)
+# and the API (under /api) on :8230.
+ExecStart=/usr/local/bin/uv run --no-sync fastapi run main.py --host 0.0.0.0 --port 8230
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,27 @@
+# mivnav-update@<arg>.service — run deploy/update.sh <arg> for a release install.
+#
+# <arg> is `latest`, a tag like `v0.2.0`, or `rollback`. Started by the backend
+# (Settings → Software → Update / Roll back) with
+#     systemctl start --no-block mivnav-update@v0.2.0.service
+# which the polkit rule in /etc/polkit-1/rules.d/50-mivnav.rules lets the
+# service user do without sudo. A separate unit, not a child of mivnav.service,
+# so the updater survives the `systemctl restart mivnav.service` it issues.
+#
+# Written for user `pi` and /opt/mivnav; deploy/install.sh renders it for the
+# installing user and root (deploy/lib.sh, mivnav_render_system_files). Only a
+# release install has it — a source install updates through git.
+#
+# `%i`, not `%I`: tags may contain `-` (v0.2.0-rc.1), which %I would unescape to `/`.
+
+[Unit]
+Description=mivnav software update (%i)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=pi
+Group=pi
+ExecStart=/opt/mivnav/current/deploy/update.sh %i
+# Download + venv build on a Pi over a slow link; the health wait is 90 s more.
+TimeoutStartSec=30min

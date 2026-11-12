@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Maskable variant: full-bleed accent background, glyph kept inside the
+       80% safe zone (scaled ~0.62) so platform masking never clips it. -->
+  <rect width="512" height="512" fill="#0284c7"/>
+  <g transform="translate(256 256) scale(0.62)">
+    <circle r="150" fill="none" stroke="#ffffff" stroke-width="14" opacity="0.85"/>
+    <path d="M0 -172 L34 -34 L172 0 L34 34 L0 172 L-34 34 L-172 0 L-34 -34 Z"
+          fill="#ffffff" opacity="0.28"/>
+    <path d="M0 -172 L40 0 L0 -12 Z" fill="#ffffff"/>
+    <path d="M0 -172 L-40 0 L0 -12 Z" fill="#e0f2fe"/>
+    <path d="M0 172 L40 0 L0 12 Z" fill="#7dd3fc"/>
+    <path d="M0 172 L-40 0 L0 12 Z" fill="#38bdf8"/>
+    <circle r="14" fill="#ffffff"/>
+  </g>
+</svg>

@@ -1,0 +1,39 @@
+
+# POI ingest runtime output (a user just ingest bakes <id>.pmtiles+<id>.json here);
+# keep only the committed test fixture. See backend/tests/test_poi.py.
+/backend/data/poi/*
+!/backend/data/poi/pois.pmtiles
+
+# Scratch logs from verify runs / analysis sweeps — never part of the tree.
+*.log
+
+# Working notes for an in-progress build — never part of the tree.
+/ROUTING_TODO.md
+/scratch/
+
+# Editor swap files — never part of the tree.
+.*.swp
+*.swp
+
+# Agent / assistant config and working notes — local to the dev box, not
+# part of the published tree.
+/CLAUDE.md
+/.claude/
+/MIVNAV_ARTIFACT_TODO.md
+/MIVNAV_NEXT_TASKS.md
+/poi.md
+/efs.md
+/anchor.md
+/msg.txt
+
+# Design/research notes, experiment harnesses and measurement probes — dev
+# material, not published. (docs/screenshots stays: the README uses it.)
+/docs/*
+!/docs/screenshots/
+/frontend/experiments/
+/chartcore/examples/*_probe.rs
+/backend/tools/spike_*
+
+# Out-of-tree plugins (mivnav.plugins / frontend/src/plugins.ts): each one is
+# its own repository, checked out here locally.
+/plugins/

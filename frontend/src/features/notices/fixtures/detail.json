@@ -1,0 +1,122 @@
+{
+ "id": "7242e03c-1279-4235-b418-6ac11cf6b027",
+ "sid": "NM-053-26",
+ "fam": "nm-t",
+ "cls": "works",
+ "sub": "established",
+ "main_type": "NM",
+ "type": "TEMPORARY_NOTICE",
+ "status": "PUBLISHED",
+ "title": {
+  "da": "Danmark. Tyskland. Østersøen. Femern Bælt. Rute Tango. Tunnel etableres. Afmærkede forbudsområder.",
+  "en": "Denmark. Germany. The Baltic Sea. Femern Belt. Route Tango. Tunnel being established. Buoyed prohibited areas."
+ },
+ "vicinity": {
+  "da": "Femern Bælt. Rute Tango",
+  "en": "Femern Belt. Route Tango"
+ },
+ "area": {
+  "da": [
+   "Danmark",
+   "Østersøen"
+  ],
+  "en": [
+   "Denmark",
+   "The Baltic Sea"
+  ]
+ },
+ "publication": {
+  "da": null,
+  "en": null
+ },
+ "source": {
+  "da": "Femern A/S 20. januar 2026",
+  "en": "Femern A/S 20 January 2026"
+ },
+ "charts": [
+  {
+   "number": "196",
+   "int_number": null,
+   "scale": 75000
+  },
+  {
+   "number": "104",
+   "int_number": null,
+   "scale": 200000
+  },
+  {
+   "number": "103",
+   "int_number": 1303,
+   "scale": 200000
+  }
+ ],
+ "references": [
+  {
+   "id": "NM-270-22",
+   "type": "REFERENCE",
+   "description": null
+  },
+  {
+   "id": "NM-306-25",
+   "type": "UPDATE",
+   "description": null
+  }
+ ],
+ "original": true,
+ "win": [
+  [
+   1769503702000,
+   null
+  ]
+ ],
+ "publish_from": 1769503702000,
+ "publish_to": null,
+ "created": 1769497797000,
+ "updated": 1785739495000,
+ "parts": [
+  {
+   "type": "DETAILS",
+   "subject": {
+    "da": "Tunnel etableres. Afmærkede forbudsområder",
+    "en": "Tunnel being established. Buoyed prohibited areas."
+   },
+   "hide_subject": true,
+   "details": {
+    "da": "<p><strong>Indtil videre</strong> etableres en tunnel mellem Femern og Lolland, i området afgrænset af en linje gennem position 1) - 4).&nbsp;</p>\n<table class=\"position-table\">\n<tbody>\n<tr>\n<td>1)</td>\n<td>54° 38,433'N - 011° 22,183'E</td>\n<td>kyst</td>\n</tr>\n<tr>\n<td>2)</td>\n<td>54° 38,683'N - 011° 21,317'E</td>\n<td>kyst</td>\n</tr>\n<tr>\n<td>3)</td>\n<td>54° 30,217'N - 011° 14,033'E</td>\n<td>kyst</td>\n</tr>\n<tr>\n<td>4)</td>\n<td>54° 29,517'N - 011° 14,600'E</td>\n<td>kyst</td>\n</tr>\n</tbody>\n</table>\n<p>Indenfor området er der oprettet to afmærkede forbudsområder. Områderne flyttes løbende som nødvendigt.&nbsp;</p>\n<p><strong>Inden for de afmærkede områder anvendes ankerbøjer med gul lysafmærkning.</strong></p>\n<p>Se i øvrigt vedhæftede meddelelse NM-270-22.</p>",
+    "en": "<p><strong>Until further notice</strong>, a tunnel is being established between Femern and Lolland, in the area bounded by a line through positions 1) - 4).&nbsp;</p>\n<table class=\"position-table\">\n<tbody>\n<tr>\n<td>1)</td>\n<td>54° 38.433'N - 011° 22.183'E</td>\n<td>coast</td>\n</tr>\n<tr>\n<td>2)</td>\n<td>54° 38.683'N - 011° 21.317'E</td>\n<td>coast</td>\n</tr>\n<tr>\n<td>3)</td>\n<td>54° 30.217'N - 011° 14.033'E</td>\n<td>coast</td>\n</tr>\n<tr>\n<td>4)</td>\n<td>54° 29.517'N - 011° 14.600'E</td>\n<td>coast</td>\n</tr>\n</tbody>\n</table>\n<p>Two buoyed prohibited aread are established within the area.</p>\n<p>The areas are being moved continuosly as required.&nbsp;</p>\n<p><strong>Within the buoyed areas anchor buoys with yellow lights will be used</strong>.</p>\n<p>For further information, see attached message NM-270-22.</p>"
+   },
+   "win": [
+    [
+     1769503702000,
+     null
+    ]
+   ]
+  }
+ ],
+ "attachments": [
+  {
+   "url": "/notices/attachments/beb0ff9a3a9e092350be4ed1",
+   "file_name": "NM-270-22 Femern_DK.pdf",
+   "mime": "application/pdf",
+   "size": 15632,
+   "caption": null
+  },
+  {
+   "url": "/notices/attachments/41400f4ca3c72fe11d1480b0",
+   "file_name": "NM-270-22 Femern_UK.pdf",
+   "mime": "application/pdf",
+   "size": 21112,
+   "caption": null
+  }
+ ],
+ "pdf": {
+  "da": "https://niord.dma.dk/rest/message-reports/message/7242e03c-1279-4235-b418-6ac11cf6b027.pdf?lang=da",
+  "en": "https://niord.dma.dk/rest/message-reports/message/7242e03c-1279-4235-b418-6ac11cf6b027.pdf?lang=en"
+ },
+ "bbox": [
+  11.233883,
+  54.49195,
+  11.369717,
+  54.644717
+ ]
+}

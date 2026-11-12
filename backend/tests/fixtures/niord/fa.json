@@ -1,0 +1,523 @@
+[
+ {
+  "id": "ae246d5a-a0e1-49b8-9f3d-b65a11858a6b",
+  "created": 1766150379000,
+  "updated": 1767084396000,
+  "messageSeries": {
+   "seriesId": "dma-fa"
+  },
+  "shortId": "FA/EK-D-396 2026",
+  "mainType": "NM",
+  "type": "MISCELLANEOUS_NOTICE",
+  "status": "PUBLISHED",
+  "areas": [
+   {
+    "id": 113166,
+    "mrn": "urn:mrn:iho:fa:dk:ek-d-396",
+    "active": true,
+    "parent": {
+     "id": 466,
+     "active": true,
+     "parent": {
+      "id": 453,
+      "mrn": "urn:mrn:iho:country:dk",
+      "active": true,
+      "descs": [
+       {
+        "lang": "da",
+        "name": "Danmark"
+       },
+       {
+        "lang": "en",
+        "name": "Denmark"
+       }
+      ]
+     },
+     "descs": [
+      {
+       "lang": "da",
+       "name": "Østersøen"
+      },
+      {
+       "lang": "en",
+       "name": "The Baltic Sea"
+      }
+     ]
+    },
+    "descs": [
+     {
+      "lang": "en",
+      "name": "EK D 396 Hullebaek"
+     },
+     {
+      "lang": "da",
+      "name": "EK D 396 Hullebæk"
+     }
+    ]
+   }
+  ],
+  "categories": [
+   {
+    "id": 469,
+    "active": true,
+    "descs": [
+     {
+      "lang": "da",
+      "name": "Skydeøvelser"
+     },
+     {
+      "lang": "en",
+      "name": "Firing Exercises"
+     }
+    ]
+   }
+  ],
+  "charts": [
+   {
+    "chartNumber": "189",
+    "internationalNumber": 1336,
+    "active": true,
+    "scale": 100000
+   },
+   {
+    "chartNumber": "188",
+    "active": true,
+    "scale": 250000
+   }
+  ],
+  "publishDateFrom": 1767084396000,
+  "references": [
+   {
+    "messageId": "FA/EK-D-396 2025",
+    "type": "REPETITION"
+   }
+  ],
+  "parts": [
+   {
+    "indexNo": 0,
+    "type": "DETAILS",
+    "eventDates": [
+     {
+      "allDay": false,
+      "fromDate": 1767084396000
+     }
+    ],
+    "geometry": {
+     "type": "FeatureCollection",
+     "id": "f254eab3-49d7-4d3b-a19d-b13e7232a227",
+     "features": [
+      {
+       "type": "Feature",
+       "id": "418d0a80-4d45-44e1-9398-3fe0c20c7854",
+       "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+         [
+          [
+           14.97945,
+           54.98
+          ],
+          [
+           14.90305,
+           54.970283333333334
+          ],
+          [
+           14.84575,
+           55.008716666666665
+          ],
+          [
+           14.917833333333334,
+           55.024483333333336
+          ],
+          [
+           14.945533333333334,
+           55.016983333333336
+          ],
+          [
+           14.97945,
+           54.98
+          ]
+         ]
+        ]
+       },
+       "properties": {
+        "name:en": "EK D 396 Hullebaek",
+        "name:da": "EK D 396 Hullebæk",
+        "startCoordIndex": 1
+       }
+      }
+     ]
+    },
+    "descs": [
+     {
+      "lang": "da",
+      "details": "<p><em></em>&nbsp;I forbindelse med skydning etableres et midlertidigt afsp&aelig;rringsomr&aring;de p&aring; s&oslash;en ud for skydepladsen p&aring; position:</p>\n<ul>\n<li>55&deg; 01'N - 014&deg; 55'E.</li>\n</ul>\n<p></p>\n<p>Skydepladsen omfatter to omr&aring;der: Hulleb&aelig;k (indre omr&aring;de) og Raghammer Odde (ydre omr&aring;de). N&aring;r der skydes i Raghammer Odde, skydes der i begge omr&aring;der.</p>"
+     },
+     {
+      "lang": "en",
+      "details": "<p>In connection with firing practices, a temporary prohibited area is established on the sea off the firing practice at position:</p>\n<ul>\n<li>55&deg; 01'N - 014&deg; 55'E.</li>\n</ul>\n<p></p>\n<p>The firing practice area covers two areas: Hulleb&aelig;k (inner area) and Raghammer Odde (outer area). When firing is practiced in Raghammer Odde, firing is practiced in both areas.</p>"
+     }
+    ]
+   },
+   {
+    "indexNo": 0,
+    "type": "PROHIBITION",
+    "descs": [
+     {
+      "lang": "da",
+      "details": "<p>Under skydning er al sejlads, ankring og fiskeri forbudt i afspærringsområdet.</p>"
+     },
+     {
+      "lang": "en",
+      "details": "<p>During firing practices, all navigation, anchoring and fishing are prohibited in the area.</p>"
+     }
+    ]
+   },
+   {
+    "indexNo": 0,
+    "type": "SIGNALS",
+    "geometry": {
+     "type": "FeatureCollection",
+     "id": "0afa3a9f-08b3-4e73-b0d7-89f90b5b84b5",
+     "features": [
+      {
+       "type": "Feature",
+       "id": "a9141c98-7626-41c8-93ee-f2ea5fc83270",
+       "geometry": {
+        "type": "MultiPoint",
+        "coordinates": [
+         [
+          14.908,
+          55.023
+         ],
+         [
+          14.955166666666667,
+          55.0065
+         ]
+        ]
+       },
+       "properties": {
+        "name:0:en": "Signal mast 1.",
+        "name:1:en": "Signal mast 2.",
+        "startCoordIndex": 6,
+        "name:0:da": "Signalmast 1.",
+        "name:1:da": "Signalmast 2."
+       }
+      }
+     ]
+    },
+    "descs": [
+     {
+      "lang": "da",
+      "details": "<p>At skydning foreg&aring;r, tilkendegives ved, at der fra en time f&oslash;r skydningens p&aring;begyndelse og indtil dens oph&oslash;r vises f&oslash;lgende signaler:</p>\n<table class=\"no-border\">\n<tbody>\n<tr>\n<td><span>a)</span></td>\n<td>\n<p><span>I dagslys hejses en kugle p&aring; signalmast 1 og 2.</span></p>\n<p><span>Desuden t&aelig;ndes p&aring; begge signalmaster et hvidt, blinkende fyr (60 blink pr. minut).</span></p>\n</td>\n</tr>\n<tr>\n<td><span>b)</span></td>\n<td><span>I m&oslash;rke t&aelig;ndes p&aring; begge signalmaster fyr, der viser r&oslash;dt og hvidt vekselblink (30 blink pr. minut).</span></td>\n</tr>\n</tbody>\n</table>\n<ul>\n<li>55<span>&deg;</span> 01,38'N - 014<span>&deg;</span> 54,48'E, signalmast 1.</li>\n<li>55<span>&deg;</span> 00,39'N - 014<span>&deg;</span> 57,31'E, signalmast 2.</li>\n</ul>"
+     },
+     {
+      "lang": "en",
+      "details": "<p>Information about firing practices is given by displaying the following signals from one hour before the start of the firing practice until its end:</p>\n<table class=\"no-border\">\n<tbody>\n<tr>\n<td>a)</td>\n<td>\n<p>By daylight, a sphere is hoisted at signal mast 1 and 2.</p>\n<p>In addition, a white, flashing light is lit on both signal masts (60 flashes per minute).</p>\n</td>\n</tr>\n<tr>\n<td>b)</td>\n<td>In darkness, lights displaying a red and a white alternating flash are lit on both signal masts (30 flashes per minute).</td>\n</tr>\n</tbody>\n</table>\n<ul>\n<li>55<span>&deg;</span> 01,38'N - 014<span>&deg;</span> 54,48'E, signal mast 1.</li>\n<li>55<span>&deg;</span> 00,39'N - 014<span>&deg;</span> 57,31'E, signal mast 2.</li>\n</ul>"
+     }
+    ]
+   },
+   {
+    "indexNo": 0,
+    "type": "NOTE",
+    "descs": [
+     {
+      "lang": "da",
+      "details": "<p>Oplysning om skydning kan indhentes ved Sikkerhedskontoret, tlf. 5697 8106 / 2010 6551 eller over VHF-radio. Kaldenavn: Raghammer. Kaldekanal: 16. Samtalekanaler: 6, 8 og 77. Radioen er &aring;ben fra en time f&oslash;r skydningens p&aring;begyndelse og indtil dens oph&oslash;r.</p>"
+     },
+     {
+      "lang": "en",
+      "details": "<p>Information about firing practices is available from the safety office, tel. +45 0000 0001 /&nbsp;+45 0000 0002, or over VHF radio. Call name: Raghammer. Call channel: 16. Conversation channels: 6, 8 and 77. The radio is open from one hour before the start of the firing practice and until its end.</p>"
+     }
+    ]
+   }
+  ],
+  "descs": [
+   {
+    "lang": "da",
+    "title": "Danmark. Østersøen. EK D 396 Hullebæk.",
+    "source": "FKO december 2025"
+   },
+   {
+    "lang": "en",
+    "title": "Denmark. The Baltic Sea. EK D 396 Hullebaek.",
+    "source": "DC DNK December 2025"
+   }
+  ]
+ },
+ {
+  "id": "8ad44dba-d9e3-4c91-be4f-cb0d0a250f1f",
+  "created": 1766394567000,
+  "updated": 1767085844000,
+  "messageSeries": {
+   "seriesId": "dma-fa"
+  },
+  "shortId": "FA/EK-R-18 2026",
+  "mainType": "NM",
+  "type": "MISCELLANEOUS_NOTICE",
+  "status": "PUBLISHED",
+  "areas": [
+   {
+    "id": 113181,
+    "mrn": "urn:mrn:iho:fa:dk:ek-r-18",
+    "active": true,
+    "parent": {
+     "id": 529,
+     "active": true,
+     "parent": {
+      "id": 453,
+      "mrn": "urn:mrn:iho:country:dk",
+      "active": true,
+      "descs": [
+       {
+        "lang": "da",
+        "name": "Danmark"
+       },
+       {
+        "lang": "en",
+        "name": "Denmark"
+       }
+      ]
+     },
+     "descs": [
+      {
+       "lang": "da",
+       "name": "Kattegat"
+      },
+      {
+       "lang": "en",
+       "name": "Kattegat"
+      }
+     ]
+    },
+    "descs": [
+     {
+      "lang": "en",
+      "name": "EK R 18 Jaegerspris"
+     },
+     {
+      "lang": "da",
+      "name": "EK R 18 Jægerspris"
+     }
+    ]
+   }
+  ],
+  "categories": [
+   {
+    "id": 469,
+    "active": true,
+    "descs": [
+     {
+      "lang": "da",
+      "name": "Skydeøvelser"
+     },
+     {
+      "lang": "en",
+      "name": "Firing Exercises"
+     }
+    ]
+   }
+  ],
+  "charts": [
+   {
+    "chartNumber": "117",
+    "active": true,
+    "scale": 25000
+   },
+   {
+    "chartNumber": "116",
+    "active": true,
+    "scale": 40000
+   }
+  ],
+  "publishDateFrom": 1767085844000,
+  "references": [
+   {
+    "messageId": "FA/EK-R-18 2025",
+    "type": "REPETITION"
+   }
+  ],
+  "parts": [
+   {
+    "indexNo": 0,
+    "type": "DETAILS",
+    "eventDates": [
+     {
+      "allDay": false,
+      "fromDate": 1767085844000
+     }
+    ],
+    "geometry": {
+     "type": "FeatureCollection",
+     "id": "416ddf8c-8b8f-4775-9246-17a9f550dc86",
+     "features": [
+      {
+       "type": "Feature",
+       "id": "be83c4d8-c014-47a0-94fa-9603d25a5822",
+       "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+         [
+          [
+           11.96485,
+           55.8434
+          ],
+          [
+           11.868583333333333,
+           55.82839999999999
+          ],
+          [
+           11.837216666666666,
+           55.892499999999984
+          ],
+          [
+           11.863166666666666,
+           55.91543333333334
+          ],
+          [
+           11.936166666666669,
+           55.89661666666666
+          ],
+          [
+           11.964783333333333,
+           55.85803333333334
+          ],
+          [
+           11.96485,
+           55.8434
+          ],
+          [
+           11.96485,
+           55.8434
+          ],
+          [
+           11.96485,
+           55.8434
+          ],
+          [
+           11.96485,
+           55.8434
+          ],
+          [
+           11.96485,
+           55.8434
+          ],
+          [
+           11.96485,
+           55.8434
+          ],
+          [
+           11.96485,
+           55.8434
+          ]
+         ]
+        ]
+       },
+       "properties": {
+        "name:en": "EK R 18 Jaegerspris",
+        "name:da": "EK R 18 Jægerspris",
+        "startCoordIndex": 1
+       }
+      },
+      {
+       "type": "Feature",
+       "id": "fd0776b5-35b2-4d4e-b7c4-8317c47a5783",
+       "geometry": {
+        "type": "Point",
+        "coordinates": [
+         11.9555,
+         55.859566666666666
+        ]
+       },
+       "properties": {
+        "name:0:en": "Signal mast 1",
+        "name:0:da": "Signalmast 1",
+        "startCoordIndex": 13
+       }
+      },
+      {
+       "type": "Feature",
+       "id": "d3aca493-6ee4-44ff-bda5-3e23669bb9e7",
+       "geometry": {
+        "type": "Point",
+        "coordinates": [
+         11.92565,
+         55.89993333333334
+        ]
+       },
+       "properties": {
+        "name:0:en": "Signal mast 3",
+        "name:0:da": "Signalmast 3",
+        "startCoordIndex": 14
+       }
+      }
+     ]
+    },
+    "descs": [
+     {
+      "lang": "da",
+      "details": "<p>I forbindelse med skydning i EK R 18 J&aelig;gerspris, etableres et midlertidigt afsp&aelig;rringsomr&aring;de p&aring; s&oslash;en ud for skydepladsen p&aring; position:</p>\n<ul class=\"positions\">\n<li>55&deg; 52'N - 011&deg; 57'E.</li>\n</ul>"
+     },
+     {
+      "lang": "en",
+      "details": "<p>In connection with firing practices in EK R 18 J&aelig;gerspris, a temporary prohibited area is established on the sea off the firing practice area in position:</p>\n<ul class=\"positions\">\n<li>55&deg; 52'N - 011&deg; 57'E.</li>\n</ul>"
+     }
+    ]
+   },
+   {
+    "indexNo": 0,
+    "type": "PROHIBITION",
+    "descs": [
+     {
+      "lang": "da",
+      "details": "<p>Under skydning er al sejlads, ankring og fiskeri forbudt i afspærringsområdet.</p>"
+     },
+     {
+      "lang": "en",
+      "details": "<p>During firing practices, all navigation, anchoring and fishing are prohibited in the area.</p>"
+     }
+    ]
+   },
+   {
+    "indexNo": 0,
+    "type": "SIGNALS",
+    "descs": [
+     {
+      "lang": "da",
+      "details": "<p>At skydning foreg&aring;r, tilkendegives ved, at der fra en time f&oslash;r skydningens p&aring;begyndelse og indtil dens oph&oslash;r vises f&oslash;lgende signaler:</p>\n<table class=\"no-border\">\n<tbody>\n<tr>\n<td>a)</td>\n<td>I dagslys hejses en kugle, og der t&aelig;ndes et hvidt, blinkende fyr (60 blink pr. minut) p&aring; signalmast 1 og 3.&nbsp;</td>\n</tr>\n<tr>\n<td>b)</td>\n<td><span>30 minutter f&oslash;r solnedgang t&aelig;ndes fyr, der viser r&oslash;dt og hvidt </span><span>vekselblink (30 blink pr. minut), p&aring; signalmast 1 og 3.</span></td>\n</tr>\n</tbody>\n</table>\n<ul>\n<li><span>55</span><span>&deg;</span><span><span>&nbsp;</span>51,57'N -</span>&nbsp;<span>011</span><span>&deg;</span><span><span>&nbsp;</span>57,33'E,&nbsp;</span>Signalmast 1 - ved observationspost Syd.</li>\n<li>55<span>&deg;</span> 54,00'N - 011<span>&deg;</span> 55,54<span>'</span>E, Signalmast 3 - ved kysten ved Storeh&oslash;j.</li>\n</ul>"
+     },
+     {
+      "lang": "en",
+      "details": "<p>Information about firing practices is given by displaying the following signals from one hour before the start of the firing practice until its end:</p>\n<table class=\"no-border\">\n<tbody>\n<tr>\n<td>a)</td>\n<td>By daylight, a sphere is hoisted and a white, flashing light is lit (60 flashes per minute) on signal mast 1 and 3.&nbsp;</td>\n</tr>\n<tr>\n<td>b)</td>\n<td><span> 30 minutes before sunset, lights displaying a red and white alternating flash </span><span>(30 flashes per minute) are lit on signal masts 1 and 3.</span></td>\n</tr>\n</tbody>\n</table>\n<ul>\n<li>55<span>&deg;</span> 51,57'N - 011<span>&deg;</span> 57,33'E, Signal mast 1 - <span>at the coast at observationspost Syd.</span></li>\n<li>55<span>&deg;</span> 54,00'N - 011<span>&deg;</span> 55,54<span>'</span>E, Signal mast 3 - <span>at the coast of Storeh&oslash;j.</span></li>\n</ul>"
+     }
+    ]
+   },
+   {
+    "indexNo": 0,
+    "type": "NOTE",
+    "descs": [
+     {
+      "lang": "da",
+      "details": "<p>Oplysning om skydning kan indhentes ved J&aelig;gersprislejren, tlf. 7283 9730 eller p&aring; <span style=\"color: #000000;\"> <a href=\"https://forsvaret.dk/da/oevelsesaktiviteter/\" style=\"color: #000000;\">https://forsvaret.dk/da/oevelsesaktiviteter</a>&nbsp;</span>eller over VHF-radio. Kaldenavn: J&aelig;gerspris. Kaldekanal: 16. Samtalekanaler: 6, 8, og 67. Radioen og telefon er &aring;ben fra en time f&oslash;r skydningens p&aring;begyndelse og indtil dens oph&oslash;r.</p>"
+     },
+     {
+      "lang": "en",
+      "details": "<p>Information about firing practices is available from Camp J&aelig;gerspris, tel. +45 0000 0003 or from&nbsp;</p>\n<p><span style=\"color: #000000;\"><a href=\"https://forsvaret.dk/da/oevelsesaktiviteter/\" style=\"color: #000000;\">https://forsvaret.dk/da/oevelsesaktiviteter</a></span>&nbsp;or over VHF radio. Call name: J&aelig;gerspris. Call channel: 16. Conversation channels: 6, 8, and 67. The radio and telephone are open from one hour before the start of the firing practice and until its end.</p>"
+     }
+    ]
+   }
+  ],
+  "descs": [
+   {
+    "lang": "da",
+    "title": "Danmark. Kattegat. EK R 18 Jægerspris.",
+    "source": "FKO december 2025"
+   },
+   {
+    "lang": "en",
+    "title": "Denmark. Kattegat. EK R 18 Jaegerspris.",
+    "source": "DC DNK December 2025"
+   }
+  ]
+ }
+]

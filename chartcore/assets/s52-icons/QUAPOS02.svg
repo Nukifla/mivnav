@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- QUAPOS02 — CSQUAPNT01's "position doubtful" marker: the abbreviation `PD`
+     set up and to the left of the feature, with a leader line pointing back
+     down-right at it.
+
+     DRAWN FOR MIVNAV (jt task lppokvtq), replacing a PNG crop of the retired
+     raster atlas. The letters were a 1-unit-stroke bitmap font in that crop
+     and are redrawn here as real stroked letterforms at the same cap height
+     (8 units), stem positions and stroke weight, so they scale instead of
+     going to mush.
+
+     THE CANVAS IS LOAD-BEARING, DO NOT TIGHTEN IT. 42x40 with the label in
+     the top-left corner is not padding: the feature's own position is the
+     CANVAS CENTRE (21,20), and the whole point of this symbol is that the
+     label sits OFF that position with a leader aimed at it. `composite`
+     centre-anchors free-standing artwork on its own canvas centre, so keeping
+     the authored viewBox is what keeps the label offset and the leader
+     pointing the right way. Crop it to the ink and the label lands on top of
+     the thing it annotates with a leader to nowhere.
+     (QUAPOS03 shares the geometry: same leader, 4 units further right for its
+     wider `Rep`, and the same 6.5-unit gap between leader tip and centre.)
+
+     COLOUR: `#000000` -> the `ink` role via `icons::roles`' ASSET_HEXES —
+     chart ink, so it inverts with a dark palette instead of staying black.
+
+     Do NOT resize by editing width/height alone — chartcore normalises to the
+     viewBox user units and ignores the outer attributes (see no-anchor.svg). -->
+<svg version="1.0" width="42" height="40" viewBox="0 0 42 40"
+     xmlns="http://www.w3.org/2000/svg">
+  <g fill="none" stroke="#000000" stroke-width="1"
+     stroke-linecap="butt" stroke-linejoin="miter">
+    <!-- P: stem plus a bowl closing on the stem at mid height -->
+    <path d="M 0.5,7.5 V 0.5 H 1.5 A 2,2 0 0 1 1.5,4.5 H 0.5" />
+    <!-- D: stem plus a full-height bowl -->
+    <path d="M 5.5,7.5 V 0.5 H 6.5 A 2,3.5 0 0 1 6.5,7.5 Z" />
+    <!-- leader, 45 degrees down-right toward the canvas centre (21,20) -->
+    <path d="M 10,9 L 14.5,13.5" />
+  </g>
+</svg>

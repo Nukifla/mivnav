@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- light-minor — the position star for a minor light (VALNMR <= 10; see
+     derive::lights::star_symbol).
+
+     SCALED x0.7 to 7x7 (mivnav change nrxlyvlv, 2026-07-29). It used to share
+     light-major's 10x10 canvas, so the two stars took an identical footprint
+     and answered icon-size identically; their ink differed only in outer
+     radius, 3.76 against major's 4.83, which at chart scale reads as no
+     difference at all — the user asked whether both icons were even in use.
+     They are, so the fix is to make the minor visibly minor: 7/10 = 0.7 puts
+     its ink radius at ~2.63 against an untouched major 4.83.
+
+     The factor goes on the drawn <path> via a wrapping <g>, with the viewBox
+     narrowed to match. Both halves are required: chartcore normalises to
+     viewBox user units and IGNORES the outer width/height, so editing those
+     alone changes nothing that gets served, and scaling without narrowing
+     would leave the footprint at 10x10 with the star shrunken up into its
+     top-left quadrant. The ink is centred on (5,5), so scale(0.7) alone
+     lands it on (3.5,3.5) — the centre of the new box, no translate needed,
+     which matters because this symbol's whole job is to mark a position.
+
+     Do NOT touch light-major.svg, and keep the fill literal `#000000`:
+     `icons::roles` maps that hex to the `ink` role, and any other spelling
+     drops out of the theme substitution. -->
+<svg
+   version="1.0"
+   width="7"
+   height="7"
+   viewBox="0 0 7 7"
+   id="svg2"
+   sodipodi:docname="light-minor.svg"
+   inkscape:version="1.4.3 (0d15f75042, 2025-12-25)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs1" />
+  <sodipodi:namedview
+     id="namedview1"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     showguides="true"
+     inkscape:zoom="59.125"
+     inkscape:cx="3.5940803"
+     inkscape:cy="3.7716702"
+     inkscape:window-width="3840"
+     inkscape:window-height="2094"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="svg2">
+    <sodipodi:guide
+       position="12.807413,5"
+       orientation="0,1"
+       id="guide1"
+       inkscape:locked="false"
+       inkscape:label=""
+       inkscape:color="rgb(0,134,229)" />
+    <sodipodi:guide
+       position="5,11.753964"
+       orientation="-1,0"
+       id="guide2"
+       inkscape:locked="false"
+       inkscape:label=""
+       inkscape:color="rgb(0,134,229)" />
+  </sodipodi:namedview>
+  <g transform="scale(0.7)">
+    <path
+       style="fill:#000000;fill-rule:evenodd;stroke:none;stroke-width:0.999998px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       d="M 5,1.2416219 5.895353,3.7881201 8.593894,3.8527401 6.44871,5.4911821 7.221149,8.0776171 5,6.5437301 2.778851,8.0776161 3.55129,5.4911801 1.406106,3.8527391 4.104647,3.7881191 Z"
+       id="path958" />
+  </g>
+</svg>

@@ -1,0 +1,128 @@
+{
+  "$comment": [
+    "The icon ROLE VOCABULARY — the contract between chartcore (which emits",
+    "sentinel colours) and the theme JSON in the Python backend (which gives",
+    "each role a hex per palette). Neither side may invent a role name; both",
+    "read this file.",
+    "",
+    "WHY SENTINELS AND NOT TOKENS: chartcore normalises every icon through",
+    "usvg, which bakes <style>/class down to concrete fill/stroke attributes",
+    "and drops the stylesheet — measured, not assumed. So a role cannot ride",
+    "as CSS. It rides as a reserved HEX that survives usvg untouched, and the",
+    "client string-substitutes it for the palette's real hex immediately",
+    "before rasterising. Rendered output is verified to contain ONLY #rrggbb",
+    "notation (no rgb(), no named colours except 'none'), so a plain hex",
+    "substitution reaches every painted value.",
+    "",
+    "SENTINEL BLOCK: #fe00XX, XX = the role's index below. No real artwork hex",
+    "collides with that block (the vendored set uses 18 distinct hexes, listed",
+    "in `retired_hexes` per role).",
+    "",
+    "OPT-IN: chartcore emits sentinels only when asked (render_aton_icon's",
+    "`roles` flag). Default output stays day-baked and byte-identical, so the",
+    "Rust and frontend halves of this migration each land green on their own.",
+    "",
+    "DAY IS THE PROOF: `day` below is exactly what the icon renders today. A",
+    "role-substituted day icon must be byte-identical to the baked one. That",
+    "is the acceptance test for the whole colour pipeline."
+  ],
+
+  "sentinel_prefix": "#fe00",
+
+  "roles": {
+    "obj-white":      { "index": "00", "day": "#ffffff", "source": "OBJECT_COLOURS 1",  "note": "S-57 COLOUR domain" },
+    "obj-black":      { "index": "01", "day": "#000000", "source": "OBJECT_COLOURS 2" },
+    "obj-red":        { "index": "02", "day": "#ed1c24", "source": "OBJECT_COLOURS 3" },
+    "obj-green":      { "index": "03", "day": "#00a650", "source": "OBJECT_COLOURS 4" },
+    "obj-blue":       { "index": "04", "day": "#10508c", "source": "OBJECT_COLOURS 5" },
+    "obj-yellow":     { "index": "05", "day": "#fab20b", "source": "OBJECT_COLOURS 6" },
+    "obj-grey":       { "index": "06", "day": "#808080", "source": "OBJECT_COLOURS 7" },
+    "obj-brown":      { "index": "07", "day": "#a52a2a", "source": "OBJECT_COLOURS 8" },
+    "obj-amber":      { "index": "08", "day": "#ffbf00", "source": "OBJECT_COLOURS 9" },
+    "obj-violet":     { "index": "09", "day": "#ee82ee", "source": "OBJECT_COLOURS 10" },
+    "obj-orange":     { "index": "0a", "day": "#f7a837", "source": "OBJECT_COLOURS 11" },
+    "obj-magenta":    { "index": "0b", "day": "#ec008c", "source": "OBJECT_COLOURS 12" },
+    "obj-pink":       { "index": "0c", "day": "#ffc0cb", "source": "OBJECT_COLOURS 13" },
+
+    "lit-generic":    { "index": "0d", "day": "#800080", "source": "LIGHT_COLOURS generic", "note": "lights keep their OWN palette — upstream genicons.py does, and the hexes differ from the object colours of the same name" },
+    "lit-white":      { "index": "0e", "day": "#fab20b", "source": "LIGHT_COLOURS white",   "note": "shares day hex with lit-yellow — a faithful upstream quirk, NOT a typo. Two roles so a theme MAY separate them; day must not." },
+    "lit-red":        { "index": "0f", "day": "#ed1c24", "source": "LIGHT_COLOURS red" },
+    "lit-green":      { "index": "10", "day": "#00a650", "source": "LIGHT_COLOURS green" },
+    "lit-blue":       { "index": "11", "day": "#10508c", "source": "LIGHT_COLOURS blue" },
+    "lit-yellow":     { "index": "12", "day": "#fab20b", "source": "LIGHT_COLOURS yellow" },
+    "lit-orange":     { "index": "13", "day": "#fa870b", "source": "LIGHT_COLOURS orange" },
+    "lit-amber":      { "index": "14", "day": "#ffbf00", "source": "LIGHT_COLOURS amber" },
+
+    "ink":            { "index": "15", "day": "#000000", "source": "recolor.rs:232,234,235", "note": "the .outline/.baseline stroke and .basepoint stroke. Baked in RUST, not in palette.rs and not in any asset — the role MIGRATION.md stage 3 forgot. This is the single most important role for a dark palette: it is the outline of every parametric buoy." },
+    "paper":          { "index": "16", "day": "#ffffff", "source": "recolor.rs:235",         "note": ".basepoint fill — the disc a buoy body sits on." },
+
+    "art-ink":        { "index": "17", "day": "#231f20", "source": "vendored art (47 files)", "note": "CMYK registration black; the literal icons' equivalent of `ink`" },
+    "art-black":      { "index": "18", "day": "#1a1a1a", "source": "crane/cliff/building.svg" },
+    "art-grey-dark":  { "index": "19", "day": "#505050", "source": "vendored art (69 files)" },
+    "art-grey-mid":   { "index": "1a", "day": "#666666", "source": "vendored art (24 files)" },
+    "art-grey-light": { "index": "1b", "day": "#d1d1d1", "source": "vendored art (101 files)" },
+    "art-grey-pale":  { "index": "1c", "day": "#eeeeee", "source": "vendored art (69 files)" },
+
+    "warn-magenta":   { "index": "1d", "day": "#ec008c", "source": "VENDORED_WARNING_MAGENTA", "note": "IHO warning magenta. Distinct role from obj-magenta despite the identical day hex: obj-magenta is an S-57 COLOUR value on a buoy, this is chart furniture (TSS arrows, restricted-area hatch). A paper theme wants them different." },
+    "art-green":      { "index": "1e", "day": "#2ea948", "source": "bird/fish/seal/area-g.svg" },
+    "art-green-deep": { "index": "1f", "day": "#2e8e20", "source": "seagrass.svg" },
+    "art-blue-pale":  { "index": "20", "day": "#afcce3", "source": "obstruction/wreck-dangerous.svg" },
+    "art-violet":     { "index": "21", "day": "#de44e8", "source": "clearance-safe.svg" },
+    "art-stroke":     { "index": "22", "day": "#333333", "source": "cross.svg, x-shape.svg", "note": "REAL production paint — measured on 98 keys (TOPSHP/7/*), not editor cruft as first assumed. It is an inline style=\"stroke:#333333\" on UNCLASSED paths: the X/cross strokes are the artwork itself but sit outside the .outline/.fill role system, so an x-shape topmark renders grey no matter which S-57 COLOUR is requested. Giving it a role makes it follow the theme; making it follow the REQUESTED COLOUR needs the asset reclassed, which is a separate fix (it would change rendered bytes for those 98 keys)." }
+  },
+
+  "$emission": {
+    "$comment": [
+      "MEASURED AFTER THE FACT: only 24 of the 35 roles above are ever emitted.",
+      "The 11 below reach nothing. They are kept (not deleted) so the indices",
+      "stay stable against the sentinel table already baked into roles.rs, and",
+      "so the mistake stays visible. Theme JSON authored for them is inert.",
+      "",
+      "The four art-grey-* roles are an error in this very file: they came from",
+      "a SOURCE-side grep and are `inkscape:deskcolor` / `bordercolor` editor",
+      "metadata, not paint. That is precisely the failure the $measurement block",
+      "below warns about — written before the roles were, and not applied to",
+      "them. 21 rendered hexes needed 21 roles, not 35; the arithmetic was",
+      "there to be checked and was not.",
+      "",
+      "The seven dead lit-* roles are a different thing and NOT an error here —",
+      "they are unreachable because of a bug in chartcore, described below."
+    ],
+    "never_emitted": ["art-grey-dark", "art-grey-mid", "art-grey-light", "art-grey-pale",
+                      "lit-white", "lit-red", "lit-green", "lit-blue", "lit-yellow", "lit-orange", "lit-amber"],
+    "lit_roles_are_unreachable": [
+      "recolor_variant resolves a colour word as colour_hex(name).or_else(light_colour_hex(name))",
+      "— object table FIRST. Every LIGHT_COLOURS word except `generic` also exists in",
+      "OBJECT_COLOURS, so the light table is never consulted for them and only lit-generic",
+      "is reachable.",
+      "",
+      "That is a REAL upstream-parity bug, not just dead roles: genicons.py gives light/white",
+      "#fab20b and light/orange #fa870b, and chartcore renders #ffffff and #f7a837. Lights are",
+      "the highest-value dusk/night case, so this is worth its own task. Fixing it changes day",
+      "bytes, which is why it was not folded into the sentinel work."
+    ]
+  },
+
+  "$measurement": [
+    "The day values above are the RENDERED surface, not the source surface —",
+    "they differ. Swept the whole production key space (136 plain literals, 36",
+    "parametric x 14 colour words, BOYSHP/BCNSHP/TOPSHP x 40 shapes x 5 colpats",
+    "x 7 colour lists): 21 distinct hexes, zero render errors. Every one has a",
+    "role. A source-side grep would have missed #333333 as production paint and",
+    "invented a role for #ff0000, which renders on no production key at all.",
+    "",
+    "#ff0000 and the bare `grey`/`red` named colours appear ONLY when a",
+    "parametric icon is rendered through the 1-segment literal form, which",
+    "leaves COLORING{} unsubstituted and lets the vendored file's Inkscape",
+    "PREVIEW stylesheet survive. No production key reaches that path. Worth",
+    "knowing, not worth a role."
+  ],
+
+  "placeholders_are_exempt": [
+    "chartcore/assets/s52-icons/placeholder/*.svg bypass recolouring entirely",
+    "(pack::render short-circuits them, because usvg destroys a raster",
+    "placeholder's <image> element). They bake day colours in rgb() notation",
+    "and CANNOT follow the theme. That is the whole reason they are",
+    "temporary — placeholders.json is the worklist."
+  ]
+}

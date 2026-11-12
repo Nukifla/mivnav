@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- LOWACC03 — CSQUAPNT01's catch-all "low positional accuracy" marker: a
+     question mark set up and to the left of the feature, with a leader line
+     pointing back down-right at it. The fourth arm of the same `match` that
+     picks QUAPOS01 (PA), QUAPOS02 (PD) and QUAPOS03 (Rep) — every QUAPOS in
+     [2,10) that is not 4, 5, 7 or 8, i.e. unsurveyed / inadequately surveyed /
+     unreliable / estimated.
+
+     DRAWN FOR MIVNAV (jt task ntyrwnnr). `LOWACC03` is not a `<symbol>` in
+     chartsymbols.xml — ochartsng emits the name and its own comment on that
+     line reads `// "?"`, because the raster atlas aliased it to the question
+     mark. But the SHAPE is not a guess: chartsymbols.xml does define
+     `LOWACC01`, "point feature or area of low accuracy", and upstream's
+     SLCONS03 draws `SY(LOWACC01)` for the IDENTICAL `2 <= QUAPOS < 10`
+     condition. Its HPGL is a question-mark glyph (hook over the top, stem,
+     separate dot below) plus a leader running from the glyph's lower right at
+     exactly 45 degrees (delta 944,944) down-right toward the pivot. That is
+     what is redrawn here.
+
+     SCALE COMES FROM THE FAMILY, NOT FROM LOWACC01. Traced at chartsymbols'
+     own units LOWACC01 is ~45x49 with a ~97x105 canvas — about 2.4x QUAPOS02.
+     These four symbols come out of one `match` and land on the same chart, so
+     the letterform is drawn to the QUAPOS02/QUAPOS03 conventions instead:
+     1-unit stroke, the same ~7-unit cap height, the same 4.5-unit 45-degree
+     leader, the same 6.5-unit gap between leader tip and canvas centre.
+
+     THE CANVAS IS LOAD-BEARING, DO NOT TIGHTEN IT. 34x40 with the glyph in
+     the top-left corner is not padding: the feature's own position is the
+     CANVAS CENTRE (17,20) and the point of the symbol is that the mark sits
+     OFF that position with a leader aimed at it. `composite` centre-anchors
+     free-standing artwork on its own canvas centre, so keeping the authored
+     viewBox is what keeps the offset and the leader direction. See
+     QUAPOS02.svg's header for the same note at length.
+
+     COLOUR: `#000000` -> the `ink` role via `icons::roles`' ASSET_HEXES —
+     chart ink, so it inverts with a dark palette instead of staying black.
+
+     Do NOT resize by editing width/height alone — chartcore normalises to the
+     viewBox user units and ignores the outer attributes (see no-anchor.svg). -->
+<svg version="1.0" width="34" height="40" viewBox="0 0 34 40"
+     xmlns="http://www.w3.org/2000/svg">
+  <g fill="none" stroke="#000000" stroke-width="1"
+     stroke-linecap="butt" stroke-linejoin="miter">
+    <!-- ?: three-quarter hook opening at the lower left, from the left of the
+         circle up over the top and round to the bottom -->
+    <path d="M 0.5,2.5 A 2,2 0 1 1 2.5,4.5" />
+    <!-- stem down from the hook's terminal -->
+    <path d="M 2.5,4.5 V 6" />
+    <!-- the dot, a round-capped stub so it scales as a dot -->
+    <path d="M 2.5,7.4 V 7.5" stroke-linecap="round" />
+    <!-- leader, 45 degrees down-right toward the canvas centre (17,20) -->
+    <path d="M 6,9 L 10.5,13.5" />
+  </g>
+</svg>

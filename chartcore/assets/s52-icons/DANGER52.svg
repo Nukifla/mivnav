@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- DANGER52 — the dotted danger ellipse, UNFILLED: a wreck/obstruction/rock
+     DEEPER than the safety contour. DANGER51 is the filled shallow one; the
+     two differ only in `fill`, exactly as the atlas crops they replace did.
+
+     DRAWN FOR MIVNAV (jt task lppokvtq). See DANGER51.svg for the full note —
+     same provenance (wreck-dangerous.svg's own ellipse, mast marks removed,
+     dash phase and 16x10 canvas kept), same dropped dangling clip-path, same
+     `art-ink` role for the dots.
+
+     Do NOT resize by editing width/height alone — chartcore normalises to the
+     viewBox user units and ignores the outer attributes (see no-anchor.svg). -->
+<svg version="1.0" width="16" height="10" viewBox="0 0 16 10"
+     xmlns="http://www.w3.org/2000/svg">
+  <g transform="matrix(1.5089843,0,0,-1.4631879,0.84550337,4.3996821)">
+    <path
+       d="m 0.51173779,-0.41588695 c 0,1.53200005 1.89599991,2.77200005 4.23499991,2.77200005 2.338,0 4.234,-1.24 4.234,-2.77200005 0,-1.53199995 -1.896,-2.77499995 -4.234,-2.77499995 -2.339,0 -4.23499991,1.243 -4.23499991,2.77499995"
+       style="fill:none;stroke:#231f20;stroke-width:0.471092;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:0.00471091, 0.970453;stroke-dashoffset:0.329764;stroke-opacity:1" />
+  </g>
+</svg>

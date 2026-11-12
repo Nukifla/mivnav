@@ -1,0 +1,60 @@
+[project]
+name = "mivnav"
+version = "0.1.0"
+description = "mivnav backend — chart service API"
+license = "GPL-2.0-only"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi[standard]>=0.115",
+    "httpx>=0.28",
+    # uvicorn already pulls this in to *serve* websockets; we now also use
+    # it as a client (mivnav.signalk.service), so it is declared rather
+    # than borrowed from someone else's transitive closure.
+    "websockets>=15",
+    "chartcore",
+    # Server-side `.om` decode for the weather tile renderer (mivnav.weather
+    # .render/.renderer) — NOTE the PyPI name is `omfiles`, not
+    # `python-omfiles` (that name doesn't exist; a stale reference in the
+    # original design doc). Confirmed at implementation time: ships
+    # `manylinux_2_28_aarch64` wheels (cp310-abi3, so Python 3.12-compatible)
+    # — Pi-viable, no maturin cross-build needed.
+    "omfiles>=1.2.0",
+    # Grid/projection math + tile rasterization for the same renderer.
+    "numpy>=2.5.1",
+    "pillow>=12.3.0",
+    "gribberish>=1.5.0",
+    # AEAD/HKDF for o-charts tiles and licences (mivnav.features.ocharts),
+    # also available to plugins. uv.lock carries manylinux_2_17/2_28
+    # aarch64 abi3 wheels (and cffi cp312 aarch64) — Pi-viable, no Rust build.
+    "cryptography>=46",
+    # Allow-list HTML sanitiser (ammonia, Rust) for Niord notice text that
+    # the frontend renders as HTML (mivnav.features.notices.sanitize).
+    # uv.lock carries manylinux aarch64 abi3 wheels — Pi-viable, no Rust build.
+    "nh3>=0.3",
+]
+
+[tool.uv.sources]
+chartcore = { path = "../chartcore" }
+
+[dependency-groups]
+dev = [
+    "import-linter>=2.13",
+    "pytest>=8",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["mivnav"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# `crosscheck` (test_weather_grid_crosscheck.py) is excluded by default: it's a
+# live-network + Node-subprocess test whose duration depends on Open-Meteo, not
+# this repo. Run it explicitly with `just check-crosscheck`.
+addopts = "-m 'not crosscheck'"
+markers = [
+    "crosscheck: live cross-check against Open-Meteo + a Node subprocess (excluded by default, see `just check-crosscheck`)",
+]

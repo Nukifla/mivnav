@@ -1,0 +1,1424 @@
+[
+ {
+  "id": "85c99a32-8ffd-4522-a455-6daed8be79f2",
+  "created": 1743497414000,
+  "updated": 1771232098000,
+  "messageSeries": {
+   "seriesId": "dma-nm"
+  },
+  "number": 245,
+  "shortId": "NM-245-25",
+  "mainType": "NM",
+  "type": "MISCELLANEOUS_NOTICE",
+  "status": "PUBLISHED",
+  "areas": [
+   {
+    "id": 453,
+    "mrn": "urn:mrn:iho:country:dk",
+    "active": true,
+    "descs": [
+     {
+      "lang": "da",
+      "name": "Danmark"
+     },
+     {
+      "lang": "en",
+      "name": "Denmark"
+     }
+    ]
+   }
+  ],
+  "publishDateFrom": 1743674834000,
+  "followUpDate": 1799622000000,
+  "originalInformation": true,
+  "parts": [
+   {
+    "indexNo": 0,
+    "type": "DETAILS",
+    "eventDates": [
+     {
+      "allDay": false,
+      "fromDate": 1743674834000
+     }
+    ],
+    "descs": [
+     {
+      "lang": "da",
+      "subject": "Meddelelse til alle tankskibe",
+      "details": "<p>Fra og med 24. februar 2025 vil de danske myndigheder anr&aring;be&nbsp;tankskibe med en dybgang p&aring; over 11m, der formodes at transportere olie som last og som vurderes at ville sejle gennem Storeb&aelig;lt. Skibene vil blive anmodet om frivilligt at indsende deres Civil Liability Convention (CLC) certifikat d&aelig;kkende olieforureningsskader. En digital kopi af CLC kan sendes til:&nbsp;<a href=\"mailto:contact@example.com\">contact@example.com</a>.</p>"
+     },
+     {
+      "lang": "en",
+      "subject": "Notice to all tanker vessels",
+      "details": "<p>As of 24 February 2025, the Danish Authorities will hail tankers with a draft exceeding 11m,&nbsp;which are presumed to be carrying oil as cargo and are assessed to pass through the Great Belt, kindly requesting them to voluntarily submit their Civil Liability Convention (CLC) Certificates of Insurance for oil pollution damage.&nbsp;A digital copy of the CLC can be sent to:&nbsp;<a href=\"mailto:contact@example.com\">contact@example.com</a>.</p>"
+     }
+    ],
+    "hideSubject": true
+   }
+  ],
+  "descs": [
+   {
+    "lang": "da",
+    "title": "Danmark. Meddelelse til alle tankskibe.",
+    "vicinity": "",
+    "source": "BRS 3. april 2025"
+   },
+   {
+    "lang": "en",
+    "title": "Denmark. Notice to all tanker vessels.",
+    "vicinity": "",
+    "source": "DEMA 3 April 2025"
+   }
+  ]
+ },
+ {
+  "id": "7242e03c-1279-4235-b418-6ac11cf6b027",
+  "created": 1769497797000,
+  "updated": 1785739495000,
+  "messageSeries": {
+   "seriesId": "dma-nm"
+  },
+  "number": 53,
+  "shortId": "NM-053-26",
+  "mainType": "NM",
+  "type": "TEMPORARY_NOTICE",
+  "status": "PUBLISHED",
+  "areas": [
+   {
+    "id": 466,
+    "active": true,
+    "parent": {
+     "id": 453,
+     "mrn": "urn:mrn:iho:country:dk",
+     "active": true,
+     "descs": [
+      {
+       "lang": "da",
+       "name": "Danmark"
+      },
+      {
+       "lang": "en",
+       "name": "Denmark"
+      }
+     ]
+    },
+    "descs": [
+     {
+      "lang": "da",
+      "name": "Østersøen"
+     },
+     {
+      "lang": "en",
+      "name": "The Baltic Sea"
+     }
+    ]
+   },
+   {
+    "id": 631,
+    "mrn": "urn:mrn:iho:country:de",
+    "active": true,
+    "descs": [
+     {
+      "lang": "da",
+      "name": "Tyskland"
+     },
+     {
+      "lang": "en",
+      "name": "Germany"
+     }
+    ]
+   }
+  ],
+  "charts": [
+   {
+    "chartNumber": "196",
+    "active": true,
+    "scale": 75000
+   },
+   {
+    "chartNumber": "104",
+    "active": true,
+    "scale": 200000
+   },
+   {
+    "chartNumber": "103",
+    "internationalNumber": 1303,
+    "active": true,
+    "scale": 200000
+   }
+  ],
+  "publishDateFrom": 1769503702000,
+  "followUpDate": 1817157600000,
+  "references": [
+   {
+    "messageId": "NM-270-22",
+    "type": "REFERENCE"
+   },
+   {
+    "messageId": "NM-306-25",
+    "type": "UPDATE"
+   }
+  ],
+  "originalInformation": true,
+  "parts": [
+   {
+    "indexNo": 0,
+    "type": "DETAILS",
+    "eventDates": [
+     {
+      "allDay": false,
+      "fromDate": 1769503702000
+     }
+    ],
+    "geometry": {
+     "type": "FeatureCollection",
+     "id": "50a4b090-a6fc-4d0b-b9bd-1f01e5784512",
+     "features": [
+      {
+       "type": "Feature",
+       "id": "e577c298-c5ee-4163-8a3e-635db94f7c6b",
+       "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+         [
+          [
+           11.369716666666669,
+           54.64054999999996
+          ],
+          [
+           11.355283333333333,
+           54.64471666666668
+          ],
+          [
+           11.233883333333335,
+           54.50361666666666
+          ],
+          [
+           11.243333333333334,
+           54.49195000000003
+          ],
+          [
+           11.369716666666669,
+           54.64054999999996
+          ]
+         ]
+        ]
+       },
+       "properties": {
+        "name:0:en": "coast",
+        "name:3:da": "kyst",
+        "name:1:en": "coast",
+        "name:2:en": "coast",
+        "startCoordIndex": 1,
+        "name:0:da": "kyst",
+        "name:1:da": "kyst",
+        "name:2:da": "kyst",
+        "name:3:en": "coast"
+       }
+      }
+     ]
+    },
+    "descs": [
+     {
+      "lang": "da",
+      "subject": "Tunnel etableres. Afmærkede forbudsområder",
+      "details": "<p><strong>Indtil videre</strong> etableres en tunnel mellem Femern og Lolland, i omr&aring;det afgr&aelig;nset af en linje gennem position 1) - 4).&nbsp;</p>\n<table class=\"position-table\">\n<tbody>\n<tr>\n<td class=\"pos-index\">1)</td>\n<td class=\"pos-col\">54&deg; 38,433'N - 011&deg; 22,183'E</td>\n<td>kyst</td>\n</tr>\n<tr>\n<td class=\"pos-index\">2)</td>\n<td class=\"pos-col\">54&deg; 38,683'N - 011&deg; 21,317'E</td>\n<td>kyst</td>\n</tr>\n<tr>\n<td class=\"pos-index\">3)</td>\n<td class=\"pos-col\">54&deg; 30,217'N - 011&deg; 14,033'E</td>\n<td>kyst</td>\n</tr>\n<tr>\n<td class=\"pos-index\">4)</td>\n<td class=\"pos-col\">54&deg; 29,517'N - 011&deg; 14,600'E</td>\n<td>kyst</td>\n</tr>\n</tbody>\n</table>\n<p>Indenfor omr&aring;det er der oprettet to afm&aelig;rkede forbudsomr&aring;der. Omr&aring;derne flyttes l&oslash;bende som n&oslash;dvendigt.&nbsp;</p>\n<p><strong>Inden for de afm&aelig;rkede omr&aring;der anvendes ankerb&oslash;jer med gul lysafm&aelig;rkning.</strong></p>\n<p>Se i &oslash;vrigt vedh&aelig;ftede meddelelse NM-270-22.</p>"
+     },
+     {
+      "lang": "en",
+      "subject": "Tunnel being established. Buoyed prohibited areas.",
+      "details": "<p><strong>Until further notice</strong>, a tunnel is being established between Femern and Lolland, in the area bounded by a line through positions 1) - 4).&nbsp;</p>\n<table class=\"position-table\">\n<tbody>\n<tr>\n<td class=\"pos-index\">1)</td>\n<td class=\"pos-col\">54&deg; 38.433'N - 011&deg; 22.183'E</td>\n<td>coast</td>\n</tr>\n<tr>\n<td class=\"pos-index\">2)</td>\n<td class=\"pos-col\">54&deg; 38.683'N - 011&deg; 21.317'E</td>\n<td>coast</td>\n</tr>\n<tr>\n<td class=\"pos-index\">3)</td>\n<td class=\"pos-col\">54&deg; 30.217'N - 011&deg; 14.033'E</td>\n<td>coast</td>\n</tr>\n<tr>\n<td class=\"pos-index\">4)</td>\n<td class=\"pos-col\">54&deg; 29.517'N - 011&deg; 14.600'E</td>\n<td>coast</td>\n</tr>\n</tbody>\n</table>\n<p>Two buoyed prohibited aread are established within the area.</p>\n<p>The areas are being moved continuosly as required.&nbsp;</p>\n<p><strong>Within the buoyed areas anchor buoys with yellow lights will be used</strong>.</p>\n<p>For further information, see attached message NM-270-22.</p>"
+     }
+    ],
+    "hideSubject": true
+   }
+  ],
+  "descs": [
+   {
+    "lang": "da",
+    "title": "Danmark. Tyskland. Østersøen. Femern Bælt. Rute Tango. Tunnel etableres. Afmærkede forbudsområder.",
+    "vicinity": "Femern Bælt. Rute Tango",
+    "source": "Femern A/S 20. januar 2026"
+   },
+   {
+    "lang": "en",
+    "title": "Denmark. Germany. The Baltic Sea. Femern Belt. Route Tango. Tunnel being established. Buoyed prohibited areas.",
+    "vicinity": "Femern Belt. Route Tango",
+    "source": "Femern A/S 20 January 2026"
+   }
+  ],
+  "attachments": [
+   {
+    "type": "application/pdf",
+    "path": "https://niord.dma.dk/rest/repo/file/messages/7/24/7242e03c-1279-4235-b418-6ac11cf6b027/33/NM-270-22%20Femern_DK.pdf",
+    "fileName": "NM-270-22 Femern_DK.pdf",
+    "fileSize": 15632
+   },
+   {
+    "type": "application/pdf",
+    "path": "https://niord.dma.dk/rest/repo/file/messages/7/24/7242e03c-1279-4235-b418-6ac11cf6b027/33/NM-270-22%20Femern_UK.pdf",
+    "fileName": "NM-270-22 Femern_UK.pdf",
+    "fileSize": 21112
+   }
+  ]
+ },
+ {
+  "id": "a17f90c8-a7d7-44ef-8fd5-eb15a757bc1e",
+  "created": 1747724306000,
+  "updated": 1790152536000,
+  "messageSeries": {
+   "seriesId": "dma-nm"
+  },
+  "number": 403,
+  "shortId": "NM-403-25",
+  "mainType": "NM",
+  "type": "TEMPORARY_NOTICE",
+  "status": "PUBLISHED",
+  "areas": [
+   {
+    "id": 466,
+    "active": true,
+    "parent": {
+     "id": 453,
+     "mrn": "urn:mrn:iho:country:dk",
+     "active": true,
+     "descs": [
+      {
+       "lang": "da",
+       "name": "Danmark"
+      },
+      {
+       "lang": "en",
+       "name": "Denmark"
+      }
+     ]
+    },
+    "descs": [
+     {
+      "lang": "da",
+      "name": "Østersøen"
+     },
+     {
+      "lang": "en",
+      "name": "The Baltic Sea"
+     }
+    ]
+   }
+  ],
+  "charts": [
+   {
+    "chartNumber": "198",
+    "active": true,
+    "scale": 75000
+   },
+   {
+    "chartNumber": "104",
+    "active": true,
+    "scale": 200000
+   }
+  ],
+  "publishDateFrom": 1747745408000,
+  "followUpDate": 1802041200000,
+  "originalInformation": true,
+  "parts": [
+   {
+    "indexNo": 0,
+    "type": "DETAILS",
+    "eventDates": [
+     {
+      "allDay": false,
+      "fromDate": 1747745408000
+     }
+    ],
+    "geometry": {
+     "type": "FeatureCollection",
+     "id": "43ffd9f5-d82b-4823-b741-2aeb9d78be81",
+     "features": [
+      {
+       "type": "Feature",
+       "id": "d6f62969-2469-405a-9e31-dec95110b939",
+       "geometry": {
+        "type": "MultiPoint",
+        "coordinates": [
+         [
+          12.462483333333333,
+          54.95218333333332
+         ],
+         [
+          12.463283333333333,
+          54.95231666666666
+         ]
+        ]
+       },
+       "properties": {
+        "name:0:en": "yellow spar buoy with cross topmark",
+        "name:1:en": "yellow spar buoy with cross topmark",
+        "startCoordIndex": 1,
+        "name:0:da": "gul stage med krydstopbetegnelse",
+        "name:1:da": "gul stage med krydstopbetegnelse"
+       }
+      }
+     ]
+    },
+    "descs": [
+     {
+      "lang": "da",
+      "subject": "Mindre dybder. Afmærkning udlagt.",
+      "details": "<p><strong>Indtil videre,</strong> er der observeret dybder ned til 1,5 m mellem den ydre b&oslash;lgebryder og stenmolen. Omr&aring;det er afm&aelig;rket som anf&oslash;rt p&aring; position 1) - 2).</p>\n<table class=\"position-table\">\n<tbody>\n<tr>\n<td class=\"pos-index\">1)</td>\n<td class=\"pos-col\">54&deg; 57,131'N - 012&deg; 27,749'E</td>\n<td>gul stage med krydstopbetegnelse</td>\n</tr>\n<tr>\n<td class=\"pos-index\">2)</td>\n<td class=\"pos-col\">54&deg; 57,139'N - 012&deg; 27,797'E</td>\n<td>gul stage med krydstopbetegnelse</td>\n</tr>\n</tbody>\n</table>"
+     },
+     {
+      "lang": "en",
+      "subject": "Reduced depths. Buoyage deployed.",
+      "details": "<p><strong>Until further notice,</strong> depths down to 1.5m have been observed between the breakwater and the stone pier. The area is buoyed as stated in positions 1) - 2).</p>\n<table class=\"position-table\">\n<tbody>\n<tr>\n<td class=\"pos-index\">1)</td>\n<td class=\"pos-col\">54&deg; 57.131'N - 012&deg; 27.749'E</td>\n<td>yellow spar buoy with cross topmark</td>\n</tr>\n<tr>\n<td class=\"pos-index\">2)</td>\n<td class=\"pos-col\">54&deg; 57.139'N - 012&deg; 27.797'E</td>\n<td>yellow spar buoy with cross topmark</td>\n</tr>\n</tbody>\n</table>"
+     }
+    ],
+    "hideSubject": true
+   }
+  ],
+  "descs": [
+   {
+    "lang": "da",
+    "title": "Danmark. Østersøen. Klintholm Havn. Mindre dybder. Afmærkning udlagt.",
+    "vicinity": "Klintholm Havn",
+    "publication": "<a publication=\"f3a2a685-fe2e-48f7-98de-f6459c6667bb\" href=\"http://www.danskehavnelods.dk\" target=\"_blank\">www.danskehavnelods.dk.</a>",
+    "source": "Vordingborg Kommune 12. maj 2025"
+   },
+   {
+    "lang": "en",
+    "title": "Denmark. The Baltic Sea. Klintholm Havn. Reduced depths. Buoyage deployed.",
+    "vicinity": "Klintholm Havn",
+    "publication": "<a publication=\"f3a2a685-fe2e-48f7-98de-f6459c6667bb\" href=\"http://www.danskehavnelods.dk\" target=\"_blank\">www.danskehavnelods.dk.</a>",
+    "source": "Vordingborg Kommune 12 May 2025"
+   }
+  ]
+ },
+ {
+  "id": "6e1ae196-2470-41af-93c5-7310ac8aedf4",
+  "created": 1790064482000,
+  "updated": 1790145980000,
+  "messageSeries": {
+   "seriesId": "dma-nm"
+  },
+  "number": 879,
+  "shortId": "NM-879-26",
+  "mainType": "NM",
+  "type": "TEMPORARY_NOTICE",
+  "status": "PUBLISHED",
+  "areas": [
+   {
+    "id": 466,
+    "active": true,
+    "parent": {
+     "id": 453,
+     "mrn": "urn:mrn:iho:country:dk",
+     "active": true,
+     "descs": [
+      {
+       "lang": "da",
+       "name": "Danmark"
+      },
+      {
+       "lang": "en",
+       "name": "Denmark"
+      }
+     ]
+    },
+    "descs": [
+     {
+      "lang": "da",
+      "name": "Østersøen"
+     },
+     {
+      "lang": "en",
+      "name": "The Baltic Sea"
+     }
+    ]
+   }
+  ],
+  "charts": [
+   {
+    "chartNumber": "190",
+    "active": true,
+    "scale": 50000
+   },
+   {
+    "chartNumber": "198",
+    "active": true,
+    "scale": 75000
+   },
+   {
+    "chartNumber": "104",
+    "active": true,
+    "scale": 200000
+   }
+  ],
+  "publishDateFrom": 1790145980000,
+  "followUpDate": 1792360800000,
+  "references": [
+   {
+    "messageId": "NM-796-26",
+    "type": "UPDATE"
+   }
+  ],
+  "originalInformation": true,
+  "parts": [
+   {
+    "indexNo": 0,
+    "type": "DETAILS",
+    "eventDates": [
+     {
+      "allDay": false,
+      "fromDate": 1790145980000
+     }
+    ],
+    "geometry": {
+     "type": "FeatureCollection",
+     "id": "c06434aa-5e52-446b-95d4-bd18190af433",
+     "features": [
+      {
+       "type": "Feature",
+       "id": "93c42952-2af3-4649-b02c-90ccd12ee14e",
+       "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+         [
+          [
+           13.063016666666666,
+           54.93878333333333
+          ],
+          [
+           12.981166666666667,
+           54.971583333333335
+          ],
+          [
+           12.902066666666666,
+           55.05285
+          ],
+          [
+           12.848233333333333,
+           55.022
+          ],
+          [
+           12.83725,
+           55.066383333333334
+          ],
+          [
+           12.616983333333334,
+           55.133633333333336
+          ],
+          [
+           12.35715,
+           55.2365
+          ],
+          [
+           12.3621,
+           55.248083333333334
+          ],
+          [
+           12.860866666666666,
+           55.07423333333333
+          ],
+          [
+           12.942716666666668,
+           55.06355
+          ],
+          [
+           13.0784,
+           54.950450000000004
+          ],
+          [
+           13.063016666666666,
+           54.93878333333333
+          ]
+         ]
+        ]
+       },
+       "properties": {
+        "startCoordIndex": 1
+       }
+      }
+     ]
+    },
+    "descs": [
+     {
+      "lang": "da",
+      "subject": "Søopmåling",
+      "details": "<p><strong>Indtil 16. oktober 2026</strong>, udf&oslash;res der s&oslash;opm&aring;ling i et omr&aring;de afgr&aelig;nset af en linje gennem position 1) - 11).</p>\n<table class=\"position-table\">\n<tbody>\n<tr>\n<td class=\"pos-index\">1)</td>\n<td class=\"pos-col\">54&deg; 56,327'N - 013&deg; 03,781'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">2)</td>\n<td class=\"pos-col\">54&deg; 58,295'N - 012&deg; 58,870'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">3)</td>\n<td class=\"pos-col\">55&deg; 03,171'N - 012&deg; 54,124'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">4)</td>\n<td class=\"pos-col\">55&deg; 01,320'N - 012&deg; 50,894'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">5)</td>\n<td class=\"pos-col\">55&deg; 03,983'N - 012&deg; 50,235'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">6)</td>\n<td class=\"pos-col\">55&deg; 08,018'N - 012&deg; 37,019'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">7)</td>\n<td class=\"pos-col\">55&deg; 14,190'N - 012&deg; 21,429'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">8)</td>\n<td class=\"pos-col\">55&deg; 14,885'N - 012&deg; 21,726'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">9)</td>\n<td class=\"pos-col\">55&deg; 04,454'N - 012&deg; 51,652'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">10)</td>\n<td class=\"pos-col\">55&deg; 03,813'N - 012&deg; 56,563'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">11)</td>\n<td class=\"pos-col\">54&deg; 57,027'N - 013&deg; 04,704'E</td>\n</tr>\n</tbody>\n</table>\n<p>Unders&oslash;gelserne udf&oslash;res fra fart&oslash;jerne&nbsp;&raquo;GEO SURVEYOR V&laquo; (2DPL6) og &raquo;GEO SURVEYOR XI&laquo; (2GRS3), som&nbsp;begge kan kontaktes p&aring; VHF kanal 16 og 8.&nbsp;</p>\n<p>Skibsfarten anmodes om at vise hensyn ved passage.</p>"
+     },
+     {
+      "lang": "en",
+      "subject": "Hydrographic surveys",
+      "details": "<p><strong>Until 16 October 2026</strong>,&nbsp;hydrographic surveys are being carried out in an area bounded by a line through positions 1) - 11).&nbsp;</p>\n<table class=\"position-table\">\n<tbody>\n<tr>\n<td class=\"pos-index\">1)</td>\n<td class=\"pos-col\">54&deg; 56.327'N - 013&deg; 03.781'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">2)</td>\n<td class=\"pos-col\">54&deg; 58.295'N - 012&deg; 58.870'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">3)</td>\n<td class=\"pos-col\">55&deg; 03.171'N - 012&deg; 54.124'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">4)</td>\n<td class=\"pos-col\">55&deg; 01.320'N - 012&deg; 50.894'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">5)</td>\n<td class=\"pos-col\">55&deg; 03.983'N - 012&deg; 50.235'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">6)</td>\n<td class=\"pos-col\">55&deg; 08.018'N - 012&deg; 37.019'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">7)</td>\n<td class=\"pos-col\">55&deg; 14.190'N - 012&deg; 21.429'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">8)</td>\n<td class=\"pos-col\">55&deg; 14.885'N - 012&deg; 21.726'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">9)</td>\n<td class=\"pos-col\">55&deg; 04.454'N - 012&deg; 51.652'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">10)</td>\n<td class=\"pos-col\">55&deg; 03.813'N - 012&deg; 56.563'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">11)</td>\n<td class=\"pos-col\">54&deg; 57.027'N - 013&deg; 04.704'E</td>\n</tr>\n</tbody>\n</table>\n<p>The surveys&nbsp;are carried out from the vessels&nbsp;&raquo;GEO SURVEYOR V&laquo; (2DPL6) and &raquo;GEO SURVEYOR XI&laquo; (2GRS3),&nbsp;which can both be contacted on VHF channel 16 and 8.</p>\n<p>Mariners are requested to pass with caution.</p>"
+     }
+    ],
+    "hideSubject": true
+   }
+  ],
+  "descs": [
+   {
+    "lang": "da",
+    "title": "Danmark. Østersøen. Kriegers Flak. Søopmåling.",
+    "vicinity": "Kriegers Flak",
+    "source": "Energinet 21. september 2026"
+   },
+   {
+    "lang": "en",
+    "title": "Denmark. The Baltic Sea. Kriegers Flak. Hydrographic surveys.",
+    "vicinity": "Kriegers Flak",
+    "source": "Energinet 21 September 2026"
+   }
+  ]
+ },
+ {
+  "id": "014e9256-e726-413e-b802-37bcc5ac4d20",
+  "created": 1789039672000,
+  "updated": 1789107660000,
+  "messageSeries": {
+   "seriesId": "dma-nm"
+  },
+  "number": 842,
+  "shortId": "NM-842-26",
+  "mainType": "NM",
+  "type": "TEMPORARY_NOTICE",
+  "status": "PUBLISHED",
+  "areas": [
+   {
+    "id": 473,
+    "active": true,
+    "parent": {
+     "id": 453,
+     "mrn": "urn:mrn:iho:country:dk",
+     "active": true,
+     "descs": [
+      {
+       "lang": "da",
+       "name": "Danmark"
+      },
+      {
+       "lang": "en",
+       "name": "Denmark"
+      }
+     ]
+    },
+    "descs": [
+     {
+      "lang": "da",
+      "name": "Sundet"
+     },
+     {
+      "lang": "en",
+      "name": "The Sound"
+     }
+    ]
+   }
+  ],
+  "charts": [
+   {
+    "chartNumber": "131",
+    "internationalNumber": 1331,
+    "active": true,
+    "scale": 75000
+   },
+   {
+    "chartNumber": "102",
+    "internationalNumber": 1302,
+    "active": true,
+    "scale": 200000
+   }
+  ],
+  "publishDateFrom": 1789107660000,
+  "followUpDate": 1792360800000,
+  "references": [
+   {
+    "messageId": "NM-597-26",
+    "type": "REPETITION_NEW_TIME"
+   }
+  ],
+  "originalInformation": true,
+  "parts": [
+   {
+    "indexNo": 0,
+    "type": "DETAILS",
+    "eventDates": [
+     {
+      "allDay": false,
+      "fromDate": 1789107660000
+     }
+    ],
+    "geometry": {
+     "type": "FeatureCollection",
+     "id": "24d06462-d475-4909-83e4-fbd7b88983f3",
+     "features": [
+      {
+       "type": "Feature",
+       "id": "0e23360a-ff01-49b9-adb0-f0589b4eba47",
+       "geometry": {
+        "type": "LineString",
+        "coordinates": [
+         [
+          12.48015,
+          56.09325000000001
+         ],
+         [
+          12.483433333333332,
+          56.098366666666664
+         ],
+         [
+          12.495116666666666,
+          56.0958
+         ],
+         [
+          12.492400000000002,
+          56.091516666666706
+         ]
+        ]
+       },
+       "properties": {
+        "startCoordIndex": 1
+       }
+      }
+     ]
+    },
+    "descs": [
+     {
+      "lang": "da",
+      "subject": "Rørarbejde. Midlertidigt forbudsområde oprettet",
+      "details": "<p><strong>Indtil medio oktober 2026,&nbsp;</strong>udf&oslash;res der r&oslash;rarbejde indenfor et omr&aring;de afgr&aelig;nset af en linje gennem position 1) - 4).</p>\n<table class=\"position-table\">\n<tbody>\n<tr>\n<td class=\"pos-index\">1)</td>\n<td class=\"pos-col\">56&deg; 05,595'N - 012&deg; 28,809'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">2)</td>\n<td class=\"pos-col\">56&deg; 05,902'N - 012&deg; 29,006'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">3)</td>\n<td class=\"pos-col\">56&deg; 05,748'N - 012&deg; 29,707'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">4)</td>\n<td class=\"pos-col\">56&deg; 05,491'N - 012&deg; 29,544'E</td>\n</tr>\n</tbody>\n</table>\n<p>Et forbudsomr&aring;de er oprettet.&nbsp;</p>\n<p>I forbudsomr&aring;det er der forbud mod uvedkommende sejlads, dykning, ankring, fiskeri og arbejder&nbsp;p&aring; havbunden.</p>"
+     },
+     {
+      "lang": "en",
+      "subject": "Pipe works. Temporary prohibited area established.",
+      "details": "<p><strong>Until mid-October 2026</strong>, pipe works&nbsp;are being carried out within an area bounded by a line through positions 1) - 4).</p>\n<table class=\"position-table\">\n<tbody>\n<tr>\n<td class=\"pos-index\">1)</td>\n<td class=\"pos-col\">56&deg; 05.595'N - 012&deg; 28.809'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">2)</td>\n<td class=\"pos-col\">56&deg; 05.902'N - 012&deg; 29.006'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">3)</td>\n<td class=\"pos-col\">56&deg; 05.748'N - 012&deg; 29.707'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">4)</td>\n<td class=\"pos-col\">56&deg; 05.491'N - 012&deg; 29.544'E</td>\n</tr>\n</tbody>\n</table>\n<p>A prohibited area has been established.&nbsp;</p>\n<p>Unauthorized navigation, diving,&nbsp;anchoring, fishing and working on the seabed, is prohibited in the area.</p>"
+     }
+    ],
+    "hideSubject": true
+   },
+   {
+    "indexNo": 0,
+    "type": "NOTE",
+    "descs": [
+     {
+      "lang": "da",
+      "details": "<p><span>Forbudsomr&aring;det er oprettet af BRS i henhold til Lovbekendtg&oslash;relse nr. 221 af 11. februar 2022 om sikkerhed til s&oslash;s, &sect; 6, nr. 1 og 7. Overtr&aelig;delse af forbuddet straffes i henhold til&nbsp;samme lov, &sect; 28 nr. 3.</span></p>"
+     },
+     {
+      "lang": "en",
+      "details": "<p><span>The prohibited area&nbsp;has been&nbsp;established by DEMA in accordance with consolidated act no 221 of 11 February 2022 on safety at sea, section 6 (i and vii). Contraventions of the prohibition are punishable in accordance with the same act, section 28 (iii)</span></p>"
+     }
+    ]
+   }
+  ],
+  "descs": [
+   {
+    "lang": "da",
+    "title": "Danmark. Sundet. Ellekilde Hage. Rørarbejde. Midlertidigt forbudsområde oprettet.",
+    "vicinity": "Ellekilde Hage",
+    "publication": "",
+    "source": "Luckow Marine 10. september 2026"
+   },
+   {
+    "lang": "en",
+    "title": "Denmark. The Sound. Ellekilde Hage. Pipe works. Temporary prohibited area established.",
+    "vicinity": "Ellekilde Hage",
+    "publication": "",
+    "source": "Luckow Marine 10 September 2026"
+   }
+  ]
+ },
+ {
+  "id": "719a7767-c91d-4542-94dc-39f514f67529",
+  "created": 1787823026000,
+  "updated": 1790765707000,
+  "messageSeries": {
+   "seriesId": "dma-nw-local"
+  },
+  "number": 224,
+  "shortId": "Local Warning-224-26",
+  "mainType": "NW",
+  "type": "LOCAL_WARNING",
+  "status": "PUBLISHED",
+  "areas": [
+   {
+    "id": 473,
+    "active": true,
+    "parent": {
+     "id": 453,
+     "mrn": "urn:mrn:iho:country:dk",
+     "active": true,
+     "descs": [
+      {
+       "lang": "da",
+       "name": "Danmark"
+      },
+      {
+       "lang": "en",
+       "name": "Denmark"
+      }
+     ]
+    },
+    "descs": [
+     {
+      "lang": "da",
+      "name": "Sundet"
+     },
+     {
+      "lang": "en",
+      "name": "The Sound"
+     }
+    ]
+   }
+  ],
+  "categories": [
+   {
+    "id": 180606,
+    "active": true,
+    "parent": {
+     "id": 180603,
+     "active": true,
+     "descs": [
+      {
+       "lang": "da",
+       "name": "Fyr"
+      },
+      {
+       "lang": "en",
+       "name": "Light"
+      }
+     ]
+    },
+    "descs": [
+     {
+      "lang": "da",
+      "name": "Fyr slukket"
+     },
+     {
+      "lang": "en",
+      "name": "Light unlit"
+     }
+    ]
+   }
+  ],
+  "publishDateFrom": 1787823811000,
+  "followUpDate": 1791151200000,
+  "parts": [
+   {
+    "indexNo": 0,
+    "type": "DETAILS",
+    "eventDates": [
+     {
+      "allDay": false,
+      "fromDate": 1787823811000
+     }
+    ],
+    "geometry": {
+     "type": "FeatureCollection",
+     "id": "623436b8-c94f-44dc-b115-d47c01e2c98d",
+     "features": [
+      {
+       "type": "Feature",
+       "id": "e2363e24-01b2-4c5a-a7a0-1f0842f68cac",
+       "geometry": {
+        "type": "Point",
+        "coordinates": [
+         12.511879300594332,
+         55.613818206741655
+        ]
+       },
+       "properties": {
+        "startCoordIndex": 1
+       }
+      }
+     ]
+    },
+    "descs": [
+     {
+      "lang": "da",
+      "subject": "Fyr slukket",
+      "details": "<p>Det gr&oslash;nne vinkelfyr p&aring; pos. 55&deg; 36,8'N - 012&deg; 30,7'E er slukket.</p>"
+     },
+     {
+      "lang": "en",
+      "subject": "Light unlit",
+      "details": "<p>The green sector light in pos. 55&deg; 36.8'N - 012&deg; 30.7'E is unlit.</p>"
+     }
+    ],
+    "hideSubject": true
+   }
+  ],
+  "descs": [
+   {
+    "lang": "da",
+    "title": "Danmark. Sundet. Kalvebodbroerne. Fyr slukket.",
+    "vicinity": "Kalvebodbroerne"
+   },
+   {
+    "lang": "en",
+    "title": "Denmark. The Sound. Kalvebodbroerne. Light unlit.",
+    "vicinity": "Kalvebodbroerne"
+   }
+  ]
+ },
+ {
+  "id": "5221f249-c8df-4b5c-9bd1-aa15b631cb04",
+  "created": 1790332555000,
+  "updated": 1790594897000,
+  "messageSeries": {
+   "seriesId": "dma-nw"
+  },
+  "number": 375,
+  "shortId": "NW-375-26",
+  "mainType": "NW",
+  "type": "COASTAL_WARNING",
+  "status": "PUBLISHED",
+  "areas": [
+   {
+    "id": 529,
+    "active": true,
+    "parent": {
+     "id": 453,
+     "mrn": "urn:mrn:iho:country:dk",
+     "active": true,
+     "descs": [
+      {
+       "lang": "da",
+       "name": "Danmark"
+      },
+      {
+       "lang": "en",
+       "name": "Denmark"
+      }
+     ]
+    },
+    "descs": [
+     {
+      "lang": "da",
+      "name": "Kattegat"
+     },
+     {
+      "lang": "en",
+      "name": "Kattegat"
+     }
+    ]
+   }
+  ],
+  "categories": [
+   {
+    "id": 184203,
+    "active": true,
+    "parent": {
+     "id": 180690,
+     "active": true,
+     "descs": [
+      {
+       "lang": "da",
+       "name": "Sejladshindring"
+      },
+      {
+       "lang": "en",
+       "name": "Obstruction"
+      }
+     ]
+    },
+    "descs": [
+     {
+      "lang": "da",
+      "name": "Øvelse"
+     },
+     {
+      "lang": "en",
+      "name": "Exercise"
+     }
+    ]
+   }
+  ],
+  "publishDateFrom": 1790488800000,
+  "followUpDate": 1791151200000,
+  "parts": [
+   {
+    "indexNo": 0,
+    "type": "DETAILS",
+    "eventDates": [
+     {
+      "allDay": true,
+      "fromDate": 1790546400000,
+      "toDate": 1791064799000
+     }
+    ],
+    "geometry": {
+     "type": "FeatureCollection",
+     "id": "76e77274-79d9-4905-9de3-20a1bcdaa983",
+     "features": [
+      {
+       "type": "Feature",
+       "id": "be1c9620-d1a6-46c8-9a62-7cfafb94a910",
+       "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+         [
+          [
+           10.608233333333333,
+           57.356033333333336
+          ],
+          [
+           11.23725,
+           57.4834
+          ],
+          [
+           11.2521,
+           57.56786666666667
+          ],
+          [
+           10.950783333333334,
+           57.7377
+          ],
+          [
+           10.568166666666666,
+           57.687916666666666
+          ],
+          [
+           10.5162,
+           57.6136
+          ],
+          [
+           10.608233333333333,
+           57.356033333333336
+          ]
+         ]
+        ]
+       },
+       "properties": {
+        "startCoordIndex": 1
+       }
+      }
+     ]
+    },
+    "descs": [
+     {
+      "lang": "da",
+      "subject": "Minelægnings- og minerydningsøvelse",
+      "details": "<p>Fra 28. september til 3. oktober 2026 vil der blive afholdt en minel&aelig;gnings- og minerydnings&oslash;velse i omr&aring;det mellem pos. 57&deg; 21,4'N - 010&deg; 36,5'E og 57&deg; 29,0'N - 011&deg; 14,2'E og 57&deg; 34,1'N - 011&deg; 15,1'E og 57&deg; 44,3'N - 010&deg; 57,0'E og 57&deg; 41,3'N - 010&deg; 34,1'E og 57&deg; 36,8'N - 010&deg; 31,0'E. Milit&aelig;rfart&oslash;jer vil v&aelig;re til stede og lytter p&aring; VHF kanal 16. Skibsfarten anmodes om at vise hensyn ved passage og holde en afstand p&aring; min. 0,5 sm til milit&aelig;rfart&oslash;jerne.</p>"
+     },
+     {
+      "lang": "en",
+      "subject": "Mine laying and mine sweeping exercise",
+      "details": "<p>From the 28&nbsp;September to the 3&nbsp;October 2026 a mine laying and mine sweeping exercise will take place in the area between pos. 57&deg; 21.4'N - 010&deg; 36.5'E and 57&deg; 29.0'N - 011&deg; 14.2'E and 57&deg; 34.1'N - 011&deg; 15.1'E and 57&deg; 44.3'N - 010&deg; 57.0'E and 57&deg; 41.3'N - 010&deg; 34.1'E and 57&deg; 36.8'N - 010&deg; 31.0'E. Military vessels will be in the area listening on VHF CH 16. Mariners are requested to pass with caution and keep a safe distance of 0.5nm to the military vessels.</p>"
+     }
+    ],
+    "hideSubject": true
+   }
+  ],
+  "descs": [
+   {
+    "lang": "da",
+    "title": "Danmark. Kattegat. Nordlige del. Minelægnings- og minerydningsøvelse.",
+    "vicinity": "Nordlige del"
+   },
+   {
+    "lang": "en",
+    "title": "Denmark. Kattegat. Northern Part. Mine laying and mine sweeping exercise.",
+    "vicinity": "Northern Part"
+   }
+  ]
+ },
+ {
+  "id": "b5acb579-9be4-4ec7-a2f9-ff7112aa5e99",
+  "created": 1790236630000,
+  "updated": 1790244627000,
+  "messageSeries": {
+   "seriesId": "dma-nm"
+  },
+  "number": 887,
+  "shortId": "NM-887-26",
+  "mainType": "NM",
+  "type": "PERMANENT_NOTICE",
+  "status": "PUBLISHED",
+  "areas": [
+   {
+    "id": 113262,
+    "active": true,
+    "parent": {
+     "id": 605,
+     "mrn": "urn:mrn:iho:country:gl",
+     "active": true,
+     "descs": [
+      {
+       "lang": "da",
+       "name": "Grønland"
+      },
+      {
+       "lang": "en",
+       "name": "Greenland"
+      }
+     ]
+    },
+    "descs": [
+     {
+      "lang": "da",
+      "name": "W-kyst"
+     },
+     {
+      "lang": "en",
+      "name": "W-coast"
+     }
+    ]
+   }
+  ],
+  "charts": [
+   {
+    "chartNumber": "1150",
+    "active": true
+   },
+   {
+    "chartNumber": "1151",
+    "active": true
+   },
+   {
+    "chartNumber": "1116",
+    "active": true,
+    "scale": 80000
+   },
+   {
+    "chartNumber": "1100",
+    "active": true,
+    "scale": 400000
+   },
+   {
+    "chartNumber": "1001",
+    "active": true,
+    "scale": 1500000
+   }
+  ],
+  "publishDateFrom": 1790244626000,
+  "publishDateTo": 1792576740000,
+  "references": [
+   {
+    "messageId": "NM-659-26",
+    "type": "REFERENCE"
+   }
+  ],
+  "originalInformation": true,
+  "parts": [
+   {
+    "indexNo": 0,
+    "type": "DETAILS",
+    "eventDates": [
+     {
+      "allDay": false,
+      "fromDate": 1790244626000
+     }
+    ],
+    "geometry": {
+     "type": "FeatureCollection",
+     "id": "159b2fd1-c6a2-427b-bd6e-1b5be48c5d49",
+     "features": [
+      {
+       "type": "Feature",
+       "id": "eec4eeb3-ec8a-492e-9b92-27bdf24fa10c",
+       "geometry": {
+        "type": "Point",
+        "coordinates": [
+         -46.48886666666667,
+         60.71038333333333
+        ]
+       },
+       "properties": {
+        "startCoordIndex": 1
+       }
+      }
+     ]
+    },
+    "descs": [
+     {
+      "lang": "da",
+      "subject": "Båke ændret. Rettelse",
+      "details": "<p>B&aring;ken p&aring; den n&aelig;vnte justerede position er blevet &aelig;ndret til en b&aring;ke med fyr, som anf&oslash;rt.</p>\n<table>\n<tbody>\n<tr>\n<td>B&aring;ke nr.</td>\n<td>209</td>\n</tr>\n<tr>\n<td>Fyrliste nr.</td>\n<td>7140</td>\n</tr>\n<tr>\n<td>Position</td>\n<td>60&deg; 42,623'N - 046&deg; 29,332'W</td>\n</tr>\n<tr>\n<td>Navn</td>\n<td>Kingigtoq</td>\n</tr>\n<tr>\n<td>Fyrkarakter</td>\n<td><strong>Fl.G.3s</strong></td>\n</tr>\n<tr>\n<td>Lysevne</td>\n<td>2 sm</td>\n</tr>\n<tr>\n<td>Udseende</td>\n<td>Gul p&aelig;l med sorte tal og en r&oslash;d trekant med spidsen opad</td>\n</tr>\n</tbody>\n</table>\n<p></p>"
+     },
+     {
+      "lang": "en",
+      "subject": "Beacon changed. Correction",
+      "details": "<p>The beacon in the mentioned adjusted position has been changed to a lighted beacon, as stated.</p>\n<table>\n<tbody>\n<tr>\n<td>Beacon no.</td>\n<td>209</td>\n</tr>\n<tr>\n<td>Light no.</td>\n<td>7140</td>\n</tr>\n<tr>\n<td>Position</td>\n<td>60&deg; 42.623'N - 046&deg; 29.332'W</td>\n</tr>\n<tr>\n<td>Name</td>\n<td>Kingigtoq</td>\n</tr>\n<tr>\n<td><span>Characteristic</span></td>\n<td><strong>Fl.G.3s</strong></td>\n</tr>\n<tr>\n<td><span>Range</span></td>\n<td>2nm</td>\n</tr>\n<tr>\n<td><span>Structure</span></td>\n<td>Yellow pole with black numbers and a red triangle pointing upwards</td>\n</tr>\n</tbody>\n</table>"
+     }
+    ],
+    "hideSubject": true
+   }
+  ],
+  "descs": [
+   {
+    "lang": "da",
+    "title": "Grønland. W-kyst. Nuussuannguaq. Båke ændret. Rettelse.",
+    "vicinity": "Nuussuannguaq",
+    "source": "BRS 24. september 2026"
+   },
+   {
+    "lang": "en",
+    "title": "Greenland. W-coast. Nuussuannguaq. Beacon changed. Correction.",
+    "vicinity": "Nuussuannguaq",
+    "source": "DEMA 24 September 2026"
+   }
+  ]
+ },
+ {
+  "id": "b00a2472-bc97-408a-b13f-ccf3ebc1f475",
+  "created": 1790900511000,
+  "updated": 1790900511000,
+  "messageSeries": {
+   "seriesId": "dma-fe"
+  },
+  "mainType": "NW",
+  "type": "LOCAL_WARNING",
+  "status": "PUBLISHED",
+  "areas": [
+   {
+    "id": 113166,
+    "mrn": "urn:mrn:iho:fa:dk:ek-d-396",
+    "active": true,
+    "parent": {
+     "id": 466,
+     "active": true,
+     "parent": {
+      "id": 453,
+      "mrn": "urn:mrn:iho:country:dk",
+      "active": true,
+      "descs": [
+       {
+        "lang": "da",
+        "name": "Danmark"
+       },
+       {
+        "lang": "en",
+        "name": "Denmark"
+       }
+      ]
+     },
+     "descs": [
+      {
+       "lang": "da",
+       "name": "Østersøen"
+      },
+      {
+       "lang": "en",
+       "name": "The Baltic Sea"
+      }
+     ]
+    },
+    "descs": [
+     {
+      "lang": "en",
+      "name": "EK D 396 Hullebaek"
+     },
+     {
+      "lang": "da",
+      "name": "EK D 396 Hullebæk"
+     }
+    ]
+   }
+  ],
+  "categories": [
+   {
+    "id": 469,
+    "active": true,
+    "descs": [
+     {
+      "lang": "da",
+      "name": "Skydeøvelser"
+     },
+     {
+      "lang": "en",
+      "name": "Firing Exercises"
+     }
+    ]
+   }
+  ],
+  "charts": [
+   {
+    "chartNumber": "189",
+    "internationalNumber": 1336,
+    "active": true,
+    "scale": 100000
+   },
+   {
+    "chartNumber": "188",
+    "active": true,
+    "scale": 250000
+   }
+  ],
+  "publishDateFrom": 1790900510000,
+  "publishDateTo": 1791403200000,
+  "parts": [
+   {
+    "indexNo": 0,
+    "type": "TIME",
+    "eventDates": [
+     {
+      "fromDate": 1791180000000,
+      "toDate": 1791230400000
+     },
+     {
+      "fromDate": 1791266400000,
+      "toDate": 1791316800000
+     },
+     {
+      "fromDate": 1791352800000,
+      "toDate": 1791403200000
+     }
+    ],
+    "descs": [
+     {
+      "lang": "en",
+      "details": "5 October 2026, hours 08:00 - 22:00.<br>6 October 2026, hours 08:00 - 22:00.<br>7 October 2026, hours 08:00 - 22:00."
+     },
+     {
+      "lang": "da",
+      "details": "5 oktober 2026, kl. 08:00 - 22:00.<br>6 oktober 2026, kl. 08:00 - 22:00.<br>7 oktober 2026, kl. 08:00 - 22:00."
+     }
+    ]
+   },
+   {
+    "indexNo": 0,
+    "type": "DETAILS",
+    "geometry": {
+     "type": "FeatureCollection",
+     "id": "f10c6083-5c92-40b9-a637-0e5e0d23ac27",
+     "features": [
+      {
+       "type": "Feature",
+       "id": "9a2873f5-d5af-4e49-a93b-4fb4cde6b6a7",
+       "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+         [
+          [
+           14.97945,
+           54.98
+          ],
+          [
+           14.90305,
+           54.970283333333334
+          ],
+          [
+           14.84575,
+           55.008716666666665
+          ],
+          [
+           14.917833333333334,
+           55.024483333333336
+          ],
+          [
+           14.945533333333334,
+           55.016983333333336
+          ],
+          [
+           14.97945,
+           54.98
+          ]
+         ]
+        ]
+       },
+       "properties": {
+        "name:en": "EK D 396 Hullebaek",
+        "name:da": "EK D 396 Hullebæk",
+        "startCoordIndex": 1
+       }
+      }
+     ]
+    },
+    "descs": [
+     {
+      "lang": "da",
+      "subject": "Skydeøvelser. Advarsel.",
+      "details": "<p><em></em>&nbsp;I forbindelse med skydning etableres et midlertidigt afsp&aelig;rringsomr&aring;de p&aring; s&oslash;en ud for skydepladsen p&aring; position:</p>\n<ul>\n<li>55&deg; 01'N - 014&deg; 55'E.</li>\n</ul>\n<p></p>\n<p>Skydepladsen omfatter to omr&aring;der: Hulleb&aelig;k (indre omr&aring;de) og Raghammer Odde (ydre omr&aring;de). N&aring;r der skydes i Raghammer Odde, skydes der i begge omr&aring;der.</p>"
+     },
+     {
+      "lang": "en",
+      "subject": "Firing exercises. Warning.",
+      "details": "<p>In connection with firing practices, a temporary prohibited area is established on the sea off the firing practice at position:</p>\n<ul>\n<li>55&deg; 01'N - 014&deg; 55'E.</li>\n</ul>\n<p></p>\n<p>The firing practice area covers two areas: Hulleb&aelig;k (inner area) and Raghammer Odde (outer area). When firing is practiced in Raghammer Odde, firing is practiced in both areas.</p>"
+     }
+    ]
+   },
+   {
+    "indexNo": 0,
+    "type": "PROHIBITION",
+    "descs": [
+     {
+      "lang": "da",
+      "details": "<p>Under skydning er al sejlads, ankring og fiskeri forbudt i afspærringsområdet.</p>"
+     },
+     {
+      "lang": "en",
+      "details": "<p>During firing practices, all navigation, anchoring and fishing are prohibited in the area.</p>"
+     }
+    ]
+   },
+   {
+    "indexNo": 0,
+    "type": "SIGNALS",
+    "geometry": {
+     "type": "FeatureCollection",
+     "id": "f52cc674-b7c2-4d6c-a2e3-a17bd5965e6e",
+     "features": [
+      {
+       "type": "Feature",
+       "id": "a19ed085-b04f-466b-bb07-0edcfe988c53",
+       "geometry": {
+        "type": "MultiPoint",
+        "coordinates": [
+         [
+          14.908,
+          55.023
+         ],
+         [
+          14.955166666666667,
+          55.0065
+         ]
+        ]
+       },
+       "properties": {
+        "name:0:en": "Signal mast 1.",
+        "name:1:en": "Signal mast 2.",
+        "startCoordIndex": 6,
+        "name:0:da": "Signalmast 1.",
+        "name:1:da": "Signalmast 2."
+       }
+      }
+     ]
+    },
+    "descs": [
+     {
+      "lang": "da",
+      "details": "<p>At skydning foreg&aring;r, tilkendegives ved, at der fra en time f&oslash;r skydningens p&aring;begyndelse og indtil dens oph&oslash;r vises f&oslash;lgende signaler:</p>\n<table class=\"no-border\">\n<tbody>\n<tr>\n<td><span>a)</span></td>\n<td>\n<p><span>I dagslys hejses en kugle p&aring; signalmast 1 og 2.</span></p>\n<p><span>Desuden t&aelig;ndes p&aring; begge signalmaster et hvidt, blinkende fyr (60 blink pr. minut).</span></p>\n</td>\n</tr>\n<tr>\n<td><span>b)</span></td>\n<td><span>I m&oslash;rke t&aelig;ndes p&aring; begge signalmaster fyr, der viser r&oslash;dt og hvidt vekselblink (30 blink pr. minut).</span></td>\n</tr>\n</tbody>\n</table>\n<ul>\n<li>55<span>&deg;</span> 01,38'N - 014<span>&deg;</span> 54,48'E, signalmast 1.</li>\n<li>55<span>&deg;</span> 00,39'N - 014<span>&deg;</span> 57,31'E, signalmast 2.</li>\n</ul>"
+     },
+     {
+      "lang": "en",
+      "details": "<p>Information about firing practices is given by displaying the following signals from one hour before the start of the firing practice until its end:</p>\n<table class=\"no-border\">\n<tbody>\n<tr>\n<td>a)</td>\n<td>\n<p>By daylight, a sphere is hoisted at signal mast 1 and 2.</p>\n<p>In addition, a white, flashing light is lit on both signal masts (60 flashes per minute).</p>\n</td>\n</tr>\n<tr>\n<td>b)</td>\n<td>In darkness, lights displaying a red and a white alternating flash are lit on both signal masts (30 flashes per minute).</td>\n</tr>\n</tbody>\n</table>\n<ul>\n<li>55<span>&deg;</span> 01,38'N - 014<span>&deg;</span> 54,48'E, signal mast 1.</li>\n<li>55<span>&deg;</span> 00,39'N - 014<span>&deg;</span> 57,31'E, signal mast 2.</li>\n</ul>"
+     }
+    ]
+   },
+   {
+    "indexNo": 0,
+    "type": "NOTE",
+    "descs": [
+     {
+      "lang": "da",
+      "details": "<p>Oplysning om skydning kan indhentes ved Sikkerhedskontoret, tlf. 5697 8106 / 2010 6551 eller over VHF-radio. Kaldenavn: Raghammer. Kaldekanal: 16. Samtalekanaler: 6, 8 og 77. Radioen er &aring;ben fra en time f&oslash;r skydningens p&aring;begyndelse og indtil dens oph&oslash;r.</p>"
+     },
+     {
+      "lang": "en",
+      "details": "<p>Information about firing practices is available from the safety office, tel. +45 0000 0001 /&nbsp;+45 0000 0002, or over VHF radio. Call name: Raghammer. Call channel: 16. Conversation channels: 6, 8 and 77. The radio is open from one hour before the start of the firing practice and until its end.</p>"
+     }
+    ]
+   }
+  ],
+  "descs": [
+   {
+    "lang": "da",
+    "title": "Danmark. Østersøen. EK D 396 Hullebæk. Skydeøvelser. Advarsel.",
+    "source": "FKO december 2025"
+   },
+   {
+    "lang": "en",
+    "title": "Denmark. The Baltic Sea. EK D 396 Hullebaek. Firing exercises. Warning.",
+    "source": "DC DNK December 2025"
+   }
+  ]
+ }
+]

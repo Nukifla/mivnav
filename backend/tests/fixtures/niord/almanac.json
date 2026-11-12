@@ -1,0 +1,61 @@
+[
+ {
+  "id": "1b5d4fea-68ff-413d-a8d8-852ff6b62bd6",
+  "created": 1766148741000,
+  "updated": 1767258039000,
+  "messageSeries": {
+   "seriesId": "dma-nm-almanac"
+  },
+  "number": 24,
+  "shortId": "A/24 2026",
+  "mainType": "NM",
+  "type": "MISCELLANEOUS_NOTICE",
+  "status": "PUBLISHED",
+  "publishDateFrom": 1767258000000,
+  "references": [
+   {
+    "messageId": "A/28 2025",
+    "type": "REPETITION"
+   }
+  ],
+  "originalInformation": false,
+  "parts": [
+   {
+    "indexNo": 0,
+    "type": "DETAILS",
+    "eventDates": [
+     {
+      "allDay": false,
+      "fromDate": 1767258000000
+     }
+    ],
+    "descs": [
+     {
+      "lang": "da",
+      "subject": "Danmarks Meteorologiske Instituts (DMI’s) udgivelser.",
+      "details": "<p>Danmarks Meteorologiske Institut (DMI) udgiver f&oslash;lgende publikationer:<br />Tidevandstabeller for danske, f&aelig;r&oslash;ske og gr&oslash;nlandske farvande.<br />Publikationerne kan downloades gratis p&aring; <a href=\"http://www.dmi.dk\">www.dmi.dk</a>.</p>"
+     },
+     {
+      "lang": "en",
+      "subject": "Danish Meteorological Institute’s (DMI’s) publications.",
+      "details": "<p>Danish Meteorological Institute (DMI) publishes the following publications:<br />Tide tables for Danish, Faroese and Greenlandic waters.<br />The publications can be downloaded at <a href=\"http://www.dmi.dk\">www.dmi.dk</a>.</p>"
+     }
+    ]
+   }
+  ],
+  "descs": [
+   {
+    "lang": "da",
+    "title": "Danmarks Meteorologiske Instituts (DMI’s) udgivelser.",
+    "publication": "",
+    "source": "DMI januar 2025"
+   },
+   {
+    "lang": "en",
+    "title": "Danish Meteorological Institute’s (DMI’s) publications.",
+    "publication": "",
+    "source": "DMI januar 2025"
+   }
+  ]
+ }
+]

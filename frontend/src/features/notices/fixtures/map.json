@@ -1,0 +1,80 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [10.5852, 55.3812] },
+      "properties": { "msg": "0b1c-nw-372", "sid": "NW-372-26", "fam": "nw", "cls": "light", "sub": "unlit", "win": [[1790942400000, null]], "gl": false, "role": "point", "n": "1", "vl_da": "Årø Sund fyr", "vl_en": "Årø Sund light" }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Polygon", "coordinates": [[[12.60, 55.68], [12.64, 55.68], [12.64, 55.70], [12.60, 55.70], [12.60, 55.68]]] },
+      "properties": { "msg": "2d3e-nm-842", "sid": "NM-842-26", "fam": "nm-t", "cls": "works", "sub": null, "win": [[1790164800000, 1791892800000]], "gl": false, "role": "area" }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [12.62, 55.69] },
+      "properties": { "msg": "2d3e-nm-842", "sid": "NM-842-26", "fam": "nm-t", "cls": "works", "sub": null, "win": [[1790164800000, 1791892800000]], "gl": false, "role": "anchor" }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [12.60, 55.68] },
+      "properties": { "msg": "2d3e-nm-842", "sid": "NM-842-26", "fam": "nm-t", "cls": "works", "sub": null, "win": [[1790164800000, 1791892800000]], "gl": false, "role": "vertex", "n": "1", "vl_da": "gul stage med krydstopbetegnelse Fl.W.1,5s", "vl_en": "yellow spar buoy with cross topmark Fl.W.1,5s" }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [12.64, 55.68] },
+      "properties": { "msg": "2d3e-nm-842", "sid": "NM-842-26", "fam": "nm-t", "cls": "works", "sub": null, "win": [[1790164800000, 1791892800000]], "gl": false, "role": "vertex", "n": "2", "vl_da": "kyst" }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "LineString", "coordinates": [[11.0, 55.5], [11.2, 55.55], [11.4, 55.6]] },
+      "properties": { "msg": "4f50-nm-900", "sid": "NM-900-26", "fam": "nm-p", "cls": "cable", "sub": null, "win": [[1791201600000, 1793620800000]], "gl": false, "role": "line" }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [11.2, 55.55] },
+      "properties": { "msg": "4f50-nm-900", "sid": "NM-900-26", "fam": "nm-p", "cls": "cable", "sub": null, "win": [[1791201600000, 1793620800000]], "gl": false, "role": "anchor" }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [10.1, 56.9] },
+      "properties": { "msg": "6172-nm-500", "sid": "NM-500-26", "fam": "nm-perm", "cls": "buoy", "sub": "established", "win": [[1782388800000, null]], "gl": false, "role": "point" }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [9.9, 57.1] },
+      "properties": { "msg": "8394-nm-700", "sid": "NM-700-26", "fam": "nm-t", "cls": "depth", "sub": "reduced", "win": [[1789300800000, 1790942400000]], "gl": false, "role": "point" }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Polygon", "coordinates": [[[11.70, 56.30], [11.90, 56.30], [11.90, 56.40], [11.70, 56.40], [11.70, 56.30]]] },
+      "properties": { "msg": "a5b6-fe-1", "sid": null, "fam": "fe", "cls": "firing", "sub": null, "win": [[1791021600000, 1791036000000]], "gl": false, "role": "area", "name_da": "EK D 396 Hullebæk", "name_en": "EK D 396 Hullebæk" }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [11.80, 56.35] },
+      "properties": { "msg": "a5b6-fe-1", "sid": null, "fam": "fe", "cls": "firing", "sub": null, "win": [[1791021600000, 1791036000000]], "gl": false, "role": "anchor" }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [11.70, 56.30] },
+      "properties": { "msg": "a5b6-fe-1", "sid": null, "fam": "fe", "cls": "firing", "sub": null, "win": [[1791021600000, 1791036000000]], "gl": false, "role": "point", "n": "1", "vl_da": "Signalmast 1.", "vl_en": "Signal mast 1." }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Polygon", "coordinates": [[[10.70, 57.50], [10.90, 57.50], [10.90, 57.60], [10.70, 57.60], [10.70, 57.50]]] },
+      "properties": { "msg": "c7d8-fa-18", "sid": null, "fam": "fa", "cls": "firing", "sub": null, "win": [], "gl": false, "role": "area", "name_da": "EK R 18", "name_en": "EK R 18", "firing_today": false }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Polygon", "coordinates": [[[8.00, 55.40], [8.20, 55.40], [8.20, 55.50], [8.00, 55.50], [8.00, 55.40]]] },
+      "properties": { "msg": "e9fa-fa-32", "sid": null, "fam": "fa", "cls": "firing", "sub": null, "win": [[1791025200000, 1791039600000]], "gl": false, "role": "area", "name_da": "EK D 380 Oksbøl", "name_en": "EK D 380 Oksbøl", "firing_today": true }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-51.73, 64.17] },
+      "properties": { "msg": "0a0b-gl-1", "sid": "NM-610-26", "fam": "nm-t", "cls": "beacon", "sub": "damaged", "win": [[1790164800000, null]], "gl": true, "role": "point" }
+    }
+  ]
+}

@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- DANGER53 — the dotted danger ellipse, INTERTIDAL: an obstruction that
+     COVERS AND UNCOVERS (OBSTRN04's `WATLEV` 4/5 arm). The third member of
+     the family DANGER51 (filled, the fallback arm) and DANGER52 (unfilled,
+     `WATLEV` 3, always submerged) already cover; all three share one outline
+     and differ only in fill, which is the whole distinction S-52 draws here.
+
+     DRAWN FOR MIVNAV (jt task ntyrwnnr). NOT traced — `DANGER53` is not a
+     `<symbol>` in chartsymbols.xml at all (nor in any `SymbolPatch*.xml`),
+     and ochartsng's own `S52CondRules.cpp` emits the name knowing the raster
+     atlas aliases it to the question mark. So this is `wreck-dangerous.svg`'s
+     own ellipse again, copied verbatim minus the interior mast marks — same
+     transform, same `stroke-dasharray`/`stroke-dashoffset` so dot spacing and
+     phase match the vendored symbol it sits beside, same 16x10 canvas so the
+     three DANGER5x are the same SIZE. Read DANGER51.svg's header for the full
+     recipe, including the dangling `clip-path` that is dropped.
+
+     WHY GREEN. chartsymbols.xml settles the fill question inside OBSTRN's own
+     symbol block: `OBSTRN01` ("obstruction, depth not stated") is `colour-ref`
+     ADEPVSBCHBLK — very-shallow-water blue on black — while `OBSTRN03`
+     ("obstruction which covers and uncovers") is ADEPITBCHBLK, the SAME glyph
+     over the INTERTIDAL colour. Covers-and-uncovers is distinguished by a
+     green fill, not by extra geometry, which is exactly the difference this
+     arm needs.
+
+     The role is `art-green` (#2ea948), not S-52's literal DEPIT (rgb 131,178,
+     149): this family already declined S-52 colour fidelity — DANGER51 fills
+     with quantenschaum's #afcce3, not DEPVS's #73b6ef — and matching DEPIT
+     exactly would need a new pale-intertidal role in `icon-roles.json`, every
+     theme JSON and the generated frontend bundle. `art-green` is the nearest
+     existing role, so DANGER53 is themeable today. The wart, recorded rather
+     than hidden: `art-green` is sourced from bird/fish/seal artwork, so a
+     theme that retints it moves a hazard fill along with the wildlife. A
+     dedicated intertidal role is the follow-up if exact fidelity is wanted.
+
+     `art-green` at full strength is a vivid emerald and rendered next to
+     DANGER51 it reads as a different CLASS of thing rather than the same
+     symbol in another state — measured, not assumed. `fill-opacity:0.45`
+     brings it to DANGER51's visual weight and lands on DEPIT's muted sage.
+     That is ISODGR51's trick, and legitimate for the same reason its header
+     gives: opacity is a separate attribute and survives the hex substitution
+     untouched, so the fill still follows whatever the theme makes of the role.
+
+     COLOUR: `#231f20` -> `art-ink` and `#2ea948` -> `art-green` through
+     `icons::roles`' ASSET_HEXES. No hex here is palette-fixed.
+
+     Do NOT resize by editing width/height alone — chartcore normalises to the
+     viewBox user units and ignores the outer attributes (see no-anchor.svg). -->
+<svg version="1.0" width="16" height="10" viewBox="0 0 16 10"
+     xmlns="http://www.w3.org/2000/svg">
+  <g transform="matrix(1.5089843,0,0,-1.4631879,0.84550337,4.3996821)">
+    <path
+       d="m 0.51173779,-0.41588695 c 0,1.53200005 1.89599991,2.77200005 4.23499991,2.77200005 2.338,0 4.234,-1.24 4.234,-2.77200005 0,-1.53199995 -1.896,-2.77499995 -4.234,-2.77499995 -2.339,0 -4.23499991,1.243 -4.23499991,2.77499995"
+       style="fill:#2ea948;fill-opacity:0.45;fill-rule:nonzero;stroke:#231f20;stroke-width:0.471092;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:0.00471091, 0.970453;stroke-dashoffset:0.329764;stroke-opacity:1" />
+  </g>
+</svg>

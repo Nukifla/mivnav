@@ -1,0 +1,3 @@
+/target
+# downloaded vendor binaries (oexserverd + dongle libs) — never vendored
+/tools/

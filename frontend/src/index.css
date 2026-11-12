@@ -1,0 +1,235 @@
+@import "tailwindcss";
+/* Plugins' markup lives outside this package (src/plugins.ts). */
+@source "../../plugins";
+@import "maplibre-gl/dist/maplibre-gl.css";
+
+/* Chrome design tokens — see docs/architecture/chrome-tokens.md for the
+   palette-switching mechanism, the `static` requirement, why chart colours
+   live elsewhere, and the motion/type/radius/spacing scale rationale. */
+@theme static {
+  /* Surfaces. `chrome` is the chrome's own ground; `chrome-2` is recessed. */
+  --color-chrome: #ffffff;
+  --color-chrome-2: #f1f5f9;
+
+  /* Text, in descending emphasis: value, label, hint/stale. */
+  --color-fg: #0f172a;
+  --color-fg-2: #64748b;
+  --color-fg-3: #94a3b8;
+
+  /* Separators. `line` divides, `line-2` groups more weakly. */
+  --color-line: #d7dee7;
+  --color-line-2: #e8edf3;
+
+  --color-accent: #0284c7;
+  --color-accent-fg: #ffffff;
+
+  /* Urgency ladder `maxUrgency` clamps to — must stay distinguishable
+     including for the red/green-blind, hence a brightness ramp not just hue. */
+  --color-ok: #059669;
+  --color-notice: #d97706;
+  --color-alarm: #dc2626;
+
+  /* On-fill foregrounds (siblings of accent-fg): `alarm-fg` for the urgency
+     fills, `on-scrim` for dark readout badges. Both white in every palette,
+     so nothing spells `text-white` on a coloured surface (theming gate). */
+  --color-alarm-fg: #ffffff;
+  --color-on-scrim: #ffffff;
+
+  /* Per-feature identity colours — a feature's chart line and its rail
+     numbers share a colour. `route` sits near S-52 CHMGD magenta
+     (colors.ts); `ap` shares a green with safe-AIS targets (unverified glance-ability). */
+  --color-route: #bf1e8f;
+  --color-ap: #047857;
+  --color-poi: #6d28d9;
+
+  /* Pinned equal to day.json's chrome.shadow by
+     test_day_chrome_still_matches_the_tailwind_declaration_block_it_cannot_leave. */
+  --color-shadow: #0f172a2e;
+
+  --text-3xs: 0.5rem;
+  --text-3xs--line-height: 0.75rem;
+  --text-2xs: 0.625rem;
+  --text-2xs--line-height: 0.875rem;
+
+  --radius-xs: 0.125rem; /* 2px */
+  --radius-sm: 0.25rem; /* 4px — bare `rounded` */
+  --radius-md: 0.375rem; /* 6px */
+  --radius-lg: 0.5rem; /* 8px */
+  --radius-xl: 0.75rem; /* 12px */
+  --radius-2xl: 1rem; /* 16px */
+
+  --spacing: 0.25rem; /* 4px */
+
+  --duration-sheet: 300ms;
+  --ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);
+  --duration-close-fallback: 420ms;
+  --duration-fast: 150ms;
+  --duration-collapse: 160ms;
+}
+
+/* Entrance keyframes for transient over-chart chrome: play on MOUNT, no
+   first-paint dance. Surfaces needing an EXIT too (mode pill, band.top,
+   drawers) use createEnterExit instead — a keyframe can't play on exit. */
+@keyframes mivnav-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.82);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes mivnav-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes mivnav-slide-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.mivnav-pop-in {
+  animation: mivnav-pop-in var(--duration-fast) var(--ease-sheet);
+}
+.mivnav-fade-in {
+  animation: mivnav-fade-in var(--duration-fast) ease-out;
+}
+.mivnav-slide-fade-in {
+  animation: mivnav-slide-fade-in var(--duration-fast) var(--ease-sheet);
+}
+/* Indeterminate progress bar for a job with no fraction (e.g. a POI bake):
+   a moving sweep reads as "working" unlike a static pulse. */
+@keyframes mivnav-indeterminate {
+  from {
+    transform: translateX(-120%);
+  }
+  to {
+    transform: translateX(280%);
+  }
+}
+.mivnav-indeterminate {
+  animation: mivnav-indeterminate 1.15s ease-in-out infinite;
+}
+/* Wind vane LOADING spin (features/weather/WindVane.tsx). viewBox is centred
+   on the vane's pivot (12, 28), so a plain rotate spins about that point. */
+@keyframes mivnav-vane-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.mivnav-vane-spin {
+  transform-origin: center;
+  animation: mivnav-vane-spin 2.6s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mivnav-pop-in,
+  .mivnav-fade-in,
+  .mivnav-slide-fade-in,
+  .mivnav-vane-spin {
+    animation: none;
+  }
+  .mivnav-indeterminate {
+    animation: mivnav-fade-in var(--duration-fast) ease-out;
+    opacity: 0.6;
+  }
+}
+
+/* Per-palette chrome (night etc.) is served at runtime from GET
+   /api/themes.css, not declared here — see docs/architecture/palette-runtime.md
+   for why day alone stays build-time and what that means for tuning it. */
+
+/* One focus ring everywhere. `data-[highlighted]`/`data-[selected]` alone
+   only tracks arrow-key/hover position, not real Tab focus, so this adds
+   `:focus-visible` (not `:focus`, so a mouse click stays ring-free). */
+@utility focus-ring {
+  outline: none;
+  &:focus-visible {
+    box-shadow: 0 0 0 2px var(--color-accent);
+  }
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+/* SPA viewport lock — kills document-level pull-to-refresh (the fixed body
+   is for iOS Safari, where overscroll-behavior alone is weakly honoured).
+   NOT touch-action:none: that would also kill map pan/zoom and sheet drag. */
+html,
+body {
+  overscroll-behavior: none;
+}
+body {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  overflow: hidden;
+}
+
+/* MapLibre's own chrome. It positions its corners itself, so the safe-area
+   insets have to go on the containers rather than on our layout. */
+.maplibregl-ctrl-top-left,
+.maplibregl-ctrl-bottom-left {
+  padding-left: env(safe-area-inset-left);
+}
+.maplibregl-ctrl-top-right,
+.maplibregl-ctrl-bottom-right {
+  padding-right: env(safe-area-inset-right);
+}
+.maplibregl-ctrl-top-left,
+.maplibregl-ctrl-top-right {
+  padding-top: env(safe-area-inset-top);
+}
+.maplibregl-ctrl-bottom-left,
+.maplibregl-ctrl-bottom-right {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Touch-sized hit targets are a function of the input device, not the
+   viewport: the boat's plotter is a big touchscreen. */
+@media (pointer: coarse) {
+  /* Zoom/compass: icons live on inner spans, so the box just grows. */
+  .maplibregl-ctrl-group button {
+    width: 44px;
+    height: 44px;
+  }
+
+  /* The attribution toggle can't: the icon is the button's own background,
+     so resizing tiles it and drops the box onto the scale bar — grow the
+     hit area instead and leave the box alone. */
+  .maplibregl-ctrl-attrib-button::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    height: 44px;
+    width: 44px;
+    transform: translate(-50%, -50%);
+  }
+}
+
+/* Overscale / "Zoom in for detail" (core/map/scaleBadge.ts): plain text in
+   the scale bar's own MapLibre look, stacked just above it. */
+.maplibregl-ctrl.mivnav-scale-badge {
+  background-color: rgb(255 255 255 / 75%);
+  color: #333;
+  font-size: 10px;
+  padding: 0 5px;
+  margin-bottom: 0;
+}
+.maplibregl-ctrl.mivnav-scale-badge[hidden] {
+  display: none;
+}

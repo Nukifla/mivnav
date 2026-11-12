@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- QUAPOS03 — CSQUAPNT01's "reported position" marker: the abbreviation
+     `Rep` set up and to the left of the feature, with a leader line pointing
+     back down-right at it. QUAPOS02 (`PD`) is the same symbol, one letter
+     narrower; read its header for the full note.
+
+     DRAWN FOR MIVNAV (jt task lppokvtq), replacing a PNG crop of the retired
+     raster atlas.
+
+     THE CANVAS IS LOAD-BEARING, DO NOT TIGHTEN IT. 50x40, feature position at
+     the canvas centre (25,20), label offset up-left, leader tip 6.5 units
+     short of the centre on both axes — measured off the crop, and identical
+     to QUAPOS02's. `composite` centre-anchors this on its canvas centre, so
+     the authored viewBox IS the placement.
+
+     COLOUR: `#000000` -> the `ink` role via `icons::roles`' ASSET_HEXES.
+
+     Do NOT resize by editing width/height alone — chartcore normalises to the
+     viewBox user units and ignores the outer attributes (see no-anchor.svg). -->
+<svg version="1.0" width="50" height="40" viewBox="0 0 50 40"
+     xmlns="http://www.w3.org/2000/svg">
+  <g fill="none" stroke="#000000" stroke-width="1"
+     stroke-linecap="butt" stroke-linejoin="miter">
+    <!-- R: P's stem and bowl, plus the leg -->
+    <path d="M 0.5,7.5 V 0.5 H 1.5 A 2,2 0 0 1 1.5,4.5 H 0.5" />
+    <path d="M 1.5,4.5 L 3.5,7.5" />
+    <!-- e: crossbar, then the loop anticlockwise from the bar's right end all
+         the way round to the terminal at the lower right -->
+    <path d="M 5.5,5 H 8.5 A 1.5,2.5 0 1 0 8.061,6.768" />
+    <!-- p: stem with a descender, bowl on the right -->
+    <path d="M 10.5,2.5 V 9.5" />
+    <path d="M 10.5,2.5 H 11.5 A 2,2.5 0 0 1 11.5,7.5 H 10.5" />
+    <!-- leader, 45 degrees down-right toward the canvas centre (25,20) -->
+    <path d="M 14,9 L 18.5,13.5" />
+  </g>
+</svg>

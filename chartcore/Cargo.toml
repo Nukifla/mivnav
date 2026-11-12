@@ -1,0 +1,75 @@
+[package]
+name = "chartcore"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-2.0-only"
+description = "Chart decode and tiling core for mivnav"
+
+[lib]
+name = "chartcore"
+# cdylib for the Python extension module (maturin), rlib for Rust tests/bins
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = []
+pyo3 = ["dep:pyo3"]
+# S-57 `.000` ingest (dev box only, `just ingest`). Pulls in the `gdal` crate
+# and thus links libgdal. The Pi never decodes `.000` — it serves prebuilt
+# PMTiles + oeSENC (pure-Rust `osenc/`) — so the wheel is built WITHOUT this
+# feature and links NO C geometry lib at all (serve-time geometry is pure Rust,
+# above). See CLAUDE.md.
+s57-ingest = ["dep:gdal"]
+# (There used to be an `icon-pack` feature here, pulling `spreet` in for a
+# `pack-icons` bin that pre-baked the whole ATON catalogue into a MapLibre
+# spritesheet. jt task qkmvmwps replaced that with `icons::pack::render`,
+# one key at a time over the backend's icon endpoint, so both the bin and
+# the dependency are gone — the default/pyo3 Pi build never had them and
+# now nothing does.)
+
+[dependencies]
+flate2 = "1"
+# Optional: only the S-57 `.000` ingest path (`s57/`, `bin/chartcore.rs`) uses
+# GDAL, gated behind the `s57-ingest` feature. Off by default so the Pi wheel
+# links no libgdal (serve-time geometry is pure Rust, below).
+gdal = { git = "https://github.com/georust/gdal", rev = "c0a6266b987a2c2d44aea9956c2cae1ed71445cf", features = ["bindgen"], optional = true }
+# Serve-time geometry ops (mvt/mask.rs) are PURE RUST: `geo`'s BooleanOps,
+# backed by the `i_overlay` overlay engine. No libgeos, no libgdal, no cmake —
+# only the Rust toolchain (plus the C compiler pyo3 already needs to link). This
+# is what makes chartcore deploy on Debian Bookworm, whose apt can install
+# neither `libgeos-dev` nor (on the target Pi) cmake. `i_overlay` is a fill-rule
+# overlay built for self-intersecting input, so it subsumes the `make_valid`
+# repair GEOS needed for our rect-clipped rings — see mvt/mask.rs.
+geo = "0.33"
+# `abi3-py312`: build against the stable ABI, so ONE wheel per arch (tagged
+# cp312-abi3) loads on any CPython >= 3.12. Release bundles ship a prebuilt
+# wheel; without abi3 it would be pinned to the exact minor version of the
+# Python it was built with, and uv on the Pi may pick a different one.
+pyo3 = { version = "0.26", optional = true, features = ["extension-module", "abi3-py312"] }
+# Pure-Rust data parallelism for the per-tile cut loop (mvt::cut_tiles): a
+# single process-global, bounded thread pool fans one tile's independent
+# per-cell cuts across the Pi's cores without oversubscribing under bulk load.
+# Pure Rust — no C lib — so it does not touch the gdal-free serve build posture.
+rayon = "1"
+# oexserverd binary download only (oex::download); blocking + small
+ureq = "3"
+# ATON icon recolor pass (icons/): a real XML parse of the vendored base
+# SVGs (chartcore/assets/s52-icons/) plus usvg's embedded CSS engine
+# (simplecss) to resolve class-based stylesheets, in place of genicons.py's
+# line-based text substitution. default-features=false drops usvg's
+# font/text stack (fontdb, rustybuzz, ttf-parser, ...) — none of the 36
+# parametric base icons use <text>, so it's dead weight we don't want on
+# the Pi wheel.
+# Also the ON-DEMAND icon endpoint's own path now (qkmvmwps): `icons::pack`
+# uses it to read back the composited canvas size for the `viewBox` usvg's
+# own writer drops. Serve-time, on the Pi — but pure Rust, so the "no C lib
+# in the wheel" posture is untouched.
+usvg = { version = "0.47", default-features = false }
+roxmltree = "0.21"
+pathfinding = "4.15.0"
+
+# The ingest CLI depends on the s57 module, so it only builds when the
+# S-57 feature is on. `cargo build` without it simply skips the bin (no
+# attempt to compile it against the gated module); `just ingest` enables it.
+[[bin]]
+name = "chartcore"
+required-features = ["s57-ingest"]

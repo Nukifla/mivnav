@@ -1,0 +1,4 @@
+node_modules/
+dist/
+tools/s52-colors/.cache/
+tools/openapi/schema.json

@@ -1,0 +1,11 @@
+{
+  "charts": {
+    "dir": "/var/lib/mivnav/charts"
+  },
+  "ocharts": {
+    "sets_dir": "/var/lib/mivnav/ocharts/sets",
+    "daemon_dir": "/var/cache/mivnav/oexserverd",
+    "work_dir": "/run/mivnav/oex",
+    "s52_path": "/var/lib/mivnav/s57data"
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "name": "mivnav-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "license": "GPL-2.0-only",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "tsc --noEmit && bun run lint:boundaries",
+    "lint:boundaries": "depcruise src --config .dependency-cruiser.cjs",
+    "mids": "bun tools/mid-table/build-mid-table.ts",
+    "s52-colors": "bun tools/s52-colors/build-s52-colors.ts",
+    "themes": "bun tools/themes/build-theme-bundle.ts",
+    "api": "bun tools/openapi/generate.ts",
+    "test": "bun test --conditions=browser src"
+  },
+  "dependencies": {
+    "@kobalte/core": "^0.13.10",
+    "@openmeteo/weather-map-layer": "^0.0.19",
+    "lucide-solid": "^1.24.0",
+    "maplibre-gl": "^5.6.0",
+    "solid-js": "^1.9.7",
+    "workbox-core": "^7.4.1",
+    "workbox-precaching": "^7.4.1",
+    "workbox-routing": "^7.4.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.11",
+    "@types/pngjs": "^6.0.5",
+    "dependency-cruiser": "^18.1.0",
+    "openapi-typescript": "^7.13.0",
+    "playwright": "^1.61.1",
+    "pngjs": "^7.0.0",
+    "tailwindcss": "^4.1.11",
+    "typescript": "^5.8.3",
+    "vite": "^7.0.0",
+    "vite-plugin-pwa": "^1.3.0",
+    "vite-plugin-solid": "^2.11.6"
+  }
+}

@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- ISODGR51 — the S-52 isolated-danger symbol (UDWHAZ03's promotion).
+
+     DRAWN FOR MIVNAV (jt task lppokvtq), replacing a PNG crop of the retired
+     raster atlas. Geometry measured off that crop (a 20-unit ring, 1-unit
+     stroke, saltire arms 2.1 units wide reaching r=8.5) and scaled x0.7368 to
+     14x14, so it sits with `caution` (14x14) and `obstruction` (11x11) rather
+     than 2.5x over them the way the atlas crop did.
+
+     The X is a HOLE, not white paint: the crop has no opaque white pixel in
+     it, only warning-magenta at two alpha levels over nothing. So the disc and
+     the X are ONE `fill-rule="evenodd"` path — the chart's own background
+     shows through the cross, in whatever palette is current.
+
+     COLOUR: every painted value is `#ec008c`, which `icons::roles`'
+     ASSET_HEXES maps to `warn-magenta` — IHO warning magenta, the role the
+     whole anchor/no-anchor/no-entry/caution family already carries. Nothing
+     here is hardcoded to a palette; `fill-opacity` is a separate attribute
+     and survives the hex substitution untouched, which is what makes the pale
+     disc follow the ring instead of drifting off it. (The `,RRGGBB` override
+     TSS-arrow uses to reach the theme's own CHMGD would also work here and
+     WINS over the role — deliberately not used, so this symbol tracks the
+     icon-role magenta its neighbours track rather than a second knob.)
+
+     Do NOT resize by editing width/height alone — chartcore normalises to the
+     viewBox user units and ignores the outer attributes (see no-anchor.svg's
+     own note on that trap).
+
+     SCALED x0.5 to 7x7 (mivnav change sqpxxuzs, 2026-07-29). 14x14 still read
+     about twice its proper size on the chart; the user asked twice. This
+     symbol is hand-drawn and so missed qqqxqskl's x0.5 sweep, which only
+     touched `placeholder/` — that left it out of scale with the traced class
+     symbols beside it. Same technique as that sweep: the factor goes on the
+     CONTENT via a wrapping <g>, with the viewBox narrowed to match. Scaling
+     the transform WITHOUT narrowing the viewBox is the double failure — the
+     footprint would not shrink AND the ink would sit off the hazard position.
+     qqqxqskl's accompanying `translate(0.4,0)` is deliberately NOT copied: it
+     corrected those symbols' own bounds, whereas this ink is centred on
+     (7,7) already and stays centred, at (3.5,3.5) in the new box. -->
+<svg version="1.0" width="7" height="7" viewBox="0 0 7 7"
+     xmlns="http://www.w3.org/2000/svg">
+  <g transform="scale(0.5)">
+    <!-- translucent disc with the saltire cut out of it -->
+    <path fill="#ec008c" fill-opacity="0.45" fill-rule="evenodd" stroke="none"
+          d="M 7,0.375 A 6.625,6.625 0 1 0 7,13.625 A 6.625,6.625 0 1 0 7,0.375 Z
+             M 10.871,11.967 L 7,8.096 L 3.129,11.967 L 2.033,10.871 L 5.904,7
+               L 2.033,3.129 L 3.129,2.033 L 7,5.904 L 10.871,2.033
+               L 11.967,3.129 L 8.096,7 L 11.967,10.871 Z" />
+    <!-- solid ring — stroke-width rides the <g>, so 0.75 draws as 0.375 -->
+    <circle cx="7" cy="7" r="6.625" fill="none" stroke="#ec008c" stroke-width="0.75" />
+  </g>
+</svg>

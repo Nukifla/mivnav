@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- DANGER51 — the dotted danger ellipse, FILLED: a wreck/obstruction/rock
+     shallower than the safety contour (the settings-dependent half of the
+     S-52 depth pick; DANGER52 is the unfilled deep one).
+
+     DRAWN FOR MIVNAV (jt task lppokvtq), replacing a PNG crop of the retired
+     raster atlas. NOT traced: this is `wreck-dangerous.svg`'s own ellipse,
+     copied verbatim minus the interior mast marks — same transform, same
+     `stroke-dasharray`/`stroke-dashoffset`, so the dot spacing and phase
+     match the vendored symbol it sits beside on the chart, and same 16x10
+     canvas, so the two are the same SIZE. The atlas crop was 32x22, roughly
+     2.5x the vendored set; that mismatch is the defect being removed, not a
+     property to preserve.
+
+     The clip-path the source group carried (`url(#clipPath25156)`) is
+     dropped: that id is defined nowhere in wreck-dangerous.svg either, and it
+     renders today only because usvg ignores an unresolvable reference.
+
+     COLOUR: `#231f20` -> `art-ink` and `#afcce3` -> `art-blue-pale` through
+     `icons::roles`' ASSET_HEXES, the same two roles wreck-dangerous itself
+     resolves to. No hex here is palette-fixed.
+
+     Do NOT resize by editing width/height alone — chartcore normalises to the
+     viewBox user units and ignores the outer attributes (see no-anchor.svg). -->
+<svg version="1.0" width="16" height="10" viewBox="0 0 16 10"
+     xmlns="http://www.w3.org/2000/svg">
+  <g transform="matrix(1.5089843,0,0,-1.4631879,0.84550337,4.3996821)">
+    <path
+       d="m 0.51173779,-0.41588695 c 0,1.53200005 1.89599991,2.77200005 4.23499991,2.77200005 2.338,0 4.234,-1.24 4.234,-2.77200005 0,-1.53199995 -1.896,-2.77499995 -4.234,-2.77499995 -2.339,0 -4.23499991,1.243 -4.23499991,2.77499995"
+       style="fill:#afcce3;fill-opacity:1;fill-rule:nonzero;stroke:#231f20;stroke-width:0.471092;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:0.00471091, 0.970453;stroke-dashoffset:0.329764;stroke-opacity:1" />
+  </g>
+</svg>

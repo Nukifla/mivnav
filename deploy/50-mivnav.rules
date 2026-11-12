@@ -1,0 +1,22 @@
+// mivnav: let the service user update itself, and nothing else.
+//
+// Installed by deploy/install.sh (release installs) as
+// /etc/polkit-1/rules.d/50-mivnav.rules, rendered for the installing user
+// (written for `pi`). It allows exactly:
+//   - start   mivnav-update@<arg>.service   (the backend's Update / Roll back buttons)
+//   - restart mivnav.service                (deploy/update.sh, after swapping releases)
+// No sudoers entries. Bookworm's polkit (122) evaluates JS rules.
+polkit.addRule(function(action, subject) {
+    if (action.id != "org.freedesktop.systemd1.manage-units" || subject.user != "pi") {
+        return polkit.Result.NOT_HANDLED;
+    }
+    var unit = action.lookup("unit");
+    var verb = action.lookup("verb");
+    if (verb == "start" && /^mivnav-update@[A-Za-z0-9._-]+\.service$/.test(unit)) {
+        return polkit.Result.YES;
+    }
+    if (verb == "restart" && unit == "mivnav.service") {
+        return polkit.Result.YES;
+    }
+    return polkit.Result.NOT_HANDLED;
+});

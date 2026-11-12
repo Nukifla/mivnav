@@ -1,0 +1,8 @@
+{
+  "state": "ready",
+  "version": "v-2026-10-03T11:30:00Z",
+  "fetched_at": "2026-10-03T11:30:00Z",
+  "count": 9,
+  "by_family": { "nw": 1, "fe": 1, "nm-t": 3, "nm-p": 1, "nm-perm": 1, "fa": 2 },
+  "error": null
+}

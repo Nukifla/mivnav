@@ -1,0 +1,512 @@
+{
+ "version": "57e71ce8c0bc5ce8",
+ "fetched_at": "2026-10-03T08:00:00Z",
+ "items": [
+  {
+   "id": "85c99a32-8ffd-4522-a455-6daed8be79f2",
+   "sid": "NM-245-25",
+   "fam": "nm-misc",
+   "cls": "general",
+   "sub": null,
+   "title": {
+    "da": "Danmark. Meddelelse til alle tankskibe.",
+    "en": "Denmark. Notice to all tanker vessels."
+   },
+   "vicinity": {
+    "da": null,
+    "en": null
+   },
+   "area": {
+    "da": [
+     "Danmark"
+    ],
+    "en": [
+     "Denmark"
+    ]
+   },
+   "win": [
+    [
+     1743674834000,
+     null
+    ]
+   ],
+   "publish_from": 1743674834000,
+   "publish_to": null,
+   "created": 1743497414000,
+   "updated": 1771232098000,
+   "lon": null,
+   "lat": null,
+   "gl": false,
+   "has_geometry": false
+  },
+  {
+   "id": "7242e03c-1279-4235-b418-6ac11cf6b027",
+   "sid": "NM-053-26",
+   "fam": "nm-t",
+   "cls": "works",
+   "sub": "established",
+   "title": {
+    "da": "Danmark. Tyskland. Østersøen. Femern Bælt. Rute Tango. Tunnel etableres. Afmærkede forbudsområder.",
+    "en": "Denmark. Germany. The Baltic Sea. Femern Belt. Route Tango. Tunnel being established. Buoyed prohibited areas."
+   },
+   "vicinity": {
+    "da": "Femern Bælt. Rute Tango",
+    "en": "Femern Belt. Route Tango"
+   },
+   "area": {
+    "da": [
+     "Danmark",
+     "Østersøen"
+    ],
+    "en": [
+     "Denmark",
+     "The Baltic Sea"
+    ]
+   },
+   "win": [
+    [
+     1769503702000,
+     null
+    ]
+   ],
+   "publish_from": 1769503702000,
+   "publish_to": null,
+   "created": 1769497797000,
+   "updated": 1785739495000,
+   "lon": 11.299812,
+   "lat": 54.569254,
+   "gl": false,
+   "has_geometry": true
+  },
+  {
+   "id": "a17f90c8-a7d7-44ef-8fd5-eb15a757bc1e",
+   "sid": "NM-403-25",
+   "fam": "nm-t",
+   "cls": "depth",
+   "sub": "reduced",
+   "title": {
+    "da": "Danmark. Østersøen. Klintholm Havn. Mindre dybder. Afmærkning udlagt.",
+    "en": "Denmark. The Baltic Sea. Klintholm Havn. Reduced depths. Buoyage deployed."
+   },
+   "vicinity": {
+    "da": "Klintholm Havn",
+    "en": "Klintholm Havn"
+   },
+   "area": {
+    "da": [
+     "Danmark",
+     "Østersøen"
+    ],
+    "en": [
+     "Denmark",
+     "The Baltic Sea"
+    ]
+   },
+   "win": [
+    [
+     1747745408000,
+     null
+    ]
+   ],
+   "publish_from": 1747745408000,
+   "publish_to": null,
+   "created": 1747724306000,
+   "updated": 1790152536000,
+   "lon": 12.462483,
+   "lat": 54.952183,
+   "gl": false,
+   "has_geometry": true
+  },
+  {
+   "id": "6e1ae196-2470-41af-93c5-7310ac8aedf4",
+   "sid": "NM-879-26",
+   "fam": "nm-t",
+   "cls": "survey",
+   "sub": null,
+   "title": {
+    "da": "Danmark. Østersøen. Kriegers Flak. Søopmåling.",
+    "en": "Denmark. The Baltic Sea. Kriegers Flak. Hydrographic surveys."
+   },
+   "vicinity": {
+    "da": "Kriegers Flak",
+    "en": "Kriegers Flak"
+   },
+   "area": {
+    "da": [
+     "Danmark",
+     "Østersøen"
+    ],
+    "en": [
+     "Denmark",
+     "The Baltic Sea"
+    ]
+   },
+   "win": [
+    [
+     1790145980000,
+     null
+    ]
+   ],
+   "publish_from": 1790145980000,
+   "publish_to": null,
+   "created": 1790064482000,
+   "updated": 1790145980000,
+   "lon": 12.779226,
+   "lat": 55.085037,
+   "gl": false,
+   "has_geometry": true
+  },
+  {
+   "id": "014e9256-e726-413e-b802-37bcc5ac4d20",
+   "sid": "NM-842-26",
+   "fam": "nm-t",
+   "cls": "cable",
+   "sub": null,
+   "title": {
+    "da": "Danmark. Sundet. Ellekilde Hage. Rørarbejde. Midlertidigt forbudsområde oprettet.",
+    "en": "Denmark. The Sound. Ellekilde Hage. Pipe works. Temporary prohibited area established."
+   },
+   "vicinity": {
+    "da": "Ellekilde Hage",
+    "en": "Ellekilde Hage"
+   },
+   "area": {
+    "da": [
+     "Danmark",
+     "Sundet"
+    ],
+    "en": [
+     "Denmark",
+     "The Sound"
+    ]
+   },
+   "win": [
+    [
+     1789107660000,
+     null
+    ]
+   ],
+   "publish_from": 1789107660000,
+   "publish_to": null,
+   "created": 1789039672000,
+   "updated": 1789107660000,
+   "lon": 12.488532,
+   "lat": 56.097247,
+   "gl": false,
+   "has_geometry": true
+  },
+  {
+   "id": "719a7767-c91d-4542-94dc-39f514f67529",
+   "sid": "Local Warning-224-26",
+   "fam": "nw",
+   "cls": "light",
+   "sub": "unlit",
+   "title": {
+    "da": "Danmark. Sundet. Kalvebodbroerne. Fyr slukket.",
+    "en": "Denmark. The Sound. Kalvebodbroerne. Light unlit."
+   },
+   "vicinity": {
+    "da": "Kalvebodbroerne",
+    "en": "Kalvebodbroerne"
+   },
+   "area": {
+    "da": [
+     "Danmark",
+     "Sundet"
+    ],
+    "en": [
+     "Denmark",
+     "The Sound"
+    ]
+   },
+   "win": [
+    [
+     1787823811000,
+     null
+    ]
+   ],
+   "publish_from": 1787823811000,
+   "publish_to": null,
+   "created": 1787823026000,
+   "updated": 1790765707000,
+   "lon": 12.511879,
+   "lat": 55.613818,
+   "gl": false,
+   "has_geometry": true
+  },
+  {
+   "id": "5221f249-c8df-4b5c-9bd1-aa15b631cb04",
+   "sid": "NW-375-26",
+   "fam": "nw",
+   "cls": "exercise",
+   "sub": null,
+   "title": {
+    "da": "Danmark. Kattegat. Nordlige del. Minelægnings- og minerydningsøvelse.",
+    "en": "Denmark. Kattegat. Northern Part. Mine laying and mine sweeping exercise."
+   },
+   "vicinity": {
+    "da": "Nordlige del",
+    "en": "Northern Part"
+   },
+   "area": {
+    "da": [
+     "Danmark",
+     "Kattegat"
+    ],
+    "en": [
+     "Denmark",
+     "Kattegat"
+    ]
+   },
+   "win": [
+    [
+     1790546400000,
+     1791064799000
+    ]
+   ],
+   "publish_from": 1790488800000,
+   "publish_to": null,
+   "created": 1790332555000,
+   "updated": 1790594897000,
+   "lon": 10.851252,
+   "lat": 57.555983,
+   "gl": false,
+   "has_geometry": true
+  },
+  {
+   "id": "b5acb579-9be4-4ec7-a2f9-ff7112aa5e99",
+   "sid": "NM-887-26",
+   "fam": "nm-perm",
+   "cls": "beacon",
+   "sub": "changed",
+   "title": {
+    "da": "Grønland. W-kyst. Nuussuannguaq. Båke ændret. Rettelse.",
+    "en": "Greenland. W-coast. Nuussuannguaq. Beacon changed. Correction."
+   },
+   "vicinity": {
+    "da": "Nuussuannguaq",
+    "en": "Nuussuannguaq"
+   },
+   "area": {
+    "da": [
+     "Grønland",
+     "W-kyst"
+    ],
+    "en": [
+     "Greenland",
+     "W-coast"
+    ]
+   },
+   "win": [
+    [
+     1790244626000,
+     null
+    ]
+   ],
+   "publish_from": 1790244626000,
+   "publish_to": 1792576740000,
+   "created": 1790236630000,
+   "updated": 1790244627000,
+   "lon": -46.488867,
+   "lat": 60.710383,
+   "gl": true,
+   "has_geometry": true
+  },
+  {
+   "id": "b00a2472-bc97-408a-b13f-ccf3ebc1f475",
+   "sid": null,
+   "fam": "fe",
+   "cls": "firing",
+   "sub": null,
+   "title": {
+    "da": "Danmark. Østersøen. EK D 396 Hullebæk. Skydeøvelser. Advarsel.",
+    "en": "Denmark. The Baltic Sea. EK D 396 Hullebaek. Firing exercises. Warning."
+   },
+   "vicinity": {
+    "da": null,
+    "en": null
+   },
+   "area": {
+    "da": [
+     "Danmark",
+     "Østersøen",
+     "EK D 396 Hullebæk"
+    ],
+    "en": [
+     "Denmark",
+     "The Baltic Sea",
+     "EK D 396 Hullebaek"
+    ]
+   },
+   "win": [
+    [
+     1791180000000,
+     1791230400000
+    ],
+    [
+     1791266400000,
+     1791316800000
+    ],
+    [
+     1791352800000,
+     1791403200000
+    ]
+   ],
+   "publish_from": 1790900510000,
+   "publish_to": 1791403200000,
+   "created": 1790900511000,
+   "updated": 1790900511000,
+   "lon": 14.91534,
+   "lat": 54.997175,
+   "gl": false,
+   "has_geometry": true
+  },
+  {
+   "id": "ae246d5a-a0e1-49b8-9f3d-b65a11858a6b",
+   "sid": "FA/EK-D-396 2026",
+   "fam": "fa",
+   "cls": "firing",
+   "sub": null,
+   "title": {
+    "da": "Danmark. Østersøen. EK D 396 Hullebæk.",
+    "en": "Denmark. The Baltic Sea. EK D 396 Hullebaek."
+   },
+   "vicinity": {
+    "da": null,
+    "en": null
+   },
+   "area": {
+    "da": [
+     "Danmark",
+     "Østersøen",
+     "EK D 396 Hullebæk"
+    ],
+    "en": [
+     "Denmark",
+     "The Baltic Sea",
+     "EK D 396 Hullebaek"
+    ]
+   },
+   "win": [],
+   "publish_from": 1767084396000,
+   "publish_to": null,
+   "created": 1766150379000,
+   "updated": 1767084396000,
+   "lon": 14.91534,
+   "lat": 54.997175,
+   "gl": false,
+   "has_geometry": true
+  },
+  {
+   "id": "8ad44dba-d9e3-4c91-be4f-cb0d0a250f1f",
+   "sid": "FA/EK-R-18 2026",
+   "fam": "fa",
+   "cls": "firing",
+   "sub": null,
+   "title": {
+    "da": "Danmark. Kattegat. EK R 18 Jægerspris.",
+    "en": "Denmark. Kattegat. EK R 18 Jaegerspris."
+   },
+   "vicinity": {
+    "da": null,
+    "en": null
+   },
+   "area": {
+    "da": [
+     "Danmark",
+     "Kattegat",
+     "EK R 18 Jægerspris"
+    ],
+    "en": [
+     "Denmark",
+     "Kattegat",
+     "EK R 18 Jaegerspris"
+    ]
+   },
+   "win": [
+    [
+     1791007200000,
+     1791057600000
+    ]
+   ],
+   "publish_from": 1767085844000,
+   "publish_to": null,
+   "created": 1766394567000,
+   "updated": 1767085844000,
+   "lon": 11.898693,
+   "lat": 55.870393,
+   "gl": false,
+   "has_geometry": true
+  },
+  {
+   "id": "1b5d4fea-68ff-413d-a8d8-852ff6b62bd6",
+   "sid": "A/24 2026",
+   "fam": "efs-a",
+   "cls": "general",
+   "sub": null,
+   "title": {
+    "da": "Danmarks Meteorologiske Instituts (DMI’s) udgivelser.",
+    "en": "Danish Meteorological Institute’s (DMI’s) publications."
+   },
+   "vicinity": {
+    "da": null,
+    "en": null
+   },
+   "area": {
+    "da": [],
+    "en": []
+   },
+   "win": [
+    [
+     1767258000000,
+     null
+    ]
+   ],
+   "publish_from": 1767258000000,
+   "publish_to": null,
+   "created": 1766148741000,
+   "updated": 1767258039000,
+   "lon": null,
+   "lat": null,
+   "gl": false,
+   "has_geometry": false
+  },
+  {
+   "id": "2a365f53-8820-4415-afcf-27c04d0d080c",
+   "sid": "B/2 2026",
+   "fam": "efs-b",
+   "cls": "general",
+   "sub": null,
+   "title": {
+    "da": "NCAGS.",
+    "en": "NCAGS."
+   },
+   "vicinity": {
+    "da": null,
+    "en": null
+   },
+   "area": {
+    "da": [
+     "Danmark"
+    ],
+    "en": [
+     "Denmark"
+    ]
+   },
+   "win": [
+    [
+     1767607773000,
+     null
+    ]
+   ],
+   "publish_from": 1767607773000,
+   "publish_to": null,
+   "created": 1766489871000,
+   "updated": 1767607773000,
+   "lon": null,
+   "lat": null,
+   "gl": false,
+   "has_geometry": false
+  }
+ ]
+}

@@ -1,0 +1,140 @@
+{
+  "id": "paper2",
+  "label": "Day",
+  "order": 0,
+  "dark": false,
+  "spritePrefix": "",
+  "canvas": "#c4def5",
+  "s52": {
+    "NODTA": "#d4dcda",
+    "DEPIT": "#dccdaa",
+    "DEPVS": "#a5cae8",
+    "DEPMS": "#c6e0f6",
+    "DEPMD": "#e4f0fa",
+    "DEPDW": "#ffffff",
+    "DEPSC": "#32323c",
+    "DEPCN": "#8c8c87",
+    "LANDA": "#f2e7c8",
+    "CHGRF": "#969696",
+    "CHBLK": "#141414",
+    "CHGRD": "#a0a0a0",
+    "CHMGF": "#d29696",
+    "CHBRN": "#be965f",
+    "LANDF": "#8f7147",
+    "CSTLN": "#1e1e1e",
+    "SNDG1": "#646464",
+    "SNDG2": "#141414",
+    "LITRD": "#d72828",
+    "LITGN": "#148241",
+    "LITYW": "#e1af23",
+    "CHMGD": "#c42828",
+    "TRFCD": "#c42828",
+    "TRFCF": "#d29696",
+    "OUTLW": "#282828",
+    "UINFD": "#141414",
+    "UIBCK": "#faf8f4"
+  },
+  "routeOverlay": {
+    "route": "#bf1e8f",
+    "accent": "#0284c7",
+    "halo": "#ffffffe6",
+    "target": "#f2b705"
+  },
+  "overlay": {
+    "accent": "#0284c7",
+    "halo": "#ffffffe6",
+    "markerHalo": "#ffffff"
+  },
+  "poi": {
+    "marina": "#0284c7",
+    "fuel": "#ea580c",
+    "harbourmaster": "#7c3aed",
+    "other": "#0d9488",
+    "label": "#0f172a"
+  },
+  "notices": {
+    "warning": "#e0561b",
+    "firing": "#d4202a",
+    "temporary": "#c026d3",
+    "preliminary": "#c026d3",
+    "permanent": "#6d4fc2",
+    "inactive": "#7d898c",
+    "badge": "#ffffff",
+    "label": "#1f2937",
+    "halo": "#ffffff"
+  },
+  "basemap": {
+    "roadMajor": "#8a6a3a",
+    "roadMinor": "#b8ab8f",
+    "place": "#0f172a",
+    "placeHalo": "#ffffffe6",
+    "land": "#f2e7c8",
+    "boundary": "#9a8f74"
+  },
+  "chrome": {
+    "chrome": "#ffffff",
+    "chrome-2": "#f2f2f0",
+    "fg": "#141414",
+    "fg-2": "#5a5a5a",
+    "fg-3": "#8c8c8c",
+    "line": "#b4b4b0",
+    "line-2": "#d8d8d4",
+    "accent": "#0284c7",
+    "accent-fg": "#ffffff",
+    "ok": "#1f7a4a",
+    "notice": "#a06a10",
+    "alarm": "#b91c1c",
+    "alarm-fg": "#ffffff",
+    "on-scrim": "#ffffff",
+    "route": "#bf1e8f",
+    "ap": "#1f6b4a",
+    "poi": "#6b3fa0",
+    "shadow": "#00000033"
+  },
+  "icons": {
+    "obj-white": "#f8f8f8",
+    "obj-black": "#141414",
+    "obj-red": "#ff4741",
+    "obj-green": "#2cb861",
+    "obj-blue": "#326eac",
+    "obj-yellow": "#ffb929",
+    "obj-grey": "#939393",
+    "obj-brown": "#c44843",
+    "obj-amber": "#ffc53a",
+    "obj-violet": "#f88cf8",
+    "obj-orange": "#ffb041",
+    "obj-pink": "#ffc4ce",
+    "lit-generic": "#a131a0",
+    "lit-blue": "#326eac",
+    "lit-orange": "#ff973f",
+    "lit-amber": "#ffc53a",
+    "ink": "#141414",
+    "paper": "#f8f8f8",
+    "art-ink": "#464243",
+    "art-black": "#3e3e3e",
+    "art-grey-dark": "#6c6c6c",
+    "art-grey-mid": "#7e7e7e",
+    "art-grey-light": "#d4d4d4",
+    "art-grey-pale": "#ebebeb",
+    "art-green": "#44ba59",
+    "art-green-deep": "#46a43a",
+    "art-blue-pale": "#b4d1e8",
+    "art-violet": "#ef57f9",
+    "art-stroke": "#545454"
+  },
+  "contourWidth": {
+    "safety": 1.5,
+    "other": 1
+  },
+  "fonts": {
+    "upright": [
+      "Termes Chart"
+    ],
+    "italic": [
+      "Termes Chart Italic"
+    ]
+  },
+  "placeLabelTiers": true,
+  "sectorOutline": false,
+  "sectorArcScale": 2
+}

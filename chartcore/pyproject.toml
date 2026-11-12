@@ -1,0 +1,19 @@
+# Python packaging for the chartcore extension module (pyo3 + maturin).
+# The backend depends on this via a uv path source; `uv sync` in backend/
+# builds the wheel using the `features` below — `pyo3` only, no
+# `s57-ingest`, so this build needs no system GDAL (GDAL is pulled in only
+# by the `s57-ingest` cargo feature, gating the S-57 `.000` reader).
+[build-system]
+requires = ["maturin>=1.7,<2"]
+build-backend = "maturin"
+
+[project]
+name = "chartcore"
+version = "0.1.0"
+description = "Chart decode and tiling core for mivnav (Rust extension)"
+license = "GPL-2.0-only"
+requires-python = ">=3.12"
+
+[tool.maturin]
+features = ["pyo3"]
+module-name = "chartcore"

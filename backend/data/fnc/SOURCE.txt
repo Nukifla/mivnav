@@ -1,0 +1,39 @@
+DE6OSTIM.S57 — committed test fixture, redistributed verbatim.
+
+Source:   https://freenauticalchart.net/download/fnc-de.zip
+          (member fnc-de/DE6OSTIM.S57)
+Edition:  FNC-DE 2026-07-19  (zip Last-Modified 2026-07-20,
+          ETag "6a5d9533-3cb28af")
+Licence:  CC0 1.0 — https://creativecommons.org/publicdomain/zero/1.0/
+          "The downloadable files on this page are licensed under CC0"
+          (https://freenauticalchart.net/download/, License section).
+Upstream data: BSH (Geonutzv / dl-de-by-2.0) via the quantenschaum/mapping
+          project (https://github.com/quantenschaum/mapping), which
+          publishes the derived charts as CC0.
+
+Despite the .S57 name the payload is a plain OSENC/SENC v200 stream, not
+an ISO-8211 S-57 base cell — see mivnav/features/ocharts/fnc.py. It is
+kept under the publisher's own name so the normalisation step has
+something real to act on in the tests.
+
+Why this cell: it is the smallest FNC cell (38 KB) that still carries
+sectored lights (10 SECTR1 attributes). The other committed chart fixture,
+US5OAKIQ, has none at all, so sector work had no real data to test against.
+
+DE6OSBRH.S57 — committed test fixture, redistributed verbatim.
+
+Source:   https://freenauticalchart.net/download/fnc-de.zip
+          (member fnc-de/DE6OSBRH.S57)
+Edition:  FNC-DE 2026-08-16  (zip Last-Modified 2026-08-17,
+          ETag "6a8280e9-3cb4711")
+Licence:  CC0 1.0 — https://creativecommons.org/publicdomain/zero/1.0/
+          (same statement as above)
+Upstream data: BSH (Geonutzv / dl-de-by-2.0) via the quantenschaum/mapping
+          project, same as DE6OSTIM.S57 above.
+
+Why this cell: the smallest FNC cell (34 KB) charting a real fairway
+(NAVLNE + RECTRC, near Barhöft) — `mivnav::portals::Portal::touches_
+fairway`/`chartcore::mivnav::query::TopologyWeights` have no other real
+(non-synthetic) fixture to prove themselves against; DE6OSTIM charts
+neither a NAVLNE/RECTRC/FAIRWY/DWRTPT fairway nor any TSS-family feature
+(confirmed by a direct feature-class scan of both cells).
