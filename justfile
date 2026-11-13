@@ -141,20 +141,20 @@ test-chartcore:
     cd {{ chartcore }} && cargo test --features s57-ingest
 
 # backend: uv run pytest (reinstalls chartcore first — see sync-chartcore).
-# Excludes the `crosscheck` marker (test_weather_grid_crosscheck.py) — see
-# check-crosscheck below and backend/pyproject.toml's addopts.
+# Excludes the `crosscheck` marker (the weather plugin's live Open-Meteo
+# cross-check) — see check-crosscheck below and backend/pyproject.toml's addopts.
 test-backend: sync-chartcore-if-stale
     cd {{ backend }} && uv run pytest
-    @echo "Excluded: Open-Meteo/.om cross-check (live network + Node, ~3 min) — run 'just check-crosscheck' to include it."
 
-# backend: the live Open-Meteo cross-check (test_weather_grid_crosscheck.py) —
+# weather plugin: the live Open-Meteo cross-check
+# (plugins/weather/backend/tests/test_weather_grid_crosscheck.py) —
 # NOT part of `just check`/`test-backend` (see there). Live network + a Node
 # subprocess, ~3 min: proves the .om decode port agrees with the ORIGINAL
 # @openmeteo/weather-map-layer JS, not just with itself. Needs a sibling
 # frontend checkout with node_modules installed (bun install) and `node` on
 # PATH; self-skips per-test if either is missing rather than failing.
 check-crosscheck: sync-chartcore-if-stale
-    cd {{ backend }} && uv run pytest -m crosscheck tests/test_weather_grid_crosscheck.py
+    cd {{ backend }} && uv run pytest -c pyproject.toml -m crosscheck ../plugins/weather/backend/tests/test_weather_grid_crosscheck.py
 
 # frontend: typecheck (tsc --noEmit) — any plugin under plugins/ included
 check-frontend: plugins-link

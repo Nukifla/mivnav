@@ -61,7 +61,7 @@ def _payload(runtime: Runtime, config: Config) -> dict[str, Any]:
             # Whether the RouteIQ access token is configured — the routing
             # settings UI shows "connected" vs "not connected" from this,
             # the same role signalk_token_set plays for autopilot write
-            # access (mivnav.features.routing.routes).
+            # access (the autorouting plugin's routes.py).
             "routeiq_token_set": bool(
                 config.credentials.routeiq.token.get_secret_value()
             ),

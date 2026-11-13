@@ -1,15 +1,21 @@
-// THE ROUTE EDITOR: the chart-mode seam (./modes.ts), the band.top instruments,
+// THE ROUTES FEATURE: the route store's live view, following, the band.top
+// instruments, the route overlay and info card, the straight-line "Go to",
 // and the pure tap-onto-leg geometry — maplibre-free. See
 // docs/architecture/route-model.md for the three-way split and why.
+//
+// The auto-routing editor (From/Stop/To, `route-edit`) and the auto-routed
+// "Go here" are the `autorouting` plugin's: it attaches to this feature as
+// the overlay's edit session (`attachEditor`) and registers itself as the
+// route planner (core/routePlanner.ts). Without it, routes are made in the
+// manual editor (features/routeDraw) and "Go to" is a straight line.
 
-import { createEffect, createMemo, createSignal, onCleanup, type Accessor } from "solid-js";
+import { createEffect, createMemo, createSignal, type Accessor } from "solid-js";
 import type { Map as MLMap } from "maplibre-gl";
 import type { QueryableMap } from "../../core/info/queryGuard";
 import { createRouteProvider } from "./provider";
 import { knotsFromMs, wrapLonDeltaDeg } from "../../core/cpa";
 import {
   DEFAULT_PLAN_SPEED_KN,
-  RouteSaveError,
   type Route,
   type RoutesClient,
   type SteerMode,
@@ -17,17 +23,13 @@ import {
 } from "../../core/routes";
 import type { Notice } from "../../core/chrome/notices";
 import type { SignalKState } from "../../core/signalk";
-import { planIsUnreachable, planRoute, type PlanFetch } from "../../core/routing";
-import { formatCoordinate } from "../../core/coordinate";
-import { nearestPlace } from "../../core/search/client";
 import { bearingDeg, type GeoPoint, rangeNm } from "../../core/chrome/geo";
 import { formatClock, formatDuration, formatRange, padDeg } from "../../core/format";
-import { isHelmish, type Instrument, type Mode } from "../../core/chrome/registry";
+import { isHelmish, type Instrument } from "../../core/chrome/registry";
 import { defineFeature, type AppFeature } from "../../core/chrome/feature";
 import { createRouteOverlay } from "./overlay";
 import { routeCommands } from "./commands";
-import { betaAutorouting } from "../../core/serverConfig";
-import { haptic } from "./haptics";
+import { routePlanner } from "../../core/routePlanner";
 import { downloadGpx } from "./download";
 import { clampName, importGpx, importSummary, type XmlParse } from "./gpx";
 import { createFollow, followName, type FollowLeg, type FollowResult } from "./follow";
@@ -119,13 +121,8 @@ export const GO_HERE_ROUTE_ID = "9e0e7e0e-0000-4000-a000-000000006e7e";
  * boat is now, waypoint 1 the destination, named as the leg (invariant #8) so
  * band.top's followed strip reads BRG/DTW straight to it. Pure.
  *
- * No longer `goTo`'s primary path (see `routeFromPlan`, which builds from a
- * real hazard-avoiding `chartcore.shortest_path` result instead) — kept as
- * its FALLBACK for when the planning request itself fails outright (a
- * network/server error, not the router finding no safe path — that case
- * already comes back as a valid, if unavoidably straight, `PlanResult`).
- * "Go here" degrading to the pre-routing straight line beats it refusing
- * to work at all when the router is briefly unreachable.
+ * The straight-line "Go to" (`goStraight`), and the autorouting plugin's
+ * fallback for when its planning request fails outright.
  */
 export function directRoute(
   from: GeoPoint,
@@ -150,58 +147,6 @@ export function directRoute(
   return { route, activeWaypointId: ids.to };
 }
 
-/**
- * A route built from a `chartcore.shortest_path` result (`POST
- * /api/routing/plan`, via `core/routing.ts`'s `planRoute`): waypoint 0 is
- * the boat, the LAST is the destination, named as the leg exactly like
- * `directRoute` (invariant #8) — and any points the real search bent
- * through in between (routing around charted danger) are named plainly,
- * "Waypoint N", since they exist for the router's reasons, not for a user
- * to rename. Pure, same shape as `directRoute`: ids come in pre-minted
- * (one per waypoint, in order) so the caller controls id generation — a
- * real uuid per point in the app, a deterministic fake in tests — and this
- * function only has to place them.
- *
- * `approximateLegs` (`PlanResult.approximateLegs`, one entry per LEG —
- * `waypoints[i]` -> `waypoints[i+1]`) is stamped onto each WAYPOINT's own
- * `approximate` field (#owqqcdqe, 2026-08-10): waypoint `i`'s flag is the
- * INCOMING leg's, `approximateLegs[i-1]` — the persisted, per-waypoint
- * home for the same fact the old ephemeral `approximateLegs` signal held
- * only for the session that planned it. Omitted (every waypoint gets
- * `false`) when the caller has none — `directRoute`'s own network-failure
- * fallback, which was never verified either way and says so through its
- * own toast instead.
- */
-export function routeFromPlan(
-  waypoints: readonly GeoPoint[],
-  ids: { route: string; waypointIds: readonly string[] },
-  name?: string,
-  approximateLegs?: readonly boolean[],
-): { route: Route; activeWaypointId: string } {
-  const label = name?.trim() || "Go here";
-  const n = waypoints.length;
-  const wps: Waypoint[] = waypoints.map((p, i) => ({
-    id: ids.waypointIds[i]!,
-    name: i === 0 ? "Boat" : i === n - 1 ? label : `Waypoint ${i}`,
-    lat: p.lat,
-    lon: p.lng,
-    approximate: i > 0 ? (approximateLegs?.[i - 1] ?? false) : false,
-    // Boat and the destination are points the mariner actually chose; any
-    // bend between them is the router's own — same tag the From/Stop/To
-    // engine uses (`rebuildFromStops`), so this ephemeral route reads
-    // sensibly if it is ever reopened in the editor.
-    stop: i === 0 || i === n - 1,
-  }));
-  const route: Route = {
-    id: ids.route,
-    name: label,
-    waypoints: wps,
-    plan_speed_kn: DEFAULT_PLAN_SPEED_KN,
-    rev: 0,
-    updated: 0,
-  };
-  return { route, activeWaypointId: wps[n - 1]!.id };
-}
 
 /** The same route, sailed the other way: waypoint order reversed, ids/names
  * carried along, `rev`/`id` preserved so saving it OVERWRITES, not forks. */
@@ -422,16 +367,6 @@ export function mintUuid(): string {
     .join("")}-${hex.slice(8, 10).join("")}-${hex.slice(10, 16).join("")}`;
 }
 
-/** A fresh, empty route with a client-minted id (idempotent PUT — see routes.py). */
-const newRoute = (mintId: () => string): Route => ({
-  id: mintId(),
-  name: "",
-  waypoints: [],
-  plan_speed_kn: DEFAULT_PLAN_SPEED_KN,
-  rev: 0,
-  updated: 0,
-});
-
 /** The overlay's whole input: what to draw, what is being edited, what is active. */
 export interface RouteOverlay {
   /** The route the chart draws: the draft while editing, else the followed one. */
@@ -453,14 +388,6 @@ export interface RouteOverlay {
   targetLine: Accessor<{ from: GeoPoint; to: GeoPoint } | null>;
   /** The leg the plan sheet asked to FLASH, or null; set for ~1.4s. */
   flashLeg: Accessor<number | null>;
-  /** The last "Go here" plan's per-leg approximate flags (`core/
-   * routing.ts`'s `PlanResult.approximateLegs`) — ephemeral, like
-   * `flashLeg` above, not part of the persisted `Route`. Not only the
-   * first/last entry: a leg anywhere in the route can be flagged. The
-   * overlay only honours this while `route()?.id === GO_HERE_ROUTE_ID`,
-   * so a stale flag from an earlier tap never bleeds onto a different
-   * route. */
-  approximateLegs: Accessor<boolean[]>;
   /** Drag committed by the layer: move a STOP to a new position. Called many
    * times across a drag (the rubber-band visual); bracket a real drag with
    * `beginWaypointDrag`/`endWaypointDrag` so the leg(s) touching it are
@@ -494,21 +421,38 @@ export interface RouteOverlay {
   previewTo: Accessor<{ point: GeoPoint; label: string } | null>;
 }
 
+/** What a route EDITOR lends the overlay while it is open — the autorouting
+ * plugin's From/Stop/To editor (`RoutesModel.attachEditor`). Its draft is
+ * drawn instead of the followed route, with the stops as drag handles; the
+ * drag verbs are its own (it re-plans the legs on drop). */
+export interface RouteEditSession {
+  /** The route being edited, or null while the editor is closed. */
+  draft: Accessor<Route | null>;
+  previewFrom: RouteOverlay["previewFrom"];
+  previewTo: RouteOverlay["previewTo"];
+  flashLeg: RouteOverlay["flashLeg"];
+  moveWaypoint: RouteOverlay["moveWaypoint"];
+  beginWaypointDrag: RouteOverlay["beginWaypointDrag"];
+  endWaypointDrag: RouteOverlay["endWaypointDrag"];
+  abortDrag: RouteOverlay["abortDrag"];
+}
+
 export interface RoutesModel extends RouteOverlay {
   /** Whether a leg is being followed — drives band.top's liveness. */
   following: Accessor<boolean>;
-  /** Is there a boat position to route FROM? Gates "Go here". */
+  /** Is there a boat position to route FROM? Gates "Go here"/"Go to". */
   hasFix: Accessor<boolean>;
-  /** "Go here": build a direct route from the boat to `to`, save it, and make it
-   * the active followed leg. Resolves `false` — building nothing — with no fix. */
-  goTo(to: GeoPoint, label?: string): Promise<boolean>;
-  /** "Go to" with "Beta autorouting" OFF: the same fixed `go-here` route, but a
-   * plain STRAIGHT line boat → `to` (`directRoute`) — no router call, no
-   * hazard check — saved and followed. `false`, building nothing, with no fix. */
+  /** "Go to" without a route planner: the fixed `go-here` route as a plain
+   * STRAIGHT line boat → `to` (`directRoute`) — no router call, no hazard
+   * check — saved and followed. `false`, building nothing, with no fix. */
   goStraight(to: GeoPoint, label?: string): Promise<boolean>;
-  /** Follow a saved route from the nearest leg ahead (`./follow.ts`). Not
-   * beta-gated. Another route followed and not `confirmed` → asks "Switch
-   * to …?" through a notice; the same route again → a no-op. */
+  /** Save `built` over the fixed go-here route (`GO_HERE_ROUTE_ID`) and
+   * follow it from `activeWaypointId` — `goStraight`'s second half, and
+   * the planner's auto-routed "Go here". `false` if the save/follow fails. */
+  followGoHere(built: { route: Route; activeWaypointId: string }): Promise<boolean>;
+  /** Follow a saved route from the nearest leg ahead (`./follow.ts`). Another
+   * route followed and not `confirmed` → asks "Switch to …?" through a
+   * notice; the same route again → a no-op. */
   follow(route: Route, opts?: { confirmed?: boolean }): Promise<FollowResult>;
   /** The followed route and its target index, or null. */
   followLeg: Accessor<FollowLeg | null>;
@@ -520,12 +464,6 @@ export interface RoutesModel extends RouteOverlay {
   routes: Accessor<Route[]>;
   /** The followed route's id, or null — the list marks which one is live. */
   activeRouteId: Accessor<string | null>;
-  /** Open a saved route INTO the editor (a copy). Edits auto-save in place. */
-  editRoute(route: Route): void;
-  /** Start a BLANK new route and enter the editor — REGARDLESS of what is being
-   * followed. Carries a one-shot "seed empty" flag past `seedDraft`'s default
-   * (continue the followed route), so the followed one is untouched. */
-  newRoute(): void;
   /** Delete a saved route. Deleting the followed one stops the follow too. */
   removeRoute(route: Route): Promise<void>;
   /** Save the return passage as a NEW route (`reversedCopy`), leaving the
@@ -535,164 +473,23 @@ export interface RoutesModel extends RouteOverlay {
   /** Import a GPX file's routes (and tracks, simplified) as new routes
    * (`./gpx.ts`), then notify what happened. Resolves to the routes saved. */
   importGpx(text: string, fileName?: string): Promise<Route[]>;
-  // The plan-mode surface (RT-R2): the sheet's read/action side, wired to the
-  // same editor operations rather than reinventing tap/insert/GO.
-  /** The route being edited, or null when closed. `route()` also returns it
-   * while editing, but the sheet wants the draft SPECIFICALLY. */
-  draft: Accessor<Route | null>;
-  /** The draft measured at rest at its own planning speed (`planRouteMetrics`). */
-  plan: Accessor<RoutePlan>;
-  /** One line of guidance for the sheet's peek. */
-  editorHint: Accessor<string>;
-  /** Is the draft the route currently being FOLLOWED? Then the sheet offers a
-   * Stop as well as a re-follow. */
-  followingDraft: Accessor<boolean>;
-  /** Set the draft's planning speed (knots); auto-saved like any edit. */
-  setPlanSpeed(kn: number): void;
-  /** Rename the draft (the backend caps `name` at 64). Also auto-saved. */
-  renameDraft(name: string): void;
-  /** Reverse the draft's whole From/Stop/To order — the return passage,
-   * mid-edit ("Flip"). Geometry only (no re-plan needed: a route through the
-   * same points sailed backwards is still a valid route), so it is instant. */
-  reverseDraft(): void;
-  /** GO: the draft is already saved (auto-save), so this just names the
-   * target as the active leg and leaves the editor (invariant #8). */
-  saveAndFollow(): Promise<void>;
-  /** "Start route" (#RT-GONAV item 2): follow from the closest-next join point —
-   * the arrival waypoint of the leg the boat is nearest, or the first waypoint
-   * with no fix. Ignores the selection. */
-  startRoute(): Promise<void>;
-  /** Open the saved-routes MANAGER (#RT-GONAV item 3), leaving the editor first. */
-  openManager(): void;
-  /** App wires this to `openRoutes` so `openManager` can reach the route list. */
-  bindOpenManager(open: () => void): void;
-  // ── The From/Stop/To list — the Google-Maps-style autorouting surface ──────
-  //
-  // The sheet (RouteSheet.tsx) renders `draftStops()` as one ordered list, From
-  // through To. Every structural edit (set a slot, insert/remove/reorder a stop)
-  // re-plans through `core/routing.ts`'s `planRoute` and rewrites the draft's
-  // whole `waypoints` array from the resulting stop list — a bend the router
-  // inserts along a leg is never something a person edits directly, so there is
-  // no partial-splice path to keep in sync; see `rebuildFromStops` for why a
-  // full rebuild, not a touched-legs-only patch, is the whole of it.
-  /** The stops a person actually chose, in route order — From, then each Stop,
-   * then To — derived straight from `draft().waypoints.filter(w => w.stop)`.
-   * Empty for a brand-new draft (nothing chosen yet; the sheet shows `fromLabel`
-   * and a blank To in that state instead). */
-  draftStops: Accessor<Waypoint[]>;
-  /** True while a stop edit's real re-plan (`rebuildFromStops`, a network round
-   * trip per leg) is in flight — the UI's one "something is happening" signal.
-   * The edit itself is never invisible while this is true: every mutator
-   * (`setStop`/`insertStop`/`removeStop`/`reorderStops`/the drag session)
-   * patches the draft with a straight-line PROVISIONAL shape synchronously,
-   * before this even flips true, so a pin/row appears immediately and this
-   * flag only covers the gap until the real routed geometry replaces it. */
-  planning: Accessor<boolean>;
-  /** Set (or replace) one slot's point — From, To (the current last stop), or an
-   * existing stop by id — and re-plan the leg(s) touching it. On a brand-new
-   * draft, setting `{kind:"from"}` only STAGES the point (`fromLabel`/
-   * `pendingFrom`, nothing to plan yet); setting `{kind:"to"}` there SEEDS the
-   * whole route from the staged (or boat) From to this point — the same "search
-   * or tap the chart" first move the empty bar has always offered. Resolves
-   * `false` on no boat fix (seeding with no staged From and none given) or a
-   * slot that doesn't resolve to an existing stop. */
-  setStop(slot: StopSlot, point: GeoPoint, label?: string): Promise<boolean>;
-  /** Insert a brand-new stop immediately before the stop `beforeId` — "+ Add a
-   * stop" passes the current To's id, so the new stop lands just ahead of it.
-   * Re-plans the two legs it now splits. `false` if `beforeId` isn't a stop on
-   * the draft (there is always at least a To to insert before once any route
-   * exists — the button is gated on that in the UI). */
-  insertStop(beforeId: string, point: GeoPoint, label?: string): Promise<boolean>;
-  /** Drop a stop and re-plan once between its former neighbours, collapsing two
-   * legs into one. Dropping down to a single remaining stop leaves it as the
-   * draft's sole waypoint (no leg to plan). A no-op if `id` isn't a stop. */
-  removeStop(id: string): Promise<void>;
-  /** Move a stop to a new position in the From/Stop/To order and re-plan every
-   * leg touching its old or new neighbours. Indices are into `draftStops()`; a
-   * no-op if either is out of range. */
-  reorderStops(fromIndex: number, toIndex: number): Promise<void>;
-  /** The staged From's display label — "Boat" (the default) until a search
-   * pick or "Choose on map" stages a different start point (only meaningful
-   * before the draft has any stops — see `setStop`). */
-  fromLabel: Accessor<string>;
-  /** Reset the From slot back to the boat: on a brand-new draft, resets the
-   * staging; on a draft with stops, replaces the live From stop with the
-   * boat's current fix (a real re-plan, like any other `setStop`). Resolves
-   * with no fix and a draft that already has stops (nothing to set it to). */
-  setFromBoat(): void;
-  /** Stage or set a custom From point — see `setStop`'s `{kind:"from"}` case,
-   * which this delegates to. `label` falls back to a generic name when
-   * omitted/blank. */
-  setFromPoint(point: GeoPoint, label?: string): void;
-  /** The staged To's display label, or `null` while nothing is staged yet
-   * (the sheet shows its own "Choose destination" placeholder then) — the
-   * symmetric read to `fromLabel`, now that EITHER end can be picked first. */
-  toLabel: Accessor<string | null>;
-  /** Stage the boat's current position as the DESTINATION — the same "use
-   * boat" affordance `setFromBoat` offers the From slot, now offered for To
-   * as well. Resolves with no fix (nothing to set it to; the UI is expected
-   * to not offer this option at all in that state — see `hasFix`). */
-  setToBoat(): void;
-  /** Stage or set a custom To point — see `setStop`'s `{kind:"to"}` case,
-   * which this delegates to. Unlike `setFromPoint`, staging To NEVER
-   * requires a boat fix: it just shows a pin (`previewTo`) and waits — the
-   * route builds itself the moment a From becomes available too (staged, or
-   * the boat, whichever comes first — see `trySeedFromStaged`). */
-  setToPoint(point: GeoPoint, label?: string): void;
-  /** Which slot an armed "Choose on map" resolves the NEXT chart tap against —
-   * `null` when nothing is armed. */
-  pickingOnMap: Accessor<MapPickTarget | null>;
-  /** Arm "Choose on map" for `target` (default `{kind:"to"}`) — the search
-   * overlay's pinned suggestion, for any slot. */
-  beginPickOnMap(target?: MapPickTarget): void;
-  /** Back out of an armed "Choose on map" without picking anything. */
-  cancelPickOnMap(): void;
-  /** Open the shared search overlay to resolve `target` — the From row, the To
-   * row, an existing stop row (re-pick it in place), or "+ Add a stop"
-   * (`{kind:"insert", beforeId}`). A no-op until `bindOpenSearchForSlot` is
-   * wired (App.tsx). */
-  openSearchForSlot(target: MapPickTarget): void;
-  /** App wires this to open the search overlay with the right pinned
-   * suggestions for `target`'s kind ("Use boat position" ahead of "Choose on
-   * map" only for `{kind:"from"}`) and an `onSelect` that resolves through
-   * `setStop`/`insertStop` (or `setFromBoat`/`setFromPoint` for `"from"`). */
-  bindOpenSearchForSlot(open: (target: MapPickTarget) => void): void;
-  /** Stop following (without deleting) — present only while `followingDraft`. */
+  /** Stop following (without deleting). */
   stopFollowing(): Promise<void>;
-  /** Delete the whole route and leave: server-side if ever saved, else discard. */
-  deleteDraftRoute(): Promise<void>;
-  /** Flash a leg on the chart (the segment `seg`→`seg+1`) for ~1.4s — a leg row
-   * tapped in the sheet reads onto the chart for a moment. */
-  flashLegAt(seg: number): void;
-  /** Leave the editor — routes through `modes.leave`, which flushes any pending
-   * debounced save and drops the draft. The sheet's X. No confirm: everything is
-   * already saved. */
-  exitEditor(): void;
-  /** App wires this to `modes.leave()` so GO/the X can close the editor. */
-  bindExit(exit: () => void): void;
-  /** App wires this to `modes.enter("route-edit")` so `editRoute` can open it. */
-  bindEnter(enter: () => void): void;
+  /** Draw `session`'s draft instead of the followed route while it has one
+   * (the autorouting plugin's editor). One at a time; returns the detach. */
+  attachEditor(session: RouteEditSession): () => void;
 }
 
-/** The routes feature: the editor mode, the band.top instruments, and the
- * model the overlay layer reads. A factory over its dependencies. */
 /** A transient arrival notice, ready for the notice strip. */
-/** One slot in the From/Stop/To list: the start, the current last stop (the
- * destination), or an existing middle stop by id. What `setStop` resolves
- * against. */
-export type StopSlot = { kind: "from" } | { kind: "to" } | { kind: "stop"; id: string };
-/** Which slot an armed "Choose on map" (or an open search panel) resolves the
- * next pick against — a `StopSlot` to REPLACE a point in place, or an INSERT
- * ahead of an existing stop ("+ Add a stop" always inserts before the
- * current To). See `pickingOnMap`/`beginPickOnMap`/`openSearchForSlot`. */
-export type MapPickTarget = StopSlot | { kind: "insert"; beforeId: string };
-
 export interface ArrivalNotice {
   id: string;
   title: string;
   detail?: string;
 }
 
+/** The routes feature: the band.top instruments, the follow commands, the
+ * overlay and info card, and the model they read. A factory over its
+ * dependencies. */
 export function createRoutes(deps: {
   signalk: SignalKState;
   client: RoutesClient;
@@ -704,10 +501,6 @@ export function createRoutes(deps: {
   /** Push a transient notice to the SAME strip `onArrival` feeds — surfacing a
    * save failure / cross-device conflict rather than a silent `console.error`. */
   notify?: (notice: Notice) => void;
-  /** Injectable for `goTo`'s planning request — same seam
-   * `features/routeTest`'s `opts.fetch` drives, chosen for the same
-   * cross-file mock-leak reason (CLAUDE.md). Defaults to the real `fetch`. */
-  fetch?: PlanFetch;
   /** The route the MANUAL editor (features/routeDraw) is drawing a draft of,
    * or null. Its saved copy is not drawn meanwhile, so the two never
    * double-draw; the boat's own course cue (`targetLine`) still is. */
@@ -722,110 +515,18 @@ export function createRoutes(deps: {
 }): { feature: AppFeature; model: RoutesModel } {
   const { signalk, client } = deps;
   const mintId = deps.mintId ?? mintUuid;
-  const fetchImpl = deps.fetch ?? fetch;
 
-  const [draft, setDraft] = createSignal<Route | null>(null);
-  // Armed by "Choose on map" (the search overlay's pinned suggestion), for
-  // WHICH slot — the NEXT chart tap resolves against that slot instead of
-  // being inert (see the mode's `onClick`). `null` = not armed. One-shot;
-  // cleared the moment a tap consumes it, or by `cancelPickOnMap`.
-  const [awaitingMapPick, setAwaitingMapPick] = createSignal<MapPickTarget | null>(null);
-  // The staged From/To — EITHER end can be picked first now (search, "Choose
-  // on map", or "Use boat position"), independently, before a route exists.
-  // `null` for From means the default, the boat — `trySeedFromStaged` falls
-  // back to `signalk.self()` in that case; `null` for To means genuinely
-  // nothing picked yet (there is no sensible default destination). Both are
-  // consumed (reset to `null`) the moment a draft is actually seeded from
-  // them, since staging is only ever a pre-route thing — once the waypoints
-  // are real, every further edit goes through `setStop`/`setFromBoat`/
-  // `setToBoat` instead, a real re-plan rather than a stage. `namedByUser`
-  // marks a label that came from the caller (a search result) rather than
-  // this file's own coordinate fallback, so the "what's charted here"
-  // upgrade (`nearestPlace`) only ever fires for the latter.
-  type Staged = { point: GeoPoint; label: string; namedByUser: boolean; isBoat?: boolean };
-  const [pendingFrom, setPendingFrom] = createSignal<Staged | null>(null);
-  const [pendingTo, setPendingTo] = createSignal<Staged | null>(null);
-  // The stop currently being dragged, or null — set at drag-start, cleared at
-  // drag-end / abort. Read by the overlay so the dragged handle can highlight.
-  const [draggingId, setDraggingId] = createSignal<string | null>(null);
-  // True between `beginWaypointDrag` and `endWaypointDrag`/`abortDrag`: while a
-  // real drag is in flight, per-move edits DO NOT schedule an auto-save (so a
-  // >500ms pause mid-drag can never publish intermediate geometry to the
-  // autopilot) — the single re-plan + save is flushed at drag-end instead.
-  // Direct `moveWaypoint` callers (programmatic / tests) leave it false and
-  // keep the trailing-debounced save.
-  let inDrag = false;
-  // A COUNTER, not a boolean: `commitRebuild` (below) can overlap — a fast
-  // second edit before the first one's re-plan lands — and `planning()` must
-  // stay true until the LAST one settles, not flip false the moment any one
-  // of them finishes.
-  const [planningCount, setPlanningCount] = createSignal(0);
-  const planning = () => planningCount() > 0;
-  // The leg the plan sheet asked to flash, and its clearing timer.
-  const [flashLeg, setFlashLeg] = createSignal<number | null>(null);
-  let flashTimer: ReturnType<typeof setTimeout> | undefined;
-  const FLASH_MS = 1400;
-  const flashLegAt = (seg: number) => {
-    setFlashLeg(seg);
-    clearTimeout(flashTimer);
-    flashTimer = setTimeout(() => setFlashLeg(null), FLASH_MS);
+  // The attached editor (the autorouting plugin), or null. Its draft, while
+  // it has one, is what the overlay draws and drags.
+  const [session, setSession] = createSignal<RouteEditSession | null>(null);
+  const draft = (): Route | null => session()?.draft() ?? null;
+  const attachEditor = (s: RouteEditSession): (() => void) => {
+    setSession(() => s);
+    return () => {
+      if (session() === s) setSession(null);
+    };
   };
-  onCleanup(() => clearTimeout(flashTimer));
-  // The last "Go here" plan's per-leg approximate flags (`PlanResult.
-  // approximateLegs`) — ephemeral, like `flashLeg` above: never part of
-  // the persisted `Route`/`Waypoint` shape (no `/routes` schema change
-  // needed for this), only ever read by the overlay while the CURRENTLY
-  // DRAWN route is the go-here one (`route()?.id === GO_HERE_ROUTE_ID` —
-  // a route the user opened for editing, or the followed leg, never
-  // carries a stale flag from an earlier "Go here" tap this way, with no
-  // separate clearing needed). Set right after a plan comes back; left
-  // at `[]` on the network-failure fallback (`directRoute`) — a
-  // different, already-notified failure mode, not "the router found
-  // part of this unreachable".
-  const [approximateLegs, setApproximateLegs] = createSignal<boolean[]>([]);
-  // Auto-save: no Save/Discard. Every edit schedules a trailing-debounced save;
-  // a drag's many `moveWaypoint` calls collapse to one at drag-end. `persist`
-  // cancels any pending timer, so an explicit GO/close never races it.
-  const SAVE_DEBOUNCE_MS = 500;
-  let saveTimer: ReturnType<typeof setTimeout> | undefined;
-  // Chained: each `persist` awaits the previous, so an immediate save can never
-  // overlap a debounced one with a stale `If-Match` (#RT-ADDRACE). See
-  // docs/architecture/route-model.md ("rev is server SYNC state").
-  let saveChain: Promise<string | null> = Promise.resolve(null);
-  const scheduleSave = () => {
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => {
-      saveTimer = undefined;
-      void persist();
-    }, SAVE_DEBOUNCE_MS);
-  };
-  onCleanup(() => clearTimeout(saveTimer));
-  // A route the list asked to open, consumed by the next `seedDraft`. Lets the
-  // editor be opened onto an arbitrary saved route, not only the followed one.
-  const [pendingOpen, setPendingOpen] = createSignal<Route | null>(null);
-  // A one-shot "start blank" flag, consumed by the next `seedDraft`. Overrides the
-  // seed-from-followed default so a NEW route can be begun while a route is being
-  // followed (`newRoute` below) without the followed one hijacking the draft.
-  const [pendingBlank, setPendingBlank] = createSignal(false);
-  let exit: (() => void) | undefined;
-  let enterEditor: (() => void) | undefined;
-  // App wires this to `openRoutes` (the SAME mechanism the command palette's
-  // "Open routes" and the rail Tools menu use) so the editor can open the
-  // saved-routes manager (#RT-GONAV item 3). Left undefined outside App/tests.
-  let openManagerFn: (() => void) | undefined;
-  // App wires this to open the shared search overlay for a given slot — the
-  // right pinned suggestions for its kind ("Use boat position" ahead of
-  // "Choose on map" only for `{kind:"from"}`) and an `onSelect` that resolves
-  // through `setStop`/`insertStop` (or `setFromBoat`/`setFromPoint` for
-  // `"from"`). Same bind-a-callback shape as `bindOpenManager`. Left
-  // undefined outside App/tests, in which case every From/Stop/To row is
-  // simply inert.
-  let openSearchForSlotFn: ((target: MapPickTarget) => void) | undefined;
 
-  // No undo/redo stack: the redesign (route tool, autorouting-only) replaces
-  // history-based correction with direct list actions instead — delete a
-  // stop, drag-reorder it, or Flip the whole order. A mistaken edit is undone
-  // by doing the obvious opposite action, not by popping a snapshot.
 
   // ── The followed leg — read from the PERSISTED active leg, never inferred ──
   const active = () => client.active();
@@ -940,439 +641,6 @@ export function createRoutes(deps: {
     });
   }
 
-  // ── The From/Stop/To list — the autorouting engine ─────────────────────────
-  //
-  // Every structural edit below (set a slot, insert/remove/reorder a stop)
-  // funnels through `rebuildFromStops`: rebuild the ENTIRE flattened
-  // `waypoints` array from an ordered list of stop seeds, re-planning every
-  // leg between them. A partial "only re-plan the touched leg(s)" splice would
-  // save a network round trip or two, but a real route here runs to a handful
-  // of stops — the full rebuild is simple, cannot desync a bend from the stop
-  // it borders, and there is no separate "planned route" state to keep in
-  // sync with the persisted draft. `patch`/`scheduleSave` are the same
-  // primitives every other edit uses.
-  const patch = (fn: (r: Route) => Route) => setDraft((r) => (r ? fn(r) : r));
-
-  interface StopSeed {
-    id: string;
-    label: string;
-    point: GeoPoint;
-  }
-  const toSeed = (w: Waypoint): StopSeed => ({ id: w.id, label: w.name, point: wpPoint(w) });
-
-  /** `planRoute` plus the "a router miss still returns a valid (if straight)
-   * `PlanResult`; only the REQUEST failing falls back to a bare straight
-   * line" split `goTo` also uses. */
-  const planLegOrFallback = async (
-    from: GeoPoint,
-    to: GeoPoint,
-  ): Promise<{ points: GeoPoint[]; approx: readonly boolean[] }> => {
-    try {
-      const p = await planRoute(from, to, undefined, fetchImpl);
-      if (planIsUnreachable(p)) {
-        deps.notify?.({
-          id: "route-plan-hazard",
-          title: "Route may cross charted danger",
-          detail: p.warnings[0],
-        });
-      }
-      return { points: p.waypoints, approx: p.approximateLegs };
-    } catch (e) {
-      console.error("route: plan-to failed, falling back to a straight line", e);
-      deps.notify?.({
-        id: "route-plan-unreachable",
-        title: "Couldn’t reach the router",
-        detail: "Drew a straight line instead — verify manually before following.",
-      });
-      return { points: [from, to], approx: [] };
-    }
-  };
-
-  /** Rebuild a whole `Waypoint[]` from an ordered list of stops: plan every
-   * leg between consecutive stops and concatenate, tagging each seed's own
-   * point `stop: true` (keeping its id/label) and every router-inserted bend
-   * `stop: false` (a fresh id, generic name) — the same per-waypoint
-   * `approximate` convention `routeFromPlan` uses (waypoint `i`'s flag is the
-   * INCOMING leg's). A single seed needs no planning at all. */
-  const rebuildFromStops = async (stops: readonly StopSeed[]): Promise<Waypoint[]> => {
-    if (stops.length === 0) return [];
-    if (stops.length === 1) {
-      const s = stops[0]!;
-      return [{ id: s.id, name: s.label, lat: s.point.lat, lon: s.point.lng, approximate: false, stop: true }];
-    }
-    const out: Waypoint[] = [];
-    for (let i = 0; i < stops.length - 1; i++) {
-      const a = stops[i]!;
-      const b = stops[i + 1]!;
-      const { points, approx } = await planLegOrFallback(a.point, b.point);
-      // `points[0]` is `a` — already pushed as the previous pair's own
-      // endpoint for every pair but the first, so only the FIRST pair
-      // contributes it.
-      for (let k = i === 0 ? 0 : 1; k < points.length; k++) {
-        const p = points[k]!;
-        const approximate = k > 0 ? (approx[k - 1] ?? false) : false;
-        if (k === 0) out.push({ id: a.id, name: a.label, lat: p.lat, lon: p.lng, approximate, stop: true });
-        else if (k === points.length - 1)
-          out.push({ id: b.id, name: b.label, lat: p.lat, lon: p.lng, approximate, stop: true });
-        else out.push({ id: mintId(), name: "Waypoint", lat: p.lat, lon: p.lng, approximate, stop: false });
-      }
-    }
-    return out;
-  };
-
-  /** The stops a person actually chose, in route order — `RoutesModel`'s own
-   * doc has the full contract. */
-  const draftStops = createMemo<Waypoint[]>(() => draft()?.waypoints.filter((w) => w.stop) ?? []);
-
-  /** The synchronous, NETWORK-FREE shape of `rebuildFromStops`: straight
-   * lines between consecutive seeds, `approximate: true` on every incoming
-   * leg but the first (reusing the existing dashed "not yet verified" paint
-   * — see `overlay.ts` — since a provisional line is exactly that, just for
-   * a different reason). This is what makes a stop edit show up on the map
-   * and in the list INSTANTLY: every mutator below patches with this before
-   * `commitRebuild`'s awaited real re-plan even starts. */
-  const provisionalRebuild = (stops: readonly StopSeed[]): Waypoint[] =>
-    stops.map((s, i) => ({
-      id: s.id,
-      name: s.label,
-      lat: s.point.lat,
-      lon: s.point.lng,
-      approximate: i > 0,
-      stop: true,
-    }));
-
-  /** The label a picked point shows the INSTANT it lands — the caller's own
-   * name (a search result already has one) or, for a bare map tap, its
-   * coordinates (`core/coordinate.ts`'s canonical DDM form) — never the old
-   * generic "Waypoint", and never blank while a real name resolves. */
-  const instantLabel = (point: GeoPoint, label?: string): string =>
-    label?.trim() || formatCoordinate(point.lat, point.lng);
-
-  /** Run the real leg re-plan (`rebuildFromStops`) and, for a fresh
-   * unlabeled point, a "what's charted here" lookup (`nearestPlace`)
-   * TOGETHER — `Promise.all`, not sequentially, so the name lookup is free
-   * (it settles well inside the routing round trip) and, critically,
-   * whichever finishes first can never clobber the other: the final patch
-   * is applied ONCE, after both are in. `planningCount` brackets the whole
-   * thing — the one signal every stop mutator's "is something happening"
-   * indicator reads. */
-  const commitRebuild = async (
-    seeds: readonly StopSeed[],
-    named?: { id: string; point: GeoPoint; alreadyNamed: boolean },
-  ): Promise<Waypoint[]> => {
-    setPlanningCount((n) => n + 1);
-    try {
-      const namePromise =
-        named && !named.alreadyNamed ? nearestPlace(named.point, fetchImpl) : Promise.resolve(null);
-      const [resolved, waypoints] = await Promise.all([namePromise, rebuildFromStops(seeds)]);
-      if (!resolved || !named) return waypoints;
-      // The real re-plan already carries the coordinate label baked in (it
-      // snapshotted `seeds` before the name lookup could have finished) —
-      // upgrade just that one waypoint now that a real name is in.
-      return waypoints.map((w) => (w.id === named.id ? { ...w, name: resolved.title } : w));
-    } finally {
-      setPlanningCount((n) => n - 1);
-    }
-  };
-
-  /** Once EITHER end is staged, try to complete the route: From is the
-   * staged point or — the "defaults to the boat" behaviour — the boat's
-   * live position; To is the staged point. Builds only when BOTH are
-   * actually available; otherwise a no-op — whichever end WAS just staged
-   * already has its own preview pin (`previewFrom`/`previewTo`), so staging
-   * alone is never invisible. Called after every staging write
-   * (`setFromPoint`/`setToPoint`/`setFromBoat`/`setToBoat`), so either
-   * order — From first, To first, or the boat default already covering
-   * From the moment a bare To is staged — completes the instant the second
-   * end becomes known. */
-  const trySeedFromStaged = async (): Promise<void> => {
-    if (draftStops().length > 0) return; // already a real route — nothing to seed
-    const to = pendingTo();
-    if (!to) return; // still needs a destination
-    const staged = pendingFrom();
-    // The boat can be EITHER end, never both at once (the user's own
-    // framing): if To is explicitly staged AS the boat and nothing else is
-    // staged for From, do NOT fall through to the "defaults to the boat"
-    // behaviour below — that would silently build a zero-distance
-    // boat-to-boat route. Stay staged; the pin already shows either way,
-    // and this only ever un-blocks once a genuinely different From arrives.
-    if (!staged && to.isBoat) return;
-    let fromPoint = staged?.point ?? null;
-    const fromName = staged?.label ?? "Boat";
-    if (!fromPoint) {
-      const self = signalk.self();
-      if (!self) return; // no fix either — stay staged; To's own pin already shows
-      fromPoint = { lng: self.lng, lat: self.lat };
-    }
-    const fromId = mintId();
-    const toId = mintId();
-    const seeds: StopSeed[] = [
-      { id: fromId, label: fromName, point: fromPoint },
-      { id: toId, label: to.label, point: to.point },
-    ];
-    patch((cur) => (cur ? { ...cur, name: to.label, waypoints: provisionalRebuild(seeds) } : cur));
-    haptic();
-    setPendingFrom(null);
-    setPendingTo(null);
-    const waypoints = await commitRebuild(seeds, { id: toId, point: to.point, alreadyNamed: to.namedByUser });
-    // Start and goal snapped to the same spot: nothing new to show.
-    if (waypoints.length < 2) return;
-    const finalName = waypoints.find((w) => w.id === toId)?.name ?? to.label;
-    patch((cur) => (cur ? { ...cur, name: finalName, waypoints } : cur));
-    scheduleSave();
-  };
-
-  const setStop = async (slot: StopSlot, point: GeoPoint, label?: string): Promise<boolean> => {
-    const r = draft();
-    if (!r) return false;
-    const name = instantLabel(point, label);
-    const stops = draftStops();
-    if (stops.length === 0) {
-      // Await the SAME staging call `setFromPoint`/`setToPoint` make (not a
-      // second, redundant `trySeedFromStaged()` of our own — by the time
-      // that one's own synchronous portion returns control here, the
-      // staged signal it consumed is already cleared, so a second call
-      // would see nothing to do and resolve instantly, defeating the
-      // await): `setStop`'s own contract is "settled when this resolves",
-      // same as every other branch below.
-      await (slot.kind === "from" ? stageFrom(point, label) : stageTo(point, label));
-      return true;
-    }
-    const idx =
-      slot.kind === "from" ? 0 : slot.kind === "to" ? stops.length - 1 : stops.findIndex((s) => s.id === slot.id);
-    if (idx < 0) return false;
-    const targetId = stops[idx]!.id;
-    const seeds = stops.map((s, i) => (i === idx ? { id: s.id, label: name, point } : toSeed(s)));
-    patch((cur) => ({ ...cur, waypoints: provisionalRebuild(seeds) }));
-    haptic();
-    const waypoints = await commitRebuild(seeds, { id: targetId, point, alreadyNamed: !!label?.trim() });
-    patch((cur) => ({ ...cur, waypoints }));
-    scheduleSave();
-    return true;
-  };
-
-  const insertStop = async (beforeId: string, point: GeoPoint, label?: string): Promise<boolean> => {
-    const stops = draftStops();
-    const idx = stops.findIndex((s) => s.id === beforeId);
-    if (idx < 0) return false;
-    const name = instantLabel(point, label);
-    const newId = mintId();
-    const seeds = [
-      ...stops.slice(0, idx).map(toSeed),
-      { id: newId, label: name, point },
-      ...stops.slice(idx).map(toSeed),
-    ];
-    patch((cur) => ({ ...cur, waypoints: provisionalRebuild(seeds) }));
-    haptic();
-    const waypoints = await commitRebuild(seeds, { id: newId, point, alreadyNamed: !!label?.trim() });
-    patch((cur) => ({ ...cur, waypoints }));
-    scheduleSave();
-    return true;
-  };
-
-  const removeStop = async (id: string): Promise<void> => {
-    const remaining = draftStops()
-      .filter((s) => s.id !== id)
-      .map(toSeed);
-    patch((cur) => ({ ...cur, waypoints: provisionalRebuild(remaining) }));
-    const waypoints = await commitRebuild(remaining);
-    patch((cur) => ({ ...cur, waypoints }));
-    scheduleSave();
-  };
-
-  const reorderStops = async (fromIndex: number, toIndex: number): Promise<void> => {
-    const seeds = draftStops().map(toSeed);
-    if (fromIndex < 0 || fromIndex >= seeds.length || toIndex < 0 || toIndex >= seeds.length) return;
-    const [moved] = seeds.splice(fromIndex, 1);
-    seeds.splice(toIndex, 0, moved!);
-    patch((cur) => ({ ...cur, waypoints: provisionalRebuild(seeds) }));
-    const waypoints = await commitRebuild(seeds);
-    patch((cur) => ({ ...cur, waypoints }));
-    scheduleSave();
-  };
-
-  // ── The drag session — grab a STOP handle, drop it, re-plan its leg(s) ─────
-  //
-  // A live drag rubber-bands the point directly (`moveWaypoint`, called many
-  // times, no re-plan) so it tracks the finger with no network round trip in
-  // the loop; only `endWaypointDrag` re-plans, once, against the dropped
-  // position — "move the dot, leave a straight line" is exactly what pin
-  // dragging no longer does.
-  const moveWaypoint = (id: string, at: GeoPoint) => {
-    // A real drag defers its single save to drag-end (`endWaypointDrag`), so a
-    // mid-drag pause never publishes an intermediate to the followed route. A
-    // direct caller (not in a drag session) keeps the trailing-debounced save.
-    if (!inDrag) scheduleSave();
-    patch((r) => ({
-      ...r,
-      waypoints: r.waypoints.map((w) => (w.id === id ? { ...w, lat: at.lat, lon: at.lng } : w)),
-    }));
-  };
-
-  const beginWaypointDrag = (id: string) => {
-    const wp = draft()?.waypoints.find((w) => w.id === id);
-    if (!wp?.stop) return; // only a chosen stop has a handle to grab
-    inDrag = true;
-    setDraggingId(id);
-    haptic(); // grabbed a handle — a confirmation tick (#RT-FEEL G4)
-  };
-
-  const endWaypointDrag = () => {
-    if (!inDrag) return;
-    inDrag = false;
-    const id = draggingId();
-    setDraggingId(null);
-    const wp = id ? draft()?.waypoints.find((w) => w.id === id) : undefined;
-    if (!id || !wp) return;
-    const seeds = draftStops().map((s) =>
-      s.id === id ? { id: s.id, label: s.name, point: wpPoint(wp) } : toSeed(s),
-    );
-    // Instant straight-line stub to the dragged point's neighbors — the
-    // dragged pin itself already tracked the finger (`moveWaypoint`, every
-    // move), but its OLD bends to either side are stale the instant it
-    // drops; a provisional rebuild clears them immediately rather than
-    // leaving a crossed/stale line up until the real re-plan lands.
-    patch((cur) => ({ ...cur, waypoints: provisionalRebuild(seeds) }));
-    void (async () => {
-      // A drag never renames the point it moved — it already has a real
-      // name (it was a stop before the drag), and re-deriving one from the
-      // new spot is a separate, not-yet-asked-for feature.
-      const waypoints = await commitRebuild(seeds);
-      patch((cur) => ({ ...cur, waypoints }));
-      // Flush ON drag-end: the followed route publishes its settled geometry to
-      // the boat NOW (never a mid-drag frame); any other route persists debounced.
-      if (followingDraft()) void persist();
-      else scheduleSave();
-    })();
-  };
-
-  const abortDrag = (id: string, at: GeoPoint) => {
-    if (!inDrag) return;
-    patch((r) => ({
-      ...r,
-      waypoints: r.waypoints.map((w) => (w.id === id ? { ...w, lat: at.lat, lon: at.lng } : w)),
-    }));
-    inDrag = false;
-    setDraggingId(null);
-    // No save/re-plan: the geometry is back to what is already persisted.
-  };
-
-  /** Reverse the DRAFT's whole From/Stop/To order — the return passage,
-   * mid-edit ("Flip"). Geometry only: a route through the same points sailed
-   * backwards is still a valid route, so this never re-plans. */
-  const reverseDraft = () => {
-    const r = draft();
-    if (!r || r.waypoints.length < 2) return;
-    setDraft(reverseWaypoints(r));
-    scheduleSave();
-  };
-
-  /** Persist the draft; keep editing it at its new rev. A brand-new EMPTY route
-   * never persists. Guards the draft update with the id so a concurrent leave
-   * (which nulls the draft) can't reopen the sheet. */
-  const persist = async (): Promise<string | null> => {
-    clearTimeout(saveTimer);
-    saveTimer = undefined;
-    // Snapshot SYNCHRONOUSLY (before any await): `leave` nulls the draft on
-    // the same tick and relies on this read landing first.
-    const snap = draft();
-    if (!snap || snap.waypoints.length === 0) return null;
-    // Chained behind `saveChain` so an immediate-persist path never fires a
-    // second `client.save` while a debounced one is in flight (#RT-ADDRACE).
-    const run = saveChain.then(async () => {
-      // Re-read: the live draft carries the rev the prior ack reseated AND any
-      // geometry edited since. Falls back to `snap` if `leave` already nulled it.
-      const live = draft();
-      const r = live && live.id === snap.id ? live : snap;
-      if (r.waypoints.length === 0) return null;
-      try {
-        const saved = await client.save(r);
-        // Updates ONLY `rev`, never the draft geometry — an older echo could
-        // drop edits made during the network window (#RT-ADDRACE). Guarded on
-        // id so a concurrent `leave` can't reopen a closed editor.
-        setDraft((cur) => (cur && cur.id === saved.id ? { ...cur, rev: saved.rev } : cur));
-        return saved.id;
-      } catch (e) {
-        // A 409 is a cross-device conflict: last-writer-refresh (#RT-UNDO) —
-        // pull the server's version and RESEAT the draft, scheduling NO
-        // further save, so a repeat 409 is impossible without a new edit.
-        if (e instanceof RouteSaveError && e.status === 409) {
-          await client.refresh();
-          const server = client.routes().find((x) => x.id === r.id);
-          if (server) {
-            setDraft((cur) => (cur && cur.id === server.id ? server : cur));
-          }
-          deps.notify?.({
-            id: `route-conflict:${r.id}`,
-            title: "Route changed on another device",
-            detail: "Showing the latest saved version.",
-          });
-          return null;
-        }
-        // Transient error: warn the change is unsaved. No auto-retry loop (a
-        // sustained outage would spin) — the next edit reschedules a save.
-        console.error("route: save failed", e);
-        deps.notify?.({
-          id: `route-save-failed:${r.id}`,
-          title: "Couldn’t save route",
-          detail: "Your last change isn’t saved yet.",
-        });
-        return null;
-      }
-    });
-    // The chain link never rejects (the callback swallows every error), so the
-    // next `.then` always runs; track the untyped tail as the barrier.
-    saveChain = run;
-    return run;
-  };
-
-  /** The waypoint GO steers to: the one NEAREST the boat's fix — the
-   * "closest next" waypoint, the natural place to pick up a route the boat is
-   * already among, NOT the last one (which would steer the final leg from
-   * wherever you are). With no fix, GO begins the route at its FIRST waypoint
-   * (index 0). Invariant #8 still holds: this sets the INITIAL active target
-   * and never auto-advances it afterward. `null` only for an empty draft. */
-  const goTarget = (): string | null => {
-    const r = draft();
-    if (!r || r.waypoints.length === 0) return null;
-    const self = signalk.self();
-    const i = self ? nearestWaypointIndex({ lng: self.lng, lat: self.lat }, r.waypoints) : 0;
-    return r.waypoints[i >= 0 ? i : 0].id;
-  };
-
-  /** GO: the draft is already auto-saved, so this just names the GO target as
-   * the active leg — outright, invariant #8. It flushes any pending debounced
-   * save first (a `persist` that cancels the timer), so the followed route is
-   * never a frame stale. Leaves the mode so band.top takes the chart.
-   *
-   * `targetId`, when given, is the exact waypoint to make active (`startRoute`,
-   * #RT-GONAV, passes it); omitted, the smart `goTarget` (nearest-or-first) is
-   * used, which is the peek GO. */
-  const go = async (targetId?: string) => {
-    const wpId = targetId ?? goTarget();
-    const id = await persist();
-    if (!id || !wpId) return;
-    try {
-      await client.setActive({ route_id: id, waypoint_id: wpId });
-      exit?.();
-    } catch (e) {
-      console.error("route: GO failed", e);
-    }
-  };
-
-  /** "Start route" (#RT-GONAV item 2): begin following from the CLOSEST-NEXT join
-   * point — the arrival waypoint of the leg the boat is nearest (`nearestLegTargetIndex`),
-   * so the boat picks up the route beside the leg it is actually next to rather
-   * than always leg 1. Ignores the selection outright. With no fix there is no
-   * "nearest", so it starts at the FIRST waypoint. */
-  const startRoute = async () => {
-    const r = draft();
-    if (!r || r.waypoints.length === 0) return;
-    const self = signalk.self();
-    const i = self ? nearestLegTargetIndex({ lng: self.lng, lat: self.lat }, r.waypoints) : 0;
-    await go(r.waypoints[i >= 0 ? i : 0].id);
-  };
-
   const stop = async () => {
     try {
       await client.setActive(null);
@@ -1381,68 +649,11 @@ export function createRoutes(deps: {
     }
   };
 
-  // ── "Go here" — the pressed-point surface's hazard-avoiding route ──────────
-  //
-  // Not part of the editor mode: it needs no draft and no tap sequence, only the
-  // boat's fix and one point. It reuses the SAME client save + setActive the
-  // editor's GO does, so band.top lights up identically — the difference is
-  // only that the route is PLANNED (a request to POST /api/routing/plan) rather
-  // than dropped waypoint by waypoint or drawn as a bare straight line.
   const hasFix = () => !!signalk.self();
 
-  const goTo = async (to: GeoPoint, label?: string): Promise<boolean> => {
-    const self = signalk.self();
-    if (!self) return false; // no fix → no route from an unknown start
-    const from: GeoPoint = { lng: self.lng, lat: self.lat };
-
-    // Ask the real hazard-avoiding search first; fall back to the plain
-    // straight line only if the REQUEST ITSELF fails (network/server
-    // error) — the router finding no safe path is a different, already-
-    // handled outcome that still comes back as a valid `PlanResult` (a
-    // straight line plus a reason), not a thrown error. See
-    // `routeFromPlan`/`directRoute`'s own docs.
-    let built: { route: Route; activeWaypointId: string };
-    try {
-      const plan = await planRoute(from, to, undefined, fetchImpl);
-      built = routeFromPlan(
-        plan.waypoints,
-        { route: GO_HERE_ROUTE_ID, waypointIds: plan.waypoints.map(() => mintId()) },
-        label,
-        plan.approximateLegs,
-      );
-      setApproximateLegs(plan.approximateLegs);
-      if (planIsUnreachable(plan)) {
-        // The router couldn't verify at least one leg — it still drew a
-        // line, bending around real danger as far as it honestly could
-        // (see `approximateLegs`, which the overlay draws as a dashed
-        // warning run wherever it falls), but the user must be told WHY
-        // rather than sail on a silently-degraded route.
-        deps.notify?.({
-          id: "go-here-hazard",
-          title: "Route may cross charted danger",
-          detail: plan.warnings[0],
-        });
-      }
-    } catch (e) {
-      console.error("route: go-here planning failed, falling back to a straight line", e);
-      built = directRoute(from, to, { route: GO_HERE_ROUTE_ID, from: mintId(), to: mintId() }, label);
-      // A network/server failure, not the router finding part of the
-      // request unreachable — a different failure mode (see the module
-      // docstring), so no dashed-warning stub here, only the toast.
-      setApproximateLegs([]);
-      deps.notify?.({
-        id: "go-here-plan-unreachable",
-        title: "Couldn’t reach the router",
-        detail: "Drew a straight line instead — verify manually before following.",
-      });
-    }
-
-    return saveAndFollowGoHere(built);
-  };
-
-  /** Save `built` over the fixed go-here route and follow it — shared by the
-   * autorouted `goTo` and the straight-line `goStraight`. */
-  const saveAndFollowGoHere = async (built: { route: Route; activeWaypointId: string }): Promise<boolean> => {
+  /** Save `built` over the fixed go-here route and follow it — `goStraight`'s
+   * and the route planner's auto-routed "Go here". */
+  const followGoHere = async (built: { route: Route; activeWaypointId: string }): Promise<boolean> => {
     // Echo the go-here route's CURRENT rev as the If-Match to overwrite it in
     // place (see GO_HERE_ROUTE_ID); the first-ever tap has none, so rev 0 creates it.
     const existing = client.routes().find((r) => r.id === GO_HERE_ROUTE_ID);
@@ -1467,8 +678,7 @@ export function createRoutes(deps: {
       { route: GO_HERE_ROUTE_ID, from: mintId(), to: mintId() },
       label,
     );
-    setApproximateLegs([]);
-    const ok = await saveAndFollowGoHere(built);
+    const ok = await followGoHere(built);
     if (ok) {
       deps.notify?.({
         id: "route-follow",
@@ -1489,243 +699,6 @@ export function createRoutes(deps: {
     },
     notify: deps.notify,
   });
-
-  /** The staged From's display label — "Boat" (the default) unless a search
-   * pick or "Choose on map" has staged a different start point. Only
-   * meaningful before the draft has any stops — see `setStop`. */
-  const fromLabel = (): string => pendingFrom()?.label ?? "Boat";
-  /** The staged To's display label, or `null` while nothing is staged —
-   * there is no default destination to fall back to the way From falls
-   * back to the boat. */
-  const toLabel = (): string | null => pendingTo()?.label ?? null;
-
-  /** Stage a bare map-tap/coordinate point (no caller-given label) at `set`,
-   * then fire the SAME "what's charted here" upgrade every fresh stop gets
-   * (`nearestPlace`) — staging is the one path that doesn't otherwise go
-   * through `commitRebuild` (nothing to re-plan yet; there may be no second
-   * point at all). Fire-and-forget: if the staged point moves on before this
-   * resolves, the stale write is discarded by the `cur.point === point`
-   * identity check rather than clobbering whatever is there now. */
-  const upgradeStagedName = (
-    point: GeoPoint,
-    set: (fn: (cur: Staged | null) => Staged | null) => void,
-  ): void => {
-    void nearestPlace(point, fetchImpl).then((resolved) => {
-      if (!resolved) return;
-      set((cur) => (cur && cur.point === point ? { ...cur, label: resolved.title } : cur));
-    });
-  };
-
-  /** The STAGING half of setting From/To on an EMPTY draft — the shared
-   * body `setFromPoint`/`setToPoint`/`setFromBoat`/`setToBoat` all delegate
-   * to below, and what `setStop`'s empty-draft branch awaits DIRECTLY
-   * (rather than also calling `trySeedFromStaged()` a second time itself)
-   * so its own `Promise<boolean>` contract — resolved once the edit is
-   * FULLY settled, same as every other `setStop` path — still holds. Each
-   * returns `trySeedFromStaged()`'s own promise; its own doc covers when
-   * that actually builds vs. stays merely staged. */
-  const stageFrom = (point: GeoPoint, label?: string, isBoat = false): Promise<void> => {
-    const namedByUser = !!label?.trim();
-    setPendingFrom({ point, label: instantLabel(point, label), namedByUser, isBoat });
-    if (!namedByUser) upgradeStagedName(point, setPendingFrom);
-    return trySeedFromStaged();
-  };
-  const stageTo = (point: GeoPoint, label?: string, isBoat = false): Promise<void> => {
-    const namedByUser = !!label?.trim();
-    setPendingTo({ point, label: instantLabel(point, label), namedByUser, isBoat });
-    if (!namedByUser) upgradeStagedName(point, setPendingTo);
-    return trySeedFromStaged();
-  };
-
-  /** Reset the From slot to the boat: on a brand-new draft, resets the
-   * staging (`pendingFrom`) back to the implicit default — which may itself
-   * complete the route right away if a To is already staged and a fix
-   * exists (`trySeedFromStaged`'s own boat fallback) — on a draft that
-   * already has stops, this is a real edit — replace the live From stop
-   * with the boat's CURRENT fix via `setStop`, same as picking any other
-   * point for that slot. */
-  const setFromBoat = () => {
-    if (draftStops().length === 0) {
-      setPendingFrom(null);
-      void trySeedFromStaged();
-      return;
-    }
-    const self = signalk.self();
-    if (!self) {
-      deps.notify?.({
-        id: "route-plan-no-fix",
-        title: "No boat position yet",
-        detail: "Can't set the start to the boat without a GPS fix.",
-      });
-      return;
-    }
-    void setStop({ kind: "from" }, { lng: self.lng, lat: self.lat }, "Boat");
-  };
-  /** The symmetric "use boat" for the DESTINATION — the UI is expected to
-   * only ever offer this while `hasFix()` (App.tsx's pinned search row), but
-   * still resolves gracefully (notifies, no mutation) if it isn't. Unlike
-   * From, To has no "implicit default" to reset TO — the boat is staged
-   * explicitly here, same as any other destination pick. */
-  const setToBoat = () => {
-    const self = signalk.self();
-    if (!self) {
-      deps.notify?.({
-        id: "route-plan-no-fix",
-        title: "No boat position yet",
-        detail: "Can't set the destination to the boat without a GPS fix.",
-      });
-      return;
-    }
-    const point = { lng: self.lng, lat: self.lat };
-    if (draftStops().length === 0) {
-      void stageTo(point, "Boat", true);
-      return;
-    }
-    void setStop({ kind: "to" }, point, "Boat");
-  };
-  /** Stage or set a custom From point (a search pick or "Choose on map"
-   * resolving against the From slot). On a brand-new draft this only STAGES
-   * the point (`stageFrom`) — the route completes the moment a To is ALSO
-   * known (staged here already, or arriving right after this); once the
-   * draft has stops it is a real edit, delegated straight to `setStop`. */
-  const setFromPoint = (point: GeoPoint, label?: string) => {
-    if (draftStops().length === 0) {
-      void stageFrom(point, label);
-      return;
-    }
-    void setStop({ kind: "from" }, point, label);
-  };
-  /** The symmetric stage for To — see `setFromPoint`'s doc; the one real
-   * difference is that staging To NEVER needs a boat fix up front (there is
-   * no "no fix" rejection here at all): it just shows a pin (`previewTo`)
-   * and `trySeedFromStaged` waits for a From to also become available,
-   * whichever order that happens in. This is what lets a destination be
-   * picked BEFORE a start point. */
-  const setToPoint = (point: GeoPoint, label?: string) => {
-    if (draftStops().length === 0) {
-      void stageTo(point, label);
-      return;
-    }
-    void setStop({ kind: "to" }, point, label);
-  };
-
-  /** The From/To PIN previews the map draws before a real route exists —
-   * see `RouteOverlay`'s own doc on each. From falls back to the boat's
-   * live position (the "defaults to the boat" behaviour); To never does. */
-  const previewFrom = createMemo<{ point: GeoPoint; label: string } | null>(() => {
-    if (draftStops().length > 0) return null;
-    const staged = pendingFrom();
-    if (staged) return { point: staged.point, label: staged.label };
-    // The boat default is a pin only while a route is being made (the
-    // editor's draft, or a staged To waiting on a From). Outside the editor
-    // there is no draft, and an ungated fallback drew a waypoint ring on
-    // the boat at all times — a second "where the boat is" that disagreed
-    // with the own-ship icon.
-    if (!draft() && !pendingTo()) return null;
-    const self = signalk.self();
-    return self ? { point: { lng: self.lng, lat: self.lat }, label: "Boat" } : null;
-  });
-  const previewTo = createMemo<{ point: GeoPoint; label: string } | null>(() => {
-    if (draftStops().length > 0) return null;
-    const staged = pendingTo();
-    return staged ? { point: staged.point, label: staged.label } : null;
-  });
-
-  /** Arm "Choose on map" for `target` (default `{kind:"to"}`) — the next chart
-   * tap resolves against that slot instead of being inert. */
-  const beginPickOnMap = (target: MapPickTarget = { kind: "to" }) => setAwaitingMapPick(target);
-  /** Back out of an armed "Choose on map" without picking anything. */
-  const cancelPickOnMap = () => setAwaitingMapPick(null);
-
-  // The plan-mode surface (RT-R2): thin wrappers over the editor operations
-  // above, no parallel routing logic.
-
-  /** The draft measured at rest at its planning speed. Empty with no draft or
-   * fewer than two waypoints. */
-  const plan = createMemo<RoutePlan>(() => {
-    const r = draft();
-    return r
-      ? planRouteMetrics(r.waypoints, r.plan_speed_kn)
-      : { legs: [], totalNm: 0, totalSec: 0 };
-  });
-
-  /** The one-line guidance the peek shows. */
-  const editorHint = (): string => {
-    const r = draft();
-    if (!r) return "";
-    if (r.waypoints.length === 0) return "Search or tap the chart to set your start and destination";
-    return "Drag a pin to adjust it — the route re-plans around the new spot";
-  };
-
-  const followingDraft = () => following() && active()?.route_id === draft()?.id;
-
-  // Planning speed and the name are NON-geometry edits: they auto-save
-  // (debounced) like any edit.
-  const setPlanSpeed = (kn: number) => {
-    patch((r) => ({ ...r, plan_speed_kn: kn }));
-    scheduleSave();
-  };
-  const renameDraft = (name: string) => {
-    patch((r) => ({ ...r, name: name.slice(0, 64) }));
-    scheduleSave();
-  };
-
-  /** Delete the whole route and leave: removed server-side if ever saved
-   * (rev > 0), else just dropped. Cancels the pending save first so a queued
-   * auto-save can't re-create the route just deleted. */
-  const deleteDraftRoute = async () => {
-    clearTimeout(saveTimer);
-    saveTimer = undefined;
-    const r = draft();
-    if (r && r.rev > 0) await removeRoute(r);
-    exit?.();
-  };
-
-  // ── Route management (the route-list surface) ──────────────────────────────
-  //
-  // The store already holds every saved route; these are the open/delete/
-  // reverse the list needs, reusing the SAME client the editor does. No parallel
-  // routing implementation — a list action is one client call plus, for open,
-  // seeding the editor.
-
-  /** Seed the draft when the mode opens: the list's pending route if one was
-   * asked for, else — unless a BLANK start was requested — the followed route
-   * (continue it), else a fresh empty one. Always a COPY. Resets the
-   * per-session editor state and cancels any leftover pending save. The
-   * `pendingBlank` one-shot forces the fresh-empty path even while following,
-   * so `newRoute` gets a blank draft the follow can't hijack. */
-  const seedDraft = () => {
-    clearTimeout(saveTimer);
-    saveTimer = undefined;
-    const opened = pendingOpen();
-    const blank = pendingBlank();
-    setPendingOpen(null);
-    setPendingBlank(false);
-    const r = blank ? null : (opened ?? activeRoute());
-    setDraft(r ? { ...r, waypoints: [...r.waypoints] } : newRoute(mintId));
-    setAwaitingMapPick(null);
-    setPendingFrom(null);
-    setPendingTo(null);
-  };
-
-  const editRoute = (route: Route) => {
-    setPendingOpen({ ...route, waypoints: [...route.waypoints] });
-    // Already editing → re-seed in place (entering an active mode is a no-op).
-    // Otherwise ask App to enter the mode, whose `enter` seeds from the pending.
-    if (draft()) seedDraft();
-    else enterEditor?.();
-  };
-
-  /** Start a BLANK new route ("New route"), ignoring `activeRoute()`: arms the
-   * one-shot `pendingBlank` so `seedDraft` skips its default seed-from-followed.
-   * `client.setActive` is never called, so the followed route keeps autopilot. */
-  const newRouteAction = () => {
-    if (draft() && saveTimer !== undefined) void persist();
-    setPendingOpen(null);
-    setPendingBlank(true);
-    if (draft()) seedDraft();
-    else enterEditor?.();
-  };
 
   const removeRoute = async (route: Route) => {
     try {
@@ -1792,58 +765,6 @@ export function createRoutes(deps: {
     return a && a.id === deps.hiddenRouteId?.() ? null : a;
   });
 
-  // Gate the raw `approximateLegs` signal on the CURRENTLY SHOWN route
-  // actually being the go-here one — otherwise a stale flag from an
-  // earlier "Go here" tap would bleed onto whatever route/draft the user
-  // opens next. Computed here, not in `overlay.ts`, specifically so that
-  // file never needs to import `GO_HERE_ROUTE_ID` (a VALUE import from
-  // `./index` back into `./overlay` would reopen the exact runtime
-  // import cycle `./layers` was carved out to avoid — see this file's
-  // own header comment on `ROUTE_LINE_LAYER`).
-  const gatedApproximateLegs = (): boolean[] =>
-    shownRoute()?.id === GO_HERE_ROUTE_ID ? approximateLegs() : [];
-
-  // ── The mode: a tap resolves an armed "choose on map" pick, or is inert ────
-  const mode: Mode = {
-    id: "route-edit",
-    label: "Route",
-    // SOLO: the shell suppresses helm widgets and the ModePill — the plan sheet
-    // (RouteSheet.tsx) is this mode's whole UI.
-    solo: true,
-    // The editor IS the auto-router: no tool button with "Beta autorouting" off.
-    hidden: () => !betaAutorouting(),
-    enter: seedDraft,
-    // No `requestLeave`: nothing to veto — every edit auto-saved already.
-    leave: () => {
-      // Flush the last edit before dropping the draft, in case of a close
-      // inside the debounce window; `persist`'s id-guard stops it reopening.
-      if (saveTimer !== undefined) void persist();
-      inDrag = false;
-      setDraft(null);
-      setDraggingId(null);
-      setAwaitingMapPick(null);
-      setPendingFrom(null);
-      setPendingTo(null);
-    },
-    // A tap does exactly one route-related thing: resolve an armed "choose on
-    // map" pick (`beginPickOnMap`/the From/Stop/To row that armed it), wherever
-    // on the chart it lands. Not armed — the ordinary case — a tap is INERT
-    // (returns `false`, so the info panel/other handlers still see it): the
-    // redesign's whole point is that the chart is not where a route gets
-    // edited freehand any more; dragging an existing stop's own handle is a
-    // SEPARATE gesture (`overlay.ts`'s `attachRouteDragging`), not a click.
-    onClick: (click) => {
-      if (!draft()) return false;
-      const pick = awaitingMapPick();
-      if (!pick) return false;
-      setAwaitingMapPick(null);
-      const p: GeoPoint = { lng: click.lngLat.lng, lat: click.lngLat.lat };
-      if (pick.kind === "insert") void insertStop(pick.beforeId, p);
-      else void setStop(pick, p);
-      return true;
-    },
-  };
-
   // The band.top instruments (the followed strip): present only while
   // following. Home band is `top` only — a next-waypoint bearing has no
   // meaning on the rail when nothing is being followed.
@@ -1865,15 +786,13 @@ export function createRoutes(deps: {
     ...extra,
   });
 
-  // One app-layer `defineFeature` folds the editor MODE, band.top instruments,
-  // chart OVERLAY and `Edit route` COMMAND into a single `AppFeature` (the
+  // One app-layer `defineFeature` folds the band.top instruments, chart
+  // OVERLAY and the follow COMMANDS into a single `AppFeature` (the
   // POI/weather shape). The overlay is attached below, once `model` exists.
   const feature = defineFeature({
     id: "routes",
-    // Closes over `model` (built below) so the in-editor Undo/GO commands
-    // drive the SAME `undo`/`saveAndFollow` the sheet does.
+    // Closes over `model` (built below).
     commands: (deps) => routeCommands(deps, model),
-    modes: [mode],
     // The board's "Route" tab: every member is `when: following`, so it shows
     // passage data under way and is empty otherwise.
     dashboard: [
@@ -1965,6 +884,7 @@ export function createRoutes(deps: {
     ],
   });
 
+  const noop = () => {};
   const model: RoutesModel = {
     route: shownRoute,
     editing: () => !!draft(),
@@ -1972,69 +892,30 @@ export function createRoutes(deps: {
     steerLine,
     activeMode,
     targetLine,
-    flashLeg,
-    approximateLegs: gatedApproximateLegs,
-    moveWaypoint,
-    beginWaypointDrag,
-    endWaypointDrag,
-    abortDrag,
-    previewFrom,
-    previewTo,
+    // The edit session's, while one is attached; inert otherwise (no editor,
+    // nothing to flash, preview or drag).
+    flashLeg: () => session()?.flashLeg() ?? null,
+    moveWaypoint: (id, at) => session()?.moveWaypoint(id, at),
+    beginWaypointDrag: (id) => session()?.beginWaypointDrag(id),
+    endWaypointDrag: () => (session()?.endWaypointDrag ?? noop)(),
+    abortDrag: (id, at) => session()?.abortDrag(id, at),
+    previewFrom: () => session()?.previewFrom() ?? null,
+    previewTo: () => session()?.previewTo() ?? null,
     following,
     hasFix,
-    goTo,
     goStraight,
+    followGoHere,
     follow: followCtl.follow,
     followLeg: followCtl.leg,
     skipWaypoint: followCtl.skip,
     startAt: followCtl.startAt,
     routes: client.routes,
     activeRouteId: () => active()?.route_id ?? null,
-    editRoute,
-    newRoute: newRouteAction,
     removeRoute,
     reverseRoute,
     importGpx: importGpxAction,
-    // ── The plan-mode surface (RT-R2) ──
-    draft,
-    plan,
-    editorHint,
-    followingDraft,
-    setPlanSpeed,
-    renameDraft,
-    reverseDraft,
-    saveAndFollow: go,
-    startRoute,
-    openManager: () => {
-      // Leave the editor first (auto-saved; frees the desktop dock the manager
-      // also docks into) — picking a route there re-enters via `editRoute`.
-      exit?.();
-      openManagerFn?.();
-    },
-    bindOpenManager: (fn) => (openManagerFn = fn),
-    draftStops,
-    planning,
-    setStop,
-    insertStop,
-    removeStop,
-    reorderStops,
-    pickingOnMap: awaitingMapPick,
-    beginPickOnMap,
-    cancelPickOnMap,
-    openSearchForSlot: (target) => openSearchForSlotFn?.(target),
-    bindOpenSearchForSlot: (fn) => (openSearchForSlotFn = fn),
-    fromLabel,
-    setFromBoat,
-    setFromPoint,
-    toLabel,
-    setToBoat,
-    setToPoint,
     stopFollowing: stop,
-    deleteDraftRoute,
-    flashLegAt,
-    exitEditor: () => exit?.(),
-    bindExit: (fn) => (exit = fn),
-    bindEnter: (fn) => (enterEditor = fn),
+    attachEditor,
   };
 
   // The overlay closes over `model`, so it's attached now that model exists.
@@ -2051,7 +932,7 @@ export function createRoutes(deps: {
     editing: () => !!draft(),
     following,
     metrics: () => metrics(),
-    editRoute,
+    planner: routePlanner,
     activeRouteId: () => active()?.route_id ?? null,
     stopFollowing: () => void stop(),
     activeWaypointId: activeWaypoint,

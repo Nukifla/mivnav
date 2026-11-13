@@ -17,7 +17,7 @@ DEFAULT_OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 DEFAULT_OVERPASS_FALLBACK_URLS: tuple[str, ...] = (
     "https://overpass.openstreetmap.fr/api/interpreter",
 )
-DEFAULT_POI_MIN_ZOOM = 5
+DEFAULT_POI_MIN_ZOOM = 6
 DEFAULT_POI_MAX_ZOOM = 14
 
 

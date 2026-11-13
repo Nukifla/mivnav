@@ -194,6 +194,16 @@ no frontend change is needed.
 Open that name in a browser on the boat's network (or, bypassing the
 proxy, `http://<pi>:8230/` directly).
 
+**The proxy must append `X-Forwarded-For`.** Licensed o-charts content is
+served to the boat network only (LAN and tailnet). Behind a proxy on the same
+host every request arrives from loopback, so the backend takes the client
+from the rightmost `X-Forwarded-For` entry — and trusts that header only
+from a loopback peer. A proxy that doesn't set it makes every client look
+like loopback, i.e. on the boat network, and the check does nothing. Caddy's
+`reverse_proxy` appends it by default; nginx needs
+
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+
 ## Data locations (native host paths — survive redeploys)
 
 Boat data lives on the host, so a redeploy can never wipe it:
@@ -205,10 +215,19 @@ Boat data lives on the host, so a redeploy can never wipe it:
 | Config + secrets | `/home/pi/.config/mivnav/{config,credentials,profiles,routes}.json` | no — bootstrapped once, then owned by the UI |
 | Charts + installed o-charts cells | `/var/lib/mivnav/` (`charts/`, `ocharts/sets/`) | no — persists |
 | S-52 symbology | `/var/lib/mivnav/s57data` | yes — fetched once (see below) |
-| oexserverd binary + cell cache | `/var/cache/mivnav/oexserverd` | yes — fetched once (see below) |
-| Decode work dir | `/run/mivnav/oex` | no — ephemeral (tmpfs) |
+| oexserverd binary + its libs (nothing else) | `/var/cache/mivnav/oexserverd` | yes — fetched once (see below) |
+| Decode work dir (response FIFOs only) | `/run/mivnav/oex` | no — tmpfs, removed when the service stops |
 
-The unit's `ExecStartPre` creates the data dirs (owned by `pi`) on every start.
+The unit's `ExecStartPre` creates the data dirs (owned by `pi`) on every start;
+`/run/mivnav` is the unit's `RuntimeDirectory=`, so systemd creates it (0700)
+and deletes it on stop. Decoded chart data is only ever in RAM: the unit sets
+`MemorySwapMax=0` (the service's memory never goes to swap; the rest of the
+system keeps it) and `LimitCORE=0` (no core dumps). The one on-disk tile
+cache (`~/.cache/mivnav/tiles`) is encrypted. `MemorySwapMax=` needs the
+cgroup v2 memory controller — after a start,
+`cat /sys/fs/cgroup/system.slice/mivnav.service/memory.swap.max` should read
+`0`; if the file is missing, the memory controller is disabled on the kernel
+command line and swap is not limited.
 The service runs as `pi` (a native host install runs `oexserverd` as the user —
 the DRM fingerprint is the machine's, not the uid's).
 
@@ -231,6 +250,17 @@ the DRM fingerprint is the machine's, not the uid's).
 
 If a config already exists it is left exactly as is — and `credentials.json`
 (0600 secrets) is never read or written by the deploy.
+
+## o-charts: the Pi is its own registered system
+
+One mivnav server is one o-charts install: the shop licenses a set to the
+`oexserverd` fingerprint of the machine it runs on, and browsers are clients
+of that server, not installs. Register the Pi in the o-charts shop as its own
+system (mivnav's o-charts shop window registers the Pi's fingerprint). Re-imaging the
+SD card or moving to another Pi means registering that system again and
+re-downloading the sets for it — never copy installed sets or a cloned card
+across: the cells are bound to the machine, won't decrypt elsewhere, and
+copying them is not an install the licence allows.
 
 ## S-52 symbology — fetched onto the Pi
 

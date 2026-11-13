@@ -34,10 +34,12 @@ import tempfile
 import threading
 import time
 import uuid
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+from .network import boat_network_refusal
 
 if TYPE_CHECKING:
     from .service import OchartsService
@@ -288,11 +290,32 @@ def _file_id(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()[:16]
 
 
+def set_eula(directory: Path) -> tuple[str, Path] | None:
+    """The EULA a set directory ships, as ``(id, path)`` — the id is the
+    file's hash, its version — or None if it ships none (freenauticalchart.net
+    sets). One rule for every reader: the device gate here and the installer's
+    accept-before-install stage (.install, .eulas) must agree on the id.
+    Raises OSError if the file cannot be read."""
+    path = pick_eula(eula_files(directory))
+    if path is None:
+        return None
+    return _file_id(path), path
+
+
 class DeviceGate:
     """Who may see o-charts tiles, from the device list and the installed sets."""
 
-    def __init__(self, store: DeviceStore) -> None:
+    def __init__(
+        self,
+        store: DeviceStore,
+        network_check: Callable[[str | None, str | None], str | None] = boat_network_refusal,
+    ) -> None:
         self.store = store
+        #: ``(peer host, X-Forwarded-For) -> None | why refused``: licensed
+        #: content for the boat network only (.network). Injectable so tests,
+        #: whose TestClient peer is the non-address ``"testclient"``, can
+        #: say which network they stand for.
+        self.network_check = network_check
         self._lock = threading.Lock()
         # (set id, sequence) per licensed set -> the EULAs they ship
         self._eula_memo: tuple[tuple[tuple[str, int], ...], tuple[Eula, ...]] | None = None
@@ -313,14 +336,14 @@ class DeviceGate:
                 return self._eula_memo[1]
         by_id: dict[str, tuple[Path, list[str]]] = {}
         for cs in sets:
-            path = pick_eula(eula_files(cs.directory))
-            if path is None:
-                continue
             try:
-                eula_id = _file_id(path)
+                found = set_eula(cs.directory)
             except OSError:
-                log.exception("unreadable EULA %s", path)
+                log.exception("unreadable EULA in %s", cs.directory)
                 continue
+            if found is None:
+                continue
+            eula_id, path = found
             by_id.setdefault(eula_id, (path, []))[1].append(cs.name)
         eulas = tuple(Eula(id=i, path=p, sets=tuple(names)) for i, (p, names) in sorted(by_id.items()))
         with self._lock:

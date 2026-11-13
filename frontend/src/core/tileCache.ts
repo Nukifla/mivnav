@@ -8,7 +8,10 @@
 // with browser-managed quota/eviction, much higher headroom than the old
 // 64MiB RAM budget it replaced.
 
-export const TILE_CACHE_NAME = "mivnav-tiles-v1";
+/** v2 (o-charts licence, plan W2): v1 may hold licensed o-charts tiles from
+ * before the server sent `no-store`; the rename makes `sw.ts`'s `activate`
+ * sweep (`staleCacheNames`) delete it on every tablet. */
+export const TILE_CACHE_NAME = "mivnav-tiles-v2";
 
 /** Shared prefix for every Cache Storage entry this app owns, so `sw.ts`'s
  * `activate` sweep (`staleCacheNames` below) can tell "ours, but stale" apart
@@ -70,7 +73,9 @@ export interface CacheLike {
  * synthesized empty 200 so MapLibre never sees a tile error for ordinary
  * "no data here" coverage. A transient error (503, a dropped link) is passed
  * through UNCACHED so the next request is a real retry. Real tile data is
- * cached durably (no expiry header).
+ * cached durably (no expiry header) — unless its `Cache-Control` says
+ * `no-store`: licensed o-charts content, which must never reach the disk
+ * (Cache Storage is disk-backed). It is served, just not stored.
  */
 export async function resolveTile(
   request: Request,
@@ -95,17 +100,29 @@ export async function resolveTile(
     return empty;
   }
   if (!res.ok) return res; // transient — never cached, so the retry is a real retry
+  if (isNoStore(res)) return res;
   await cache.put(request, res.clone());
   return res;
 }
 
+/** Does this response forbid being stored (`Cache-Control: no-store`)? */
+function isNoStore(res: Response): boolean {
+  const cc = res.headers.get("Cache-Control") ?? "";
+  return cc.split(",").some((d) => d.trim().toLowerCase() === "no-store");
+}
+
 /** Is this request shaped like a chart/POI tile — the route match `sw.ts`
- * uses. A plugin's live POI layer (`/api/poi/live/…`) is excluded (never cached). WEATHER IS EXCLUDED, load-bearing not tidiness: a synthesized 0-byte
+ * uses. A plugin's live POI layer (`/api/poi/live/…`) is excluded (never cached). The weather plugin's routes (`/api/weather/…`) are EXCLUDED, load-bearing not tidiness: a synthesized 0-byte
  * 200 from `resolveTile` isn't a decodable raster PNG and broke the wash.
- * `/api/satellite/tiles/...` carries the same latent hazard, left alone. See
+ * `/api/satellite/tiles/...` carries the same latent hazard, left alone.
+ * The o-charts union `/api/tiles/all/…` is excluded too: it is licensed
+ * content, `no-store` on the server, and `resolveTile` already refuses to
+ * store it — this is belt and braces. (Only that exact route: the OSM/POI
+ * `…/osm_world/tiles/all/…` unions are free and stay cached.) See
  * docs/architecture/tile-cache.md. */
 export function isTileRequest(url: URL): boolean {
   if (url.pathname.startsWith("/api/weather/")) return false;
+  if (url.pathname.startsWith("/api/tiles/all/")) return false;
   // A live POI layer is online-only by design ("no caching"): its tiles must
   // never land in the disk-backed Cache Storage.
   if (url.pathname.startsWith("/api/poi/live/")) return false;

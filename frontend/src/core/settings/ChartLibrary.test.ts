@@ -152,6 +152,12 @@ describe("updatesSummary", () => {
     );
   });
 
+  test("an update waiting for its new licence agreement says so", () => {
+    expect(updatesSummary(st({ updates: [{ ...dk, awaiting_eula: "abc" }] }), NOW)).toBe(
+      "1 update available — checked 2 h ago. A new licence agreement needs accepting.",
+    );
+  });
+
   test("a run in progress outranks the last result", () => {
     expect(updatesSummary(st({ state: "checking", error: "old" }), NOW)).toBe("Checking the shop…");
     expect(updatesSummary(st({ state: "installing" }), NOW)).toBe("Installing updates…");

@@ -23,6 +23,7 @@ from mivnav.features.ocharts.devices import (
     eula_files,
     pick_eula,
 )
+from mivnav.features.ocharts.network import boat_network_refusal
 from senc_fixture import point_cell
 from test_ocharts_serving import _two_set_env, tile_of
 
@@ -137,6 +138,19 @@ def _build_east(d: Path) -> None:
     )
 
 
+class Network:
+    """The gate's ``network_check`` for these tests: the TestClient's peer is
+    the non-address ``"testclient"``, which the real check refuses (fails
+    closed). Here it stands for ``peer`` — a boat-LAN screen unless a test
+    moves it — and everything else is the real classification."""
+
+    def __init__(self) -> None:
+        self.peer = "192.168.1.20"
+
+    def __call__(self, peer: str | None, forwarded_for: str | None) -> str | None:
+        return boat_network_refusal(self.peer if peer == "testclient" else peer, forwarded_for)
+
+
 @pytest.fixture()
 def env(tmp_path: Path):
     """set-A stands in for an encrypted o-charts set (it ships the EULA),
@@ -149,7 +163,7 @@ def env(tmp_path: Path):
     client, service = next(gen)
     licensed_ids = {"set-A"}
     service.licensed = lambda cs: cs.id in licensed_ids
-    gate = DeviceGate(DeviceStore(tmp_path / "state" / "devices.json"))
+    gate = DeviceGate(DeviceStore(tmp_path / "state" / "devices.json"), network_check=Network())
     app.dependency_overrides[get_device_gate] = lambda: gate
     try:
         yield client, service, gate, licensed_ids
@@ -220,6 +234,32 @@ def test_registering_needs_the_eula_and_then_serves_everything(env) -> None:
     # Registering twice from one browser is refused, not a second slot.
     again = client.post("/ocharts/devices", json={"name": "again", "accept": []})
     assert again.status_code == 409
+
+
+def test_licensed_content_is_never_cacheable_free_content_is(env) -> None:
+    """o-charts licence (plan W2): licensed tiles and notes are `private,
+    no-store` with no ETag and no 304, so no client keeps them on disk; free
+    sets keep the revalidated `public, no-cache` + ETag caching."""
+    client, service, *_ = env
+    for set_dir in ("set-A", "set-B"):
+        (service.get(set_dir).directory / "NOTE.TXT").write_text("a note")
+    _register(client)
+
+    def licensed(r) -> None:
+        assert r.status_code == 200
+        assert r.headers["cache-control"] == "private, no-store"
+        assert "etag" not in r.headers
+
+    for url in (f"/tiles/all/{Z}/{X}/{Y}", f"/tiles/set-A/{Z}/{X}/{Y}", "/text/set-A/NOTE.TXT"):
+        licensed(client.get(url))
+        licensed(client.get(url, headers={"if-none-match": "*"}))  # never 304
+
+    for url in (f"/tiles/free/{Z}/{X}/{Y}", f"/tiles/set-B/{Z}/{X}/{Y}", "/text/set-B/NOTE.TXT"):
+        r = client.get(url)
+        assert r.status_code == 200
+        assert r.headers["cache-control"] == "public, no-cache"
+        etag = r.headers["etag"]
+        assert client.get(url, headers={"if-none-match": etag}).status_code == 304
 
 
 def test_the_sixth_device_removes_one_and_the_removed_one_loses_o_charts(env) -> None:
@@ -297,3 +337,105 @@ def test_rename(env) -> None:
     assert r.status_code == 200 and r.json() == {**r.json(), "name": "Nav station", "current": True}
     assert client.patch("/ocharts/devices/nope", json={"name": "x"}).status_code == 404
     assert client.patch(f"/ocharts/devices/{device_id}", json={"name": " "}).status_code == 422
+
+
+# -- cell outlines (plan W12) ------------------------------------------------------
+
+# Inside WEST's coverage (set-A, licensed) only.
+WEST_SPOT = {"lon": 11.18, "lat": 54.2}
+
+
+def _cells_at(client, **params) -> set[str]:
+    r = client.get("/cells/at", params={**WEST_SPOT, **params})
+    assert r.status_code == 200, r.text
+    assert r.headers["cache-control"] == "no-store"
+    return {c["set"] for c in r.json()["cells"]}
+
+
+def _outline_sets(client, **params) -> set[str]:
+    r = client.get("/debug/cells", params=params)
+    assert r.status_code == 200, r.text
+    assert r.headers["cache-control"] == "no-store"
+    return {f["properties"]["set"] for f in r.json()["features"]}
+
+
+def test_an_unregistered_screen_gets_no_licensed_cells(env) -> None:
+    client, *_ = env
+    # Answered as if free=true (no 403): the scale badge keeps working.
+    assert _cells_at(client) == set()
+    assert _cells_at(client, free="true") == set()
+    assert _outline_sets(client) == {"set-B"}
+
+
+def test_a_registered_screen_gets_every_cell(env) -> None:
+    client, *_ = env
+    _register(client)
+    assert _cells_at(client) == {"set-A"}
+    assert _cells_at(client, free="true") == set()
+    assert _outline_sets(client) == {"set-A", "set-B"}
+    # The free union (a screen that lost the server draws it) asks for free.
+    assert _outline_sets(client, free="true") == {"set-B"}
+
+
+def test_cells_without_a_licensed_set_are_unchanged(env) -> None:
+    client, _, _, licensed_ids = env
+    licensed_ids.clear()
+    assert _cells_at(client) == {"set-A"}
+    assert _outline_sets(client) == {"set-A", "set-B"}
+
+
+# -- the boat network only (plan W11) ----------------------------------------------
+
+
+def test_a_registered_screen_off_the_boat_network_gets_no_licensed_content(env) -> None:
+    client, service, gate, _ = env
+    (service.get("set-A").directory / "NOTE.TXT").write_text("a note")
+    _register(client)
+    gate.network_check.peer = "203.0.113.7"  # say, through a port forward
+
+    for url in (f"/tiles/all/{Z}/{X}/{Y}", f"/tiles/set-A/{Z}/{X}/{Y}", "/text/set-A/NOTE.TXT"):
+        r = client.get(url)
+        assert r.status_code == 403, url
+        assert r.json()["detail"]["code"] == "not_boat_network"
+        assert "203.0.113.7" in r.json()["detail"]["message"]
+        assert r.headers["cache-control"] == "no-store"
+    assert _cells_at(client) == set()
+    assert _outline_sets(client) == {"set-B"}
+    # The screen is told to draw /tiles/free, which still works.
+    me = client.get("/ocharts/devices/me").json()
+    assert me["registered"] is True and me["allowed"] is False
+    assert client.get(f"/tiles/free/{Z}/{X}/{Y}").status_code == 200
+    assert client.get(f"/tiles/set-B/{Z}/{X}/{Y}").status_code == 200
+
+    gate.network_check.peer = "100.101.102.103"  # the tailnet
+    assert client.get(f"/tiles/all/{Z}/{X}/{Y}").status_code == 200
+
+
+def test_the_forwarded_client_counts_only_behind_a_loopback_proxy(env) -> None:
+    client, _, gate, _ = env
+    _register(client)
+    url = f"/tiles/all/{Z}/{X}/{Y}"
+
+    def status(peer: str, forwarded: str | None = None) -> int:
+        gate.network_check.peer = peer
+        headers = {"x-forwarded-for": forwarded} if forwarded is not None else {}
+        return client.get(url, headers=headers).status_code
+
+    # The same-host proxy: its appended (rightmost) entry is the client.
+    assert status("127.0.0.1", "192.168.1.30") == 200
+    assert status("127.0.0.1", "203.0.113.7") == 403
+    # A public client that sends its own LAN-looking header: the proxy
+    # appends the real address, and only that one is believed.
+    assert status("127.0.0.1", "192.168.1.30, 203.0.113.7") == 403
+    assert status("127.0.0.1", "203.0.113.7, 192.168.1.30") == 200
+    # Any other peer's header is ignored, both ways.
+    assert status("203.0.113.7", "192.168.1.30") == 403
+    assert status("192.168.1.30", "203.0.113.7") == 200
+
+
+def test_the_boat_network_check_is_not_applied_without_a_licensed_set(env) -> None:
+    client, _, gate, licensed_ids = env
+    licensed_ids.clear()
+    gate.network_check.peer = "203.0.113.7"
+    assert client.get(f"/tiles/all/{Z}/{X}/{Y}").status_code == 200
+    assert client.get("/ocharts/devices/me").json()["allowed"] is True

@@ -26,7 +26,9 @@ from mivnav.features.ocharts.devices import (
     DeviceGate,
     DevicesFull,
     UnknownDevice,
+    set_eula,
 )
+from mivnav.features.ocharts.eulas import EulaAcceptances
 from mivnav.features.ocharts.install import InstallError, Installer
 from mivnav.features.ocharts.provider import ocharts_data_provider
 from mivnav.features.ocharts.runtime import OchartsRuntime, build_ocharts_runtime, ocharts_guard
@@ -42,6 +44,7 @@ __all__ = [
     "FEATURE",
     "device_token",
     "get_device_gate",
+    "network_refusal",
     "get_installer",
     "get_service",
     "get_updater",
@@ -70,9 +73,33 @@ def get_device_gate(runtime: Runtime = Depends(get_runtime)) -> DeviceGate:
     return cast(OchartsRuntime, runtime.feature("ocharts")).devices
 
 
+def get_eula_acceptances(runtime: Runtime = Depends(get_runtime)) -> EulaAcceptances:
+    return cast(OchartsRuntime, runtime.feature("ocharts")).eula_acceptances
+
+
+def _idle_installer(installer: Installer) -> None:
+    """409 unless a new install could start now."""
+    if installer.busy():
+        raise HTTPException(status_code=409, detail="an install is already running")
+    if installer.parked():
+        raise HTTPException(
+            status_code=409,
+            detail="an install is waiting for its licence agreement; accept or decline it first",
+        )
+
+
 def device_token(request: Request) -> str | None:
     """This browser's device cookie, if it has one (see .devices)."""
     return request.cookies.get(COOKIE) or None
+
+
+def network_refusal(gate: DeviceGate, request: Request) -> str | None:
+    """None if this request comes from the boat network (.network), else
+    why not — the gate's ``network_check`` over the peer and the forwarded
+    header."""
+    peer = request.client.host if request.client is not None else None
+    forwarded = ",".join(request.headers.getlist("x-forwarded-for")) or None
+    return gate.network_check(peer, forwarded)
 
 
 def _configured_credentials(runtime: Runtime) -> Credentials | None:
@@ -231,6 +258,8 @@ def shop_install(
     runtime: Runtime = Depends(get_runtime),
 ) -> dict:
     creds = _credentials(runtime)
+    # Before assigning a slot: that spends a licence binding.
+    _idle_installer(installer)
     client = ShopClient(creds)
     try:
         slot_uuid = body.slot_uuid
@@ -351,8 +380,7 @@ def updates_install(
     Poll ``GET /ocharts/updates`` for the run and ``GET /ocharts/install``
     for the download in progress."""
     creds = _configured_credentials(runtime)
-    if installer.busy():
-        raise HTTPException(status_code=409, detail="an install is already running")
+    _idle_installer(installer)
     try:
         updater.start(service, installer, creds)
     except UpdateError as e:
@@ -362,14 +390,95 @@ def updates_install(
 
 @router.get("/install")
 def install_status(installer: Installer = Depends(get_installer)) -> dict:
+    """The install in progress or last finished. ``awaiting_eula``: the set
+    is unpacked but not installed until its licence agreement (``eula.id``,
+    readable at ``GET /eula/{id}``) is accepted — ``POST /install/accept`` —
+    or declined — ``POST /install/decline``."""
     return installer.status()
+
+
+class InstallAcceptBody(BaseModel):
+    #: The EULA shown — must be the one the install waits for.
+    eula_id: str
+
+
+@router.post("/install/accept")
+def install_accept(
+    body: InstallAcceptBody, installer: Installer = Depends(get_installer)
+) -> dict:
+    """Accept the waiting install's licence agreement; the install resumes.
+    Recorded, so a later update shipping the same text installs without
+    asking again."""
+    try:
+        installer.accept(body.eula_id)
+    except InstallError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
+    return installer.status()
+
+
+@router.post("/install/decline")
+def install_decline(installer: Installer = Depends(get_installer)) -> dict:
+    """Decline the waiting install's licence agreement: the downloaded set
+    is deleted and nothing is installed."""
+    try:
+        installer.decline()
+    except InstallError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
+    return installer.status()
+
+
+class LicenceOut(BaseModel):
+    set_id: str
+    name: str
+    edition: str
+    #: The EULA the set ships (``GET /eula/{id}``); None if it ships none.
+    eula_id: str | None
+    #: When it was accepted for install (epoch s), None if never recorded
+    #: (a set installed before acceptance was recorded at install).
+    accepted_at: float | None
+    #: ``install``: accepted at an install; ``device``: carried over from a
+    #: screen's acceptance when this record was introduced; ``""``: none.
+    accepted_via: str
+
+
+class LicencesOut(BaseModel):
+    sets: list[LicenceOut]
+
+
+@router.get("/licences")
+def licences(
+    gate: DeviceGate = Depends(get_device_gate),
+    service: OchartsService = Depends(get_service),
+    acceptances: EulaAcceptances = Depends(get_eula_acceptances),
+) -> LicencesOut:
+    """Every installed licensed set with its licence agreement and when it
+    was accepted — the EULA must be retrievable at any time. Not
+    device-gated: an agreement is not chart data."""
+    out: list[LicenceOut] = []
+    for cs in sorted(gate.licensed_sets(service), key=lambda cs: cs.id):
+        try:
+            found = set_eula(cs.directory)
+        except OSError:
+            log.exception("unreadable EULA in %s", cs.directory)
+            found = None
+        entry = acceptances.get(found[0]) if found is not None else None
+        out.append(
+            LicenceOut(
+                set_id=cs.id,
+                name=cs.name,
+                edition=cs.info.edition,
+                eula_id=found[0] if found is not None else None,
+                accepted_at=entry["accepted_at"] if entry else None,
+                accepted_via=entry.get("via", "") if entry else "",
+            )
+        )
+    return LicencesOut(sets=out)
 
 
 @router.post("/upload")
 async def upload(file: UploadFile, installer: Installer = Depends(get_installer)) -> dict:
     """Manual install: upload a chart zip (offline shop download)."""
-    if installer.busy():
-        raise HTTPException(status_code=409, detail="an install is already running")
+    _idle_installer(installer)
     # spool to disk (the zip is encrypted-at-rest shop material, not
     # decrypted chart data); the installer job deletes it
     spool = tempfile.NamedTemporaryFile(prefix="mivnav-upload-", suffix=".zip", delete=False)
@@ -478,6 +587,10 @@ def device_me(
     ``removed`` is said once: the stale cookie is dropped with the answer,
     so the client clears its cached o-charts tiles once, not every launch."""
     status = _status(gate, service, device_token(request))
+    if status.allowed and status.gate and network_refusal(gate, request) is not None:
+        # Off the boat network the licensed tiles 403 whatever the
+        # registration says; tell the screen to draw /tiles/free instead.
+        status.allowed = False
     if status.removed:
         response.delete_cookie(COOKIE, path="/")
     return status
@@ -574,19 +687,30 @@ def eula(
     eula_id: str,
     gate: DeviceGate = Depends(get_device_gate),
     service: OchartsService = Depends(get_service),
+    installer: Installer = Depends(get_installer),
 ) -> Response:
-    """One EULA document as the chart set ships it. Vendor HTML, so it is
-    served sandboxed: no script, no same-origin access."""
+    """One EULA document as the chart set ships it: an installed set's, or
+    the one an install is waiting on (not installed yet — it must be read
+    before it is). Vendor HTML, so it is served sandboxed: no script, no
+    same-origin access. Not device-gated."""
+    path: Path | None = None
     for e in gate.eulas(service):
         if e.id == eula_id:
-            return FileResponse(
-                e.path,
-                media_type="text/html; charset=utf-8",
-                headers={
-                    "Content-Security-Policy": "sandbox",
-                    "Cache-Control": "no-cache",
-                },
-            )
+            path = e.path
+            break
+    if path is None:
+        staged = installer.parked_eula()
+        if staged is not None and staged[0] == eula_id:
+            path = staged[1]
+    if path is not None:
+        return FileResponse(
+            path,
+            media_type="text/html; charset=utf-8",
+            headers={
+                "Content-Security-Policy": "sandbox",
+                "Cache-Control": "no-cache",
+            },
+        )
     return JSONResponse({"detail": f"unknown licence agreement {eula_id!r}"}, status_code=404)
 
 

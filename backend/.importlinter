@@ -13,8 +13,8 @@ root_package = mivnav
 #                 module's docstring for why it is kernel, mirroring rescan),
 #                 system (the server's own version + release-updater
 #                 mechanics; no data provider, so not a feature)
-#   features    — mivnav.features.{poi,satellite,ocharts,weather,autopilot,
-#                 route,routing} (each self-contained: store/service lifecycle,
+#   features    — mivnav.features.{poi,satellite,ocharts,autopilot,
+#                 route} (each self-contained: store/service lifecycle,
 #                 routes + its one Feature registration, ingest runner where
 #                 bakeable — see mivnav.feature; a config schema too, EXCEPT
 #                 autopilot, which owns no config fields of its own — see
@@ -86,9 +86,7 @@ ignore_imports =
     mivnav.config.model -> mivnav.features.osm_world.config
     mivnav.config.model -> mivnav.features.satellite.config
     mivnav.config.model -> mivnav.features.ocharts.config
-    mivnav.config.model -> mivnav.features.weather.config
     mivnav.config.model -> mivnav.features.route.config
-    mivnav.config.model -> mivnav.features.routing.config
     mivnav.config.model -> mivnav.features.track.config
     mivnav.config.model -> mivnav.features.notices.config
     # The collision alarm's thresholds — same leaf-config.py rule.
@@ -168,11 +166,9 @@ source_modules =
     mivnav.features.poi
     mivnav.features.osm_world
     mivnav.features.satellite
-    mivnav.features.weather
     mivnav.features.autopilot
     mivnav.features.anchor
     mivnav.features.route
-    mivnav.features.routing
     mivnav.features.themes
     mivnav.features.notices
     mivnav.features.mob
@@ -182,11 +178,9 @@ forbidden_modules =
     mivnav.features.poi
     mivnav.features.osm_world
     mivnav.features.satellite
-    mivnav.features.weather
     mivnav.features.autopilot
     mivnav.features.anchor
     mivnav.features.route
-    mivnav.features.routing
     mivnav.features.themes
     mivnav.features.notices
     mivnav.features.mob

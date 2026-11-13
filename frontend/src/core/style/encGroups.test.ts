@@ -42,7 +42,8 @@ const set: ChartSet = {
   vector_layers: layerIds.map((id) => ({ id, minzoom: 0, maxzoom: 16, fields: {} })),
 };
 
-const withGroups = (groups: EncGroupsState): ChartSettings => ({ ...DEFAULT_SETTINGS, encGroups: groups });
+// OSM-on-land off, so LNDARE ships its plain fill-opacity 1 for the group to multiply.
+const withGroups = (groups: EncGroupsState): ChartSettings => ({ ...DEFAULT_SETTINGS, showOsmOnLand: false, encGroups: groups });
 const patch = (base: EncGroupsState, id: keyof EncGroupsState, s: Partial<{ visible: boolean; opacity: number }>): EncGroupsState => ({
   ...base,
   [id]: { ...base[id], ...s },

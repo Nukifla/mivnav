@@ -306,8 +306,8 @@ describe("OSM on land", () => {
   const landFill = (s: typeof off) =>
     s.layers.find((l) => l.id === "chart-dk-lndare") as { paint: Record<string, unknown> };
 
-  test("off by default, and then land is opaque LANDA", () => {
-    expect(DEFAULT_SETTINGS.showOsmOnLand).toBe(false);
+  test("on by default; off, land is opaque LANDA", () => {
+    expect(DEFAULT_SETTINGS.showOsmOnLand).toBe(true);
     expect(landFill(off).paint).toEqual({ "fill-color": S52_COLORS.LANDA, "fill-opacity": 1 });
   });
 
@@ -529,7 +529,7 @@ describe("the scamin fade dissolves gated features instead of popping them", () 
       fields: {},
     })),
   };
-  const built = buildStyle([full], DEFAULT_SETTINGS);
+  const built = buildStyle([full], { ...DEFAULT_SETTINGS, showOsmOnLand: false });
   const paintOf = (id: string) =>
     (built.layers.find((l) => l.id === id) as { paint?: Record<string, unknown> }).paint ?? {};
   const propSpec = {

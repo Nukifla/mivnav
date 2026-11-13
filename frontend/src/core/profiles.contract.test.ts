@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { settingsFromProfile } from "./profiles";
-import { DEFAULT_WEATHER, type WeatherSettings } from "./weatherSettings";
 
 // Drift guard for the PROFILE COERCER — the profile analogue of
 // serverConfig.contract.test.ts.
@@ -24,7 +23,6 @@ import { DEFAULT_WEATHER, type WeatherSettings } from "./weatherSettings";
 // uncoerced.) A new key lands as a red test here until it is mapped.
 
 const SETTINGS_TS = join(import.meta.dir, "style/settings.ts");
-const WEATHER_TS = join(import.meta.dir, "weatherSettings.ts");
 
 /** The property names of a TS `export interface`, from the source. Same shape
  * as serverConfig.contract.test.ts's parser: a `name:` (optionally `name?:`) at
@@ -38,17 +36,14 @@ function interfaceFields(src: string, name: string, file: string): string[] {
 }
 
 const settingsSrc = readFileSync(SETTINGS_TS, "utf8");
-const weatherSrc = readFileSync(WEATHER_TS, "utf8");
 
 const chartSettingsFields = interfaceFields(settingsSrc, "ChartSettings", "style/settings.ts");
-const weatherFields = interfaceFields(weatherSrc, "WeatherSettings", "weatherSettings.ts");
 
 describe("the profile coercer stays in lockstep with ChartSettings", () => {
   test("the parse is non-trivial (guards against a vacuous pass)", () => {
     // ChartSettings is a large interface; a handful of fields means the regex
     // broke and every coverage assertion below would be vacuously true.
     expect(chartSettingsFields.length).toBeGreaterThan(10);
-    expect(weatherFields.length).toBeGreaterThan(4);
   });
 
   test("settingsFromProfile produces every ChartSettings field", () => {
@@ -70,13 +65,5 @@ describe("the profile coercer stays in lockstep with ChartSettings", () => {
       (k) => !declared.has(k),
     );
     expect(extra).toEqual([]);
-  });
-
-  test("the nested weather block covers every WeatherSettings field", () => {
-    const produced = new Set(Object.keys(settingsFromProfile({}).weather));
-    const missing = weatherFields.filter((f) => !produced.has(f));
-    expect(missing).toEqual([]);
-    // And it is the coerced default block, not a passed-through raw one.
-    expect(settingsFromProfile({}).weather).toEqual(DEFAULT_WEATHER satisfies WeatherSettings);
   });
 });

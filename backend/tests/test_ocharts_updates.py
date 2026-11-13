@@ -13,6 +13,7 @@ import httpx
 import pytest
 
 from mivnav.features.ocharts import editions, fnc
+from mivnav.features.ocharts.eulas import EulaAcceptances
 from mivnav.features.ocharts.install import Installer
 from mivnav.features.ocharts.service import OchartsService
 from mivnav.features.ocharts.shop import (
@@ -34,16 +35,20 @@ CREDS = Credentials("sailor@example.com", "pw")
 SYSTEM = "boatpi"
 
 
-def chart_zip(tmp_path: Path, directory: str, edition: str, with_cell: bool = True) -> bytes:
+def chart_zip(
+    tmp_path: Path, directory: str, edition: str, with_cell: bool = True, eula: str | None = None
+) -> bytes:
     """A shop-shaped zip: one directory, a legacy Chartinfo.txt carrying the
     edition (``2026-31`` parses to ``2026/01-31``), one plain cell."""
     buf = io.BytesIO()
     cell = tmp_path / "zip-cell.senc"
     point_cell(cell, name="OC-1")
     with zipfile.ZipFile(buf, "w") as zf:
-        zf.writestr(f"{directory}/Chartinfo.txt", f"ChartInfo:Denmark;{edition};2027-01-01\n")
+        zf.writestr(f"{directory}/Chartinfo.txt", f"ChartInfo:Denmark;{edition};2099-12-31\n")
         if with_cell:
             zf.write(cell, f"{directory}/OC-1.senc")
+        if eula is not None:
+            zf.writestr(f"{directory}/EN_rrc_eula_ChartSetsForOpenCPN.html", eula)
     return buf.getvalue()
 
 
@@ -223,7 +228,9 @@ class FakeShop:
         pass
 
 
-def downloading(service: OchartsService, zip_bytes: bytes) -> tuple[Installer, list[str]]:
+def downloading(
+    service: OchartsService, zip_bytes: bytes, acceptances: EulaAcceptances | None = None
+) -> tuple[Installer, list[str]]:
     fetched: list[str] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -232,7 +239,11 @@ def downloading(service: OchartsService, zip_bytes: bytes) -> tuple[Installer, l
             return httpx.Response(200, content=zip_bytes)
         return httpx.Response(200, content=b"<keyList></keyList>")
 
-    return Installer(service, http=httpx.Client(transport=httpx.MockTransport(handler))), fetched
+    return Installer(
+        service,
+        http=httpx.Client(transport=httpx.MockTransport(handler)),
+        acceptances=acceptances,
+    ), fetched
 
 
 def test_run_installs_the_update_and_retires_the_old_set(
@@ -308,6 +319,95 @@ def test_a_failed_edition_is_not_downloaded_again_unattended(
     # asked for by hand, it is tried again
     updater.run(service, installer, CREDS, retry_failed=True)
     assert len(shop.requested) == 2
+
+
+def _install_with_eula(
+    service: OchartsService, tmp_path: Path, acceptances: EulaAcceptances, text: str
+) -> None:
+    """The installed DK 2026-31, its licence agreement ``text`` accepted."""
+    installer = Installer(service, acceptances=acceptances)
+    installer.install_zip_bytes(chart_zip(tmp_path, "oeuSENC-DK-2026-1-31", "2026-31", eula=text))
+    st = wait_parked_or_done(installer)
+    assert st["state"] == "awaiting_eula"
+    installer.accept(st["eula"]["id"])
+    assert wait_parked_or_done(installer)["state"] == "done"
+
+
+def wait_parked_or_done(installer: Installer, timeout: float = 15.0) -> dict:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        st = installer.status()
+        if st["state"] in ("done", "error", "awaiting_eula") and not installer.busy():
+            return st
+        time.sleep(0.02)
+    raise TimeoutError(f"install did not finish: {installer.status()}")
+
+
+def test_an_update_with_an_unchanged_eula_installs_unattended(
+    service: OchartsService, tmp_path: Path
+) -> None:
+    acceptances = EulaAcceptances(tmp_path / "state" / "eula-acceptances.json")
+    _install_with_eula(service, tmp_path, acceptances, "Licence v1")
+    update = chart_zip(tmp_path, "oeuSENC-DK-2026-1-38", "2026-38", eula="Licence v1")
+    installer, _ = downloading(service, update, acceptances)
+    updater = Updater(shop=FakeShop([shop_chart("2026/1-38")]))
+
+    updater.run(service, installer, CREDS)
+
+    assert sorted(service.sets()) == ["oeuSENC-DK-2026-1-38"]
+    assert updater.status()["updates"] == []
+
+
+def test_an_update_with_a_changed_eula_parks_until_accepted(
+    service: OchartsService, tmp_path: Path
+) -> None:
+    acceptances = EulaAcceptances(tmp_path / "state" / "eula-acceptances.json")
+    _install_with_eula(service, tmp_path, acceptances, "Licence v1")
+    update = chart_zip(tmp_path, "oeuSENC-DK-2026-1-38", "2026-38", eula="Licence v2")
+    installer, _ = downloading(service, update, acceptances)
+    shop = FakeShop([shop_chart("2026/1-38")])
+    updater = Updater(shop=shop)
+
+    updater.run(service, installer, CREDS)
+
+    # never installed unattended: the old set serves on, the new one waits
+    assert sorted(service.sets()) == ["oeuSENC-DK-2026-1-31"]
+    st = installer.status()
+    assert st["state"] == "awaiting_eula"
+    (pending,) = updater.status()["updates"]
+    assert pending["awaiting_eula"] == st["eula"]["id"]
+    assert pending["failed"] == ""
+    assert updater.status()["installed"] == []
+    # the next unattended run neither downloads it again nor accepts it
+    updater.run(service, installer, CREDS)
+    assert len(shop.requested) == 1
+    assert installer.status()["state"] == "awaiting_eula"
+
+    installer.accept(st["eula"]["id"])
+    assert wait_parked_or_done(installer)["state"] == "done"
+    assert sorted(service.sets()) == ["oeuSENC-DK-2026-1-38"]
+
+
+def test_a_declined_update_is_not_downloaded_again_unattended(
+    service: OchartsService, tmp_path: Path
+) -> None:
+    acceptances = EulaAcceptances(tmp_path / "state" / "eula-acceptances.json")
+    _install_with_eula(service, tmp_path, acceptances, "Licence v1")
+    update = chart_zip(tmp_path, "oeuSENC-DK-2026-1-38", "2026-38", eula="Licence v2")
+    installer, _ = downloading(service, update, acceptances)
+    shop = FakeShop([shop_chart("2026/1-38")])
+    updater = Updater(shop=shop)
+
+    updater.run(service, installer, CREDS)
+    installer.decline()
+    updater.run(service, installer, CREDS)
+    assert len(shop.requested) == 1
+    assert sorted(service.sets()) == ["oeuSENC-DK-2026-1-31"]
+    # asked for by hand, it is downloaded and waits for a person again
+    updater.run(service, installer, CREDS, retry_failed=True)
+    assert len(shop.requested) == 2
+    assert installer.status()["state"] == "awaiting_eula"
+    installer.discard()  # don't leak the staged set into the temp dir
 
 
 def test_a_zip_that_is_another_chart_is_refused(service: OchartsService, tmp_path: Path) -> None:
@@ -480,7 +580,9 @@ def fnc_client(zip_bytes: bytes, etag: str = ETAG_NEW, last_modified: str = LM_N
 
 def install_fnc(service: OchartsService, date: str = "2026-07-19") -> None:
     http = fnc_http(fnc_zip(date), ETAG_OLD, LM_OLD)
-    installer = Installer(service, http=http)
+    # No EULA ever accepted: a free set ships none, so it never waits for one.
+    nothing_accepted = EulaAcceptances(service.sets_dir.parent / "state" / "eula-acceptances.json")
+    installer = Installer(service, http=http, acceptances=nothing_accepted)
     installer.install_from_url(
         FNC_URL,
         prepare=fnc.prepare(fnc.FncClient(http).version("de")),

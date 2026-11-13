@@ -26,7 +26,8 @@ from mivnav.api.charts import (
 )
 from mivnav.api.deps import Runtime, get_runtime
 from mivnav.charts.pmtiles import COMPRESSION_GZIP, COMPRESSION_NONE, TILE_TYPE_MVT, PMTilesError, decompress
-from mivnav.feature import Feature
+from mivnav.feature import CacheDir, Feature
+from mivnav.features.osm_world.live import close_live_http_client
 from mivnav.features.osm_world.live import LiveTile
 from mivnav.features.osm_world.provider import osm_world_data_provider
 from mivnav.features.osm_world.runtime import OsmWorldRuntime, build_osm_world_runtime
@@ -294,4 +295,9 @@ FEATURE: Feature[OsmWorldRuntime] = Feature(
     routers=(router,),
     build_runtime=build_osm_world_runtime,
     data_provider=osm_world_data_provider,
+    shutdown=close_live_http_client,
+    cache_dirs=lambda config: (
+        CacheDir("OSM world live cache", config.osm_world.live_cache_dir, live=True),
+    ),
+    live_cache_bytes=lambda rt: rt.live_cache().stats()["bytes"],
 )

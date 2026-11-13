@@ -41,7 +41,7 @@ export interface CoreDeps {
   now?: Accessor<number>;
   /** The boat's collision settings (`signalk.collisionSettings`) — `ais.cpa`
    * fires the alarm only in `tell`, and sounds it here only with `sound` on.
-   * Absent → `DEFAULT_COLLISION_SETTINGS` (tell, sound on). */
+   * Absent → `DEFAULT_COLLISION_SETTINGS` (show: drawn, silent). */
   collision?: Accessor<CollisionSettings>;
   /** Server-side ACK of the collision alarm. Injected by tests; defaults to
    * `acknowledgeCollision` (POST /api/signalk/collision/ack). */

@@ -1,4 +1,4 @@
-// FOLLOWING A ROUTE, beta-independent: start following a saved route, skip to
+// FOLLOWING A ROUTE, planner-independent: start following a saved route, skip to
 // the next/previous waypoint, restart at a chosen waypoint. No autorouting and
 // no hazard checks — every action here is one `PUT /routes/active` naming a
 // waypoint (invariant #8); the backend publishes it to SignalK and its
@@ -23,7 +23,7 @@ const wpLabel = (r: Route, i: number): string => r.waypoints[i]?.name.trim() || 
  * Which waypoint "Follow" makes the active target.
  *
  * - With a fix: the arrival waypoint of the leg the boat is nearest
- *   (`nearestLegTargetIndex`, the beta editor's "Start route" rule) — beside
+ *   (`nearestLegTargetIndex`, the autorouting editor's "Start route" rule) — beside
  *   the middle of leg 3→4 that is 4, never 3 behind the boat.
  * - With NO fix: index 1 — the first LEG (point 1 → point 2), not point 1
  *   itself. A route's first point is conventionally where it departs from;

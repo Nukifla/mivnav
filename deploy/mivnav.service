@@ -24,9 +24,12 @@
 #
 # DATA (native host paths, named by the config, created by ExecStartPre below):
 #   /home/pi/.config/mivnav   config + credentials (the UI writes them)
-#   /var/lib/mivnav           charts + installed o-charts cells + S-52 tables
-#   /var/cache/mivnav         oexserverd binary + cell cache
-#   /run/mivnav               decode work dir (tmpfs)
+#   /var/lib/mivnav           charts + installed o-charts cells (o-charts-encrypted) + S-52 tables
+#   /var/cache/mivnav         the oexserverd binary and its libs, nothing else
+#   /run/mivnav               decode work dir (tmpfs; response FIFOs only) —
+#                             RuntimeDirectory=, so systemd removes it on stop
+# Decoded chart data lives only in RAM; the one on-disk tile cache
+# (~/.cache/mivnav/tiles) is encrypted (ocharts/disk_tiles.py).
 # The service runs as `pi` (a native host install, like the dev box, runs
 # oexserverd as the user — the DRM fingerprint is the machine's, not the uid's).
 #
@@ -47,12 +50,22 @@ RestartSec=5
 WorkingDirectory=/home/pi/mivnav/backend
 
 # Host data dirs. The `+` prefix runs these as root (needed to create/chown under
-# /var and /run); `-` ignores an already-present dir. Config dir is 0700 (holds
+# /var); `-` ignores an already-present dir. Config dir is 0700 (holds
 # credentials.json); the installer bootstraps the JSON inside it.
 ExecStartPre=+-/usr/bin/install -d -o pi -g pi -m0700 /home/pi/.config/mivnav
 ExecStartPre=+-/usr/bin/install -d -o pi -g pi -m0755 /var/lib/mivnav/charts /var/lib/mivnav/ocharts/sets /var/lib/mivnav/s57data
 ExecStartPre=+-/usr/bin/install -d -o pi -g pi -m0755 /var/cache/mivnav/oexserverd
-ExecStartPre=+-/usr/bin/install -d -o pi -g pi -m0755 /run/mivnav/oex
+
+# o-charts licence (no decoded chart data on any medium, none left after a
+# session): the decode work dir is removed when the service stops; the RAM
+# cell/tile caches never go to swap (memory.swap.max=0 for this service only,
+# the rest of the system keeps its swap; needs the cgroup v2 memory
+# controller — check `cat /sys/fs/cgroup/system.slice/mivnav.service/memory.swap.max`
+# reads 0); and no core dumps of a process holding decoded cells.
+RuntimeDirectory=mivnav
+RuntimeDirectoryMode=0700
+MemorySwapMax=0
+LimitCORE=0
 
 # Run the already-built venv (the installer/updater built it). --no-sync so the boot path
 # never rebuilds — it must not need cargo/network to start. Serves the SPA (at /)

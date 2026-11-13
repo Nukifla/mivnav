@@ -32,7 +32,7 @@ import {
   type Profile,
 } from "./profiles";
 import { DEFAULT_SETTINGS, normalizedContours, type ChartSettings } from "./style/settings";
-import { DEFAULT_WEATHER } from "./weatherSettings";
+import { registerPluginSettings } from "./pluginSettings";
 
 /** Every field non-default, so a round trip that drops or defaults one is
  * visible — including shallowDepth/deepDepth, which have no UI and would
@@ -53,7 +53,7 @@ const NIGHT: ChartSettings = {
   showOpenSeaMap: true,
   showPois: true,
   pluginLayers: { "some-plugin-layer": false }, // non-default (default is {})
-  showOsmOnLand: true,
+  showOsmOnLand: false,
   showSatellite: true, // non-default (default is false)
   satelliteSource: "eox-sentinel2-cloudless", // non-default (default is "")
   satelliteOpacity: 0.8, // non-default (default is 0.75)
@@ -66,16 +66,9 @@ const NIGHT: ChartSettings = {
   noticesPermanent: false, // non-default (default is true)
   noticesFiring: false, // non-default (default is true)
   noticesShowEnded: true, // non-default (default is false)
-  // non-default weather block (default is disabled / icon / off / no arrows /
-  // now)
-  weather: {
-    model: "om:ncep_gfs025", // an opaque source id; the default is now "" (nothing selected)
-    field: "gusts",
-    arrows: true,
-    hours: 6,
-    keepVisible: true,
-    opacity: 0.4,
-  },
+  // non-default plugin settings (default is {}): a slice no plugin here
+  // registered, which must round-trip verbatim.
+  pluginSettings: { absent_plugin: { level: 3 } },
   // non-default ENC groups (default is all shown / opaque) and a non-default
   // stack order (default is []) — every group object differs from its default.
   encGroups: {
@@ -86,7 +79,7 @@ const NIGHT: ChartSettings = {
   },
   layerOrder: ["enc:aids", "openseamap", "enc:fills", "enc:lines", "enc:soundings"],
   showAisTargets: false, // non-default (default is true)
-  predictorMinutes: 30,
+  predictorMinutes: 60,
   showHeadingLine: false,
   showAisGhost: false, // non-default (default is now true)
   showAisRisk: false,
@@ -296,18 +289,25 @@ describe("settingsFromProfile", () => {
     expect(Object.keys(loaded).sort()).toEqual(Object.keys(DEFAULT_SETTINGS).sort());
   });
 
-  test("a profile still carrying a RETIRED weather key loads, without it", () => {
-    // `coloredFlow` (the colour-by-speed wind flow) was removed with the
-    // feature; the coercion reads only the keys that exist today, so an older
-    // profile's leftover key is simply not carried through — no migration step,
-    // and the rest of the block still loads.
-    const loaded = settingsFromProfile({
-      ...NIGHT,
-      weather: { ...NIGHT.weather, coloredFlow: true },
+  test("a registered plugin slice is coerced; a legacy top-level key is read", () => {
+    const unregister = registerPluginSettings({
+      key: "demo",
+      defaults: { n: 1 },
+      coerce: (raw) => ({ n: typeof (raw as { n?: unknown })?.n === "number" ? (raw as { n: number }).n : 1 }),
+      legacyKey: "oldDemo",
     });
-    expect(Object.keys(loaded.weather).sort()).toEqual(Object.keys(DEFAULT_WEATHER).sort());
-    expect(loaded.weather.arrows).toBe(NIGHT.weather.arrows);
-    expect(loaded.weather.field).toBe(NIGHT.weather.field);
+    try {
+      expect(settingsFromProfile({}).pluginSettings.demo).toEqual({ n: 1 });
+      expect(settingsFromProfile({ pluginSettings: { demo: { n: "x" } } }).pluginSettings.demo).toEqual({ n: 1 });
+      // Before it was a plugin's, the slice lived at the top level.
+      const legacy = settingsFromProfile({ oldDemo: { n: 7 } });
+      expect(legacy.pluginSettings.demo).toEqual({ n: 7 });
+      expect("oldDemo" in legacy).toBe(false);
+      // The plugin's own block wins over a stale legacy one.
+      expect(settingsFromProfile({ oldDemo: { n: 7 }, pluginSettings: { demo: { n: 2 } } }).pluginSettings.demo).toEqual({ n: 2 });
+    } finally {
+      unregister();
+    }
   });
 
   test("garbage in place of an object is the defaults, not a crash", () => {

@@ -17,22 +17,18 @@ from mivnav.features.ocharts.routes import FEATURE as OCHARTS
 from mivnav.features.osm_world.routes import FEATURE as OSM_WORLD
 from mivnav.features.poi.routes import FEATURE as POI
 from mivnav.features.route.routes import FEATURE as ROUTE
-from mivnav.features.routing.routes import FEATURE as ROUTING
 from mivnav.features.satellite.routes import FEATURE as SATELLITE
 from mivnav.features.themes.routes import FEATURE as THEMES
 from mivnav.features.track.routes import FEATURE as TRACK
-from mivnav.features.weather.routes import FEATURE as WEATHER
 
 FEATURES: tuple[Feature, ...] = (
     POI,
     OSM_WORLD,
     SATELLITE,
     OCHARTS,
-    WEATHER,
     AUTOPILOT,
     ANCHOR,
     ROUTE,
-    ROUTING,
     THEMES,
     TRACK,
     NOTICES,

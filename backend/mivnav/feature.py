@@ -8,7 +8,7 @@ docs/architecture/feature-abstraction-backend.md.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import asdict, dataclass, field
 from typing import TYPE_CHECKING, Generic, Literal, Protocol, TypeVar
 
@@ -218,3 +218,23 @@ class Feature(Generic[R]):
     #: add-on routes over another feature's data).
     data_provider: Callable[["Config", R], DataProvider] | None = None
     guard: Callable[[R, "Config", "Config"], str | None] | None = None
+    #: Async cleanup at app shutdown (a process-wide HTTP pool, say).
+    shutdown: "Callable[[], Awaitable[None]] | None" = None
+    #: The feature's own on-disk caches outside ``data_root`` — Settings →
+    #: Storage lists them under "Caches & logs".
+    cache_dirs: "Callable[[Config], Sequence[CacheDir]] | None" = None
+    #: Bytes held by the feature's ONE live fetch-through cache — the size a
+    #: ``"live-cache"`` dataset of this provider reports. ``None``: the
+    #: provider has no live cache (and so no live-cache datasets).
+    live_cache_bytes: Callable[[R], int] | None = None
+
+
+@dataclass(frozen=True)
+class CacheDir:
+    """One cache directory a feature owns, for the storage breakdown."""
+
+    name: str
+    path: "Path"
+    #: The provider's live fetch-through cache: not listed separately when
+    #: a ``"live-cache"`` dataset already counts it.
+    live: bool = False

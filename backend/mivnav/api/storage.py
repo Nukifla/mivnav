@@ -4,8 +4,8 @@ full the disk under ``data_root`` is.
 
 ``GET /datasets`` only sizes DECLARED (and orphan poi/satellite) datasets,
 so a Storage view built on it alone missed most of the disk: o-charts/FNC
-chart sets nobody declared, the routing graphs (several GB each), the
-track history, and every XDG cache. This walks each location mivnav writes
+chart sets nobody declared, a plugin's own data (the autorouting graphs,
+several GB each), the track history, and every XDG cache. This walks each location mivnav writes
 to exactly once:
 
 - datasets — straight from ``list_datasets`` (so sizes match the dataset
@@ -15,7 +15,8 @@ to exactly once:
 - anything else under a dataset provider's directory that no dataset entry
   covers (an undeclared chart set, a stray archive) — into that provider's
   group, so nothing under ``data_root`` goes uncounted;
-- the non-dataset directories under ``data_root`` (routing, track, other);
+- the non-dataset directories under ``data_root`` (track, a feature's own
+  directory declared through ``Feature.cache_dirs``, other);
 - caches and logs outside ``data_root`` — skipping a live cache a declared
   live-cache dataset already counts, and only the search index's
   UNATTRIBUTED remainder (the attributed share is in the datasets' sizes).
@@ -26,7 +27,6 @@ from __future__ import annotations
 import logging
 import shutil
 from pathlib import Path
-from typing import get_args
 
 from fastapi import APIRouter, Depends
 
@@ -34,7 +34,7 @@ from mivnav.api.datasets import list_datasets
 from mivnav.api.deps import Runtime, get_runtime
 from mivnav.config.base import dataset_dir
 from mivnav.config.dataset_layout import dataset_disk_stats, search_index_share
-from mivnav.config.model import DatasetProvider, default_log_dir
+from mivnav.config.model import dataset_providers, default_log_dir
 
 log = logging.getLogger(__name__)
 
@@ -43,8 +43,8 @@ router = APIRouter(prefix="/storage")
 __all__ = ["router"]
 
 #: Non-dataset directories under ``data_root`` with a name worth showing.
+#: A feature can add its own (``Feature.cache_dirs`` under ``data_root``).
 _DATA_DIR_LABELS = {
-    "routing": "Routing graphs",
     "track": "Track history",
 }
 
@@ -110,9 +110,29 @@ def _children(directory: Path) -> list[Path]:
         return []
 
 
+def _feature_data_dirs(runtime: Runtime, data_root: Path) -> dict[str, str]:
+    """``data_root`` child name -> label, for each feature cache directory
+    that lies under ``data_root`` (a switched-off plugin's too: its bytes
+    are still on disk)."""
+    config = runtime.config.get()
+    out: dict[str, str] = {}
+    for feature in runtime.feature_specs():
+        if feature.cache_dirs is None:
+            continue
+        for cache in feature.cache_dirs(config):
+            try:
+                rel = cache.path.resolve().relative_to(data_root.resolve())
+            except ValueError:
+                continue
+            if rel.parts:
+                out.setdefault(rel.parts[0], cache.name)
+    return out
+
+
 def _data_root_groups(runtime: Runtime, groups: _Groups, listing: dict) -> None:
     config = runtime.config.get()
     data_root = config.data_root
+    labels = {**_feature_data_dirs(runtime, data_root), **_DATA_DIR_LABELS}
     catalog = {p["id"]: p for p in listing["providers"]}
     covered: set[Path] = set()
     for ds in listing["datasets"]:
@@ -120,9 +140,9 @@ def _data_root_groups(runtime: Runtime, groups: _Groups, listing: dict) -> None:
         groups.add(f"dataset:{label}", label, "dataset", ds["name"], ds["size"])
         covered.add(dataset_dir(data_root, ds["provider"], ds["id"]))
 
-    dataset_providers = set(get_args(DatasetProvider))
+    provider_dirs = set(dataset_providers())
     for child in _children(data_root):
-        if child.name in dataset_providers:
+        if child.name in provider_dirs:
             # Whatever no dataset entry already counted — an undeclared
             # o-charts/FNC set, a stray flat archive — under the provider's
             # plain label, so the whole provider directory is accounted for.
@@ -131,10 +151,11 @@ def _data_root_groups(runtime: Runtime, groups: _Groups, listing: dict) -> None:
                 if item in covered:
                     continue
                 groups.add(f"dataset:{label}", label, "dataset", item.name, path_bytes(item))
-        elif child.name in _DATA_DIR_LABELS:
-            label = _DATA_DIR_LABELS[child.name]
+        elif child.name in labels:
+            label = labels[child.name]
             items = _children(child)
-            # routing keeps its graphs one level down (routing/mivnav/…).
+            # Only one directory inside (autorouting keeps its graphs one
+            # level down, routing/mivnav/…): list what is in that instead.
             if len(items) == 1 and items[0].is_dir():
                 items = _children(items[0])
             for item in items:
@@ -151,13 +172,18 @@ def _cache_groups(runtime: Runtime, groups: _Groups, listing: dict) -> None:
     caches: list[tuple[str, Path]] = [
         ("Chart tile cache", config.ocharts.tile_disk_dir),
         ("o-charts decoder", config.ocharts.daemon_dir),
-        ("Weather tile renders", config.weather.render_cache_dir),
         ("Logs", default_log_dir()),
     ]
-    if "weather" not in live_counted:
-        caches.append(("Weather download cache", config.weather.cache_dir))
-    if "osm_world" not in live_counted:
-        caches.append(("OSM world live cache", config.osm_world.live_cache_dir))
+    # Each feature's own caches (a switched-off plugin's too: its bytes are
+    # still on disk). A live cache a "live-cache" dataset already counted is
+    # not listed twice.
+    for feature in runtime.feature_specs():
+        if feature.cache_dirs is None:
+            continue
+        for cache in feature.cache_dirs(config):
+            if cache.live and feature.id in live_counted:
+                continue
+            caches.append((cache.name, cache.path))
     for name, path in caches:
         if _is_within(path, config.data_root):
             continue  # already walked as part of data_root

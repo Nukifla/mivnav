@@ -11,7 +11,7 @@ import Navigation from "lucide-solid/icons/navigation";
 import SkipForward from "lucide-solid/icons/skip-forward";
 import SkipBack from "lucide-solid/icons/skip-back";
 import Flag from "lucide-solid/icons/flag";
-import { betaAutorouting } from "../../core/serverConfig";
+import type { RoutePlanner } from "../../core/routePlanner";
 import type { QueryableMap } from "../../core/info/queryGuard";
 import { scopedQuery } from "../../core/info/queryGuard";
 import type {
@@ -52,16 +52,16 @@ export interface RouteProviderDeps {
   /** The live boat→destination metrics, or null with no fix / no leg. Read at
    * resolve time and by `watch`, so the ETA stays honest under an open panel. */
   metrics: Accessor<RouteFollowMetrics | null>;
-  /** Open the editor on a route — the "Edit route" action. Reuses the model's
-   * existing enter path (`editRoute` → `enterEditor`/`seedDraft`). */
-  editRoute: (route: Route) => void;
+  /** The registered route planner (core/routePlanner.ts), or null: present,
+   * "Edit route" opens the route in its editor. */
+  planner: Accessor<RoutePlanner | null>;
   /** The id of the route being followed, or null. Gates "Stop following". */
   activeRouteId: Accessor<string | null>;
   /** Stop following the active route — the model's `stopFollowing`. */
   stopFollowing: () => void;
-  /** Open the MANUAL route editor (features/routeDraw) on a route. Not
-   * beta-gated: it is "Edit route" with the autorouter off, "Edit points"
-   * beside the autorouter's "Edit route" with it on. */
+  /** Open the MANUAL route editor (features/routeDraw) on a route: "Edit
+   * route" with no route planner, "Edit points" beside the planner's own
+   * "Edit route" with one. */
   editPoints?: (route: Route) => void;
   /** The followed leg's target waypoint id, or null — marks the row and
    * places the Next/Previous controls. Absent → no follow controls. */
@@ -240,22 +240,22 @@ export function createRouteProvider(deps: RouteProviderDeps): InfoProvider {
           { label: "Waypoints", rows: wpRows },
         ],
         actions: [
-          // Follow / Next / Previous / Start at — none of it beta-gated.
+          // Follow / Next / Previous / Start at — none of it needs a planner.
           ...followActions(route),
-          // NOT beta-gated: with the editor hidden this card is the only way
-          // to stop following a route.
+          // Not planner-gated: with no planner's editor this card is the only
+          // way to stop following a route.
           ...(deps.activeRouteId() === route.id
             ? [{ label: "Stop following", icon: CircleStop, run: () => deps.stopFollowing() }]
             : []),
-          // "Edit route" is the auto-router with "Beta autorouting" on, and the
-          // manual editor with it off; with it on, the manual one is "Edit points".
-          ...(betaAutorouting()
-            ? [{ label: "Edit route", icon: Pencil, run: () => deps.editRoute(route) }]
+          // "Edit route" is the route planner's editor when one is registered,
+          // else the manual editor; beside a planner, the manual one is "Edit points".
+          ...(deps.planner()
+            ? [{ label: "Edit route", icon: Pencil, run: () => deps.planner()?.editRoute(route) }]
             : []),
           ...(deps.editPoints
             ? [
                 {
-                  label: betaAutorouting() ? "Edit points" : "Edit route",
+                  label: deps.planner() ? "Edit points" : "Edit route",
                   icon: Pencil,
                   run: () => deps.editPoints!(route),
                 },

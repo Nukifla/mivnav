@@ -374,7 +374,8 @@ def test_planning_rests_so_it_cannot_hold_the_gil_for_minutes(monkeypatch) -> No
 
     w._stop = Stop()
     monkeypatch.setattr(warm, "PLAN_SLICE_S", 0.0)
-    tiles = w._pretile_tiles()
+    # The Python planner; real cells plan in chartcore without the GIL.
+    tiles = w._pretile_tiles_py([cell], 8)
     assert tiles and len(rests) >= len(tiles)
     assert set(rests) == {warm.PLAN_REST_S}
 
@@ -401,5 +402,5 @@ def test_planning_stops_at_shutdown(monkeypatch) -> None:
 
     w._stop = Stopped()
     monkeypatch.setattr(warm, "PLAN_SLICE_S", 0.0)
-    w._pretile_tiles()
+    w._pretile_tiles_py([cell], 11)
     assert rests == [warm.PLAN_REST_S], "planning must end at its first rest"

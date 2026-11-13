@@ -24,7 +24,6 @@ import { createSatellite } from "./features/satellite";
 import { createTrack } from "./features/track";
 import { DEFAULT_SETTINGS } from "./core/style/settings";
 import { BOAT_SETTINGS } from "./core/settings/boat";
-import { ROUTING_SETTINGS } from "./core/settings/routing";
 import { COLLISION_SETTINGS } from "./core/settings/collision";
 import { GNSS_SETTINGS } from "./core/settings/gnss";
 import { SHALLOW_SECTION, SHALLOW_SETTINGS } from "./features/instruments/settings";
@@ -63,7 +62,7 @@ const features = createRoot(() => [
  * SignalK client, so its shallow-water section is added directly — it is the
  * one that once landed in the rail by accident (no category named). */
 const reg = createSettingsRegistry<SettingsCtx>(
-  [...DEVICE_SETTINGS, ...BOAT_SETTINGS, ...COLLISION_SETTINGS, ...GNSS_SETTINGS, ...ROUTING_SETTINGS, ...SHALLOW_SETTINGS, ...featureSettings(features)],
+  [...DEVICE_SETTINGS, ...BOAT_SETTINGS, ...COLLISION_SETTINGS, ...GNSS_SETTINGS, ...SHALLOW_SETTINGS, ...featureSettings(features)],
   [...DEVICE_SECTIONS, ...BOAT_SECTIONS, SHALLOW_SECTION, ...featureSettingsSections(features)],
   [...DEVICE_CATEGORIES, ...BOAT_CATEGORIES, ...featureSettingsCategories(features)],
 );
@@ -92,9 +91,10 @@ describe("the assembled settings surface", () => {
       "signalk",
       // Collision, shallow-water, GNSS & connection.
       "alarms",
-      // Route following + the auto-router.
+      // Route following (+ the autorouting plugin's sections).
       "routes",
       "advanced",
+      "plugins",
       // The server's own version and its release updates (/api/system).
       "software",
     ]);
@@ -104,31 +104,14 @@ describe("the assembled settings surface", () => {
     expect(reg.sectionsFor("alarms").map((s) => s.id)).toEqual(["collision", "shallow", "gnss"]);
   });
 
-  test("Routes is route following, then the auto-router's three sections", () => {
-    expect(reg.sectionsFor("routes").map((s) => s.id)).toEqual([
-      "nav",
-      "routing",
-      "routing-prefs",
-      "routing-engines",
-    ]);
-    // Each routing section carries its own feedback line.
-    for (const sec of ["routing", "routing-prefs", "routing-engines"]) {
-      expect(reg.settingsFor(sec).at(-1)?.control.kind).toBe("custom");
-    }
+  // The auto-router's three sections join this pane from the autorouting
+  // plugin (its own settings.test.ts); the core has route following alone.
+  test("Routes is route following", () => {
+    expect(reg.sectionsFor("routes").map((s) => s.id)).toEqual(["nav"]);
   });
 
-  test("Advanced holds Chart detail and Beta features, above the locked set-once fields", () => {
-    expect(reg.sectionsFor("advanced").map((s) => s.id)).toEqual(["chart-detail", "beta", "advanced"]);
-  });
-
-  test("the auto-router's sections hide while Beta autorouting is off", () => {
-    const ctxWith = (beta: boolean) =>
-      ({ cfg: { config: () => ({ routing: { beta_enabled: beta } }) } }) as unknown as SettingsCtx;
-    const routing = reg.sectionsFor("routes").filter((s) => s.id.startsWith("routing"));
-    expect(routing.map((s) => s.id)).toEqual(["routing", "routing-prefs", "routing-engines"]);
-    expect(routing.every((s) => s.hidden?.(ctxWith(false)))).toBe(true);
-    expect(routing.some((s) => s.hidden?.(ctxWith(true)))).toBe(false);
-    expect(reg.byId("routing.beta_enabled")?.default).toBe(false);
+  test("Advanced holds Chart detail, above the locked set-once fields", () => {
+    expect(reg.sectionsFor("advanced").map((s) => s.id)).toEqual(["chart-detail", "advanced"]);
   });
 
   test("Datasets holds the regions it bakes for", () => {
@@ -147,11 +130,12 @@ describe("the assembled settings surface", () => {
   });
 
   // The consolidation: two sections that spent their prose pointing at each other.
-  test("Charts is the library, the o-charts login and its screens, in that order", () => {
+  test("Charts is the library, the o-charts login, its screens and its licences, in that order", () => {
     expect(reg.sectionsFor("charts").map((s) => s.id)).toEqual([
       "charts",
       "ocharts",
       "ocharts-screens",
+      "chart-licences",
     ]);
   });
 

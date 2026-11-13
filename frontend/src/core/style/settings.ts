@@ -4,7 +4,6 @@
 
 import type { Palette } from "./colors";
 import { DEFAULT_ENC_GROUPS, type EncGroupsState } from "./encGroups";
-import { DEFAULT_WEATHER, type WeatherSettings } from "../weatherSettings";
 
 export interface ChartSettings {
   /** Day/dusk/night — which S-52 colour table the chart draws from. ONE
@@ -93,10 +92,9 @@ export interface ChartSettings {
   /** Draw notices whose event windows are all over but which BRS still
    * publishes. Off by default (Q5): stale clutter, not information. */
   noticesShowEnded: boolean;
-  /** Open-Meteo forecast overlay: provider, raster wash, wind arrows,
-   * time offset. Needs internet, never safety-critical, degrades to absent.
-   * See `features/weather/sources.ts`. */
-  weather: WeatherSettings;
+  /** Each plugin's own settings slice, by the plugin's key — opaque here
+   * (`core/pluginSettings.ts`). */
+  pluginSettings: Readonly<Record<string, unknown>>;
 
   /** Per-ENC-group visibility + opacity (`style/encGroups.ts`). Opacity
    * MULTIPLIES into the generated style; a group at opacity 1 + visible is
@@ -127,8 +125,8 @@ export interface ChartSettings {
   /** Colour AIS targets by collision risk and draw CPA geometry for
    * dangerous ones. Off falls back to one neutral colour for every target. */
   showAisRisk: boolean;
-  /** Wind-speed display unit, global across weather readouts, toggled by
-   * tapping a wind value. m/s by default (SI the models report in). */
+  /** Wind-speed display unit, global across wind readouts (instruments, the
+   * weather plugin), toggled by tapping a wind value. m/s by default (SI the models report in). */
   windUnit: "ms" | "kn";
   /** Hold a Screen Wake Lock while the chart is visible (`core/wakeLock.ts`),
    * so the screen doesn't dim/lock at the helm. On by default; silently a
@@ -165,7 +163,7 @@ export const DEFAULT_SETTINGS: ChartSettings = {
   showOpenSeaMap: false,
   showPois: false,
   pluginLayers: {},
-  showOsmOnLand: false,
+  showOsmOnLand: true,
   showSatellite: false,
   satelliteSource: "", // AUTO: baked set if any, else first online source
   satelliteOpacity: 0.75, // a wash over the base chart, not a full cover
@@ -178,12 +176,12 @@ export const DEFAULT_SETTINGS: ChartSettings = {
   noticesPermanent: true, // Q3: on, violet
   noticesFiring: true,
   noticesShowEnded: false, // Q5: ended-but-published notices hidden
-  weather: DEFAULT_WEATHER,
+  pluginSettings: {},
   encGroups: DEFAULT_ENC_GROUPS, // all groups shown, opaque — byte-identical style
   layerOrder: [], // default stack order — the reorder pass is a no-op while empty
 
   showAisTargets: true, // preserves the previous always-on behaviour
-  predictorMinutes: 60,
+  predictorMinutes: 30,
   showHeadingLine: true,
   showAisGhost: true, // dead-reckoned ghost target — on by default (user request)
   showAisRisk: true,

@@ -1,4 +1,5 @@
-import { createEffect, createMemo, createSignal, onCleanup, onMount, type Component } from "solid-js";
+import { createEffect, createMemo, createSignal, For, onCleanup, onMount, type Component } from "solid-js";
+import { Dynamic } from "solid-js/web";
 import { createCatalog } from "./core/catalog";
 import { createScreenWakeLock } from "./core/wakeLock";
 import { drawableSets, ochartsDevice } from "./core/ochartsDevice";
@@ -15,7 +16,8 @@ import {
 import CatalogAlert from "./core/settings/CatalogAlert";
 import { isTypingTarget } from "./core/chrome/accelerators";
 import { clearChartTileCache } from "./core/chartProtocol";
-import { betaAutorouting, patchServerConfig, seedChartDetail } from "./core/serverConfig";
+import { patchServerConfig, seedChartDetail } from "./core/serverConfig";
+import { routePlanner } from "./core/routePlanner";
 import { bootChrome, coarsePointer, seedDefaults } from "./core/chrome/boot";
 import CommandPalette from "./core/chrome/CommandPalette";
 import SearchPanel from "./core/search/SearchPanel";
@@ -39,7 +41,6 @@ import { createCursor } from "./core/chrome/cursor";
 import Dashboard from "./core/chrome/Dashboard";
 import type { DashboardDrag } from "./core/chrome/dashboardDnd";
 import { createMeasure } from "./features/measure";
-import { createRouteTest } from "./features/routeTest";
 import { createRegionDraw } from "./features/region-draw";
 import { createTrack } from "./features/track";
 import { createNoticesToMariners, noticeSearchHit } from "./features/notices";
@@ -73,29 +74,25 @@ import {
 } from "./core/chrome/feature";
 import { createWidgetRegistry, withWidgets } from "./core/chrome/widget";
 import { WIDGETS } from "./core/chrome/widgets";
-import { createRoutes, type MapPickTarget } from "./features/route";
+import { createRoutes } from "./features/route";
 import { routeHit } from "./features/route/provider";
 import RouteList from "./features/route/RouteList";
-import RouteSheet from "./features/route/RouteSheet";
 import { createRouteDraw, ROUTE_DRAW_MODE_ID } from "./features/routeDraw";
 import RouteDrawCard from "./features/routeDraw/RouteDrawCard";
 import { createLegTable } from "./features/legTable";
 import LegTableSheet from "./features/legTable/LegTableSheet";
 import TopBand from "./core/chrome/TopBand";
 import { createRoutesClient } from "./core/routes";
-import { createWeather } from "./features/weather";
-import WeatherSheet from "./features/weather/sheet";
 import AnchorSheet from "./features/anchor/sheet";
 import { createMob } from "./features/mob";
 import MobControl from "./features/mob/MobControl";
 import { createPoi } from "./features/poi";
-import { pluginFeatures } from "./plugins";
+import { pluginFeatures, setupPlugins, type SearchPick } from "./plugins";
 import { createSatellite } from "./features/satellite";
 import { createOsmWorld } from "./features/osm_world";
 import { DEVICE_CATEGORIES, DEVICE_SECTIONS, DEVICE_SETTINGS } from "./core/settings/device";
 import { BOAT_CATEGORIES, BOAT_SECTIONS } from "./core/settings/ServerSettings";
 import { BOAT_SETTINGS } from "./core/settings/boat";
-import { ROUTING_SETTINGS } from "./core/settings/routing";
 import { COLLISION_SETTINGS } from "./core/settings/collision";
 import { GNSS_SETTINGS } from "./core/settings/gnss";
 import { createLinkAlarmsFeature } from "./core/linkAlarms";
@@ -142,47 +139,6 @@ function searchResultToHit(r: SearchResult): InfoHit | undefined {
   }
   return undefined;
 }
-
-/** The search overlay's pinned "Choose on map" row (Suggestion A's From/To
- * fields), synthesized exactly like `SearchPanel`'s own `coordinateResult` —
- * a `SearchResult` with no backend row behind it, `source: "choose-on-map"`
- * so `searchResultToHit` naturally has no provider for it (falls through to
- * the plain pin case, though picking it never reaches that far — App's
- * `onSelect` recognizes the source first, only while `routeFieldPicking`).
- * Static (no query/geometry of its own), unlike `coordinateResult`, so it
- * lives here rather than reactively inside SearchPanel. */
-const CHOOSE_ON_MAP_RESULT: SearchResult = {
-  id: "choose-on-map",
-  source: "choose-on-map",
-  region: "",
-  category: null,
-  title: "Choose on map",
-  text: null,
-  lat: null,
-  lon: null,
-  data: {},
-  updated_at: 0,
-};
-
-/** The search overlay's pinned "Use boat position" row — offered for BOTH
- * From and To now (the boat can be either end, never both at once — picking
- * it for one slot is just an ordinary edit of that slot), ahead of "Choose
- * on map". Gated on a real fix (`routeSearchPinned`): offering it with
- * nothing to set it TO would be the same silent dead end `setStop` used to
- * hit picking a destination first with no fix and nothing staged. Same
- * synthesized-result shape as `CHOOSE_ON_MAP_RESULT`. */
-const USE_BOAT_POSITION_RESULT: SearchResult = {
-  id: "use-boat-position",
-  source: "use-boat-position",
-  region: "",
-  category: null,
-  title: "Use boat position",
-  text: null,
-  lat: null,
-  lon: null,
-  data: {},
-  updated_at: 0,
-};
 
 const App: Component = () => {
   // Captured BEFORE deviceSetting writes its default back: a fresh device has
@@ -263,8 +219,9 @@ const App: Component = () => {
   const catalog = createCatalog();
   const allSets = () => catalog.sets();
   // This screen's o-charts registration (core/ochartsDevice.ts): an
-  // unregistered screen draws the free sets only, through `/tiles/free`.
-  onCleanup(ochartsDevice.start());
+  // unregistered screen draws the free sets only, through `/tiles/free` —
+  // and so does any screen that has lost the server for over 20 s (started
+  // below, once the backend websocket exists).
   const drawnSets = createMemo(() => drawableSets(allSets(), ochartsDevice.union()));
   // The boot splash (core/splash.ts) holds until MapView's `onReady`, which
   // waits for this: a catalog in hand, or the server's word that there isn't
@@ -322,6 +279,7 @@ const App: Component = () => {
   // No URL: the boat's server holds the connection and every device
   // subscribes to it. See signalk.ts.
   const signalk = createSignalK();
+  onCleanup(ochartsDevice.start(signalk.linkDownSince));
   // The collision alarm's off/show/tell is the boat's (server config), set
   // from the rail or the palette for every screen and SignalK at once.
   const cpaMode = createCpaModeControl(
@@ -341,12 +299,6 @@ const App: Component = () => {
   // map needs, because a mode owns its state and the kernel does not.
   const cursor = createCursor(signalk);
   const measure = createMeasure(signalk);
-  // A throwaway click-and-see probe for POST /api/routing/plan
-  // (mivnav/features/routing) — see features/routeTest/index.ts. Not a
-  // navigation feature: it commits to nothing, publishes nothing, and
-  // exists only so the backend's live hazard check has a surface to test
-  // against before the real path search (ROUTING_TODO.md) replaces it.
-  const routeTest = createRouteTest();
   // Region-draw mode: draws a bounding box for the Regions settings section.
   // No launcher of its own — reached via `startRegionDraw` below. Needs a
   // THIRD bind (`bindLeft`, beyond enter/exit) because Settings is a true
@@ -360,7 +312,7 @@ const App: Component = () => {
   // NOTICE, not the alarm band's collision red. See chrome/notices.ts.
   const notices = createNotices();
   // The MANUAL route editor: straight legs placed by hand, saved on Done.
-  // Separate from the beta autorouting editor below; shares only the store.
+  // Separate from the autorouting plugin's editor; shares only the store.
   const routeDraw = createRouteDraw({
     client: routesClient,
     notify: (notice) => notices.push(notice),
@@ -389,12 +341,28 @@ const App: Component = () => {
   const mob = createMob({ signalk });
   const toggleWindUnit = () =>
     setSettings((s) => ({ ...s, windUnit: s.windUnit === "ms" ? "kn" : "ms" }));
-  // Weather: a mode (bottom sheet) plus the info-at-point wind provider,
-  // reading/writing the persisted `weather` settings slice. `createWeather`
-  // folds both into one AppFeature; the overlay itself stays a MapView
-  // baseOverlay (map-lifecycle-coupled double-buffer).
-  const weather = createWeather({ settings, setSettings, toggleWindUnit });
-  // Built out-of-line like weather/satellite; `onCatalogChanged` below is the
+  // Plugins (src/plugins.ts), set up once against the app. `modes` is built
+  // further down (it needs the registry, which needs these features), so
+  // the host reaches it lazily — a plugin only calls it after mount.
+  const pluginInstances = setupPlugins({
+    settings,
+    setSettings,
+    toggleWindUnit,
+    modes: {
+      active: () => modes.active(),
+      enter: (id) => modes.enter(id),
+      leave: () => void modes.leave(),
+    },
+    signalk,
+    notify: (notice) => notices.push(notice),
+    density: () => chrome().density,
+    routes: { model: routes.model, client: routesClient, openList: () => openRoutes() },
+    openSearch: (pick) => {
+      setSearchPick(pick);
+      setSearchOpen(true);
+    },
+  });
+  // Built out-of-line like satellite; `onCatalogChanged` below is the
   // only thing that still deletes a POI set (the old ingest UI is retired).
   const poi = createPoi();
   // Overlay is a negative-z underlay, born inert (no source when off), so it
@@ -476,20 +444,17 @@ const App: Component = () => {
     createInstruments({ signalk }),
     cursor.feature,
     measure.feature,
-    routeTest.feature,
     regionDraw.feature,
     routes.feature,
     routeDraw.feature,
     legTable.feature,
     // AFTER routes so the dashboard page order comes out Nav, Route, Pilot.
     createAutopilot({ signalk }),
-    // Before weather: its mode button sits next to Weather's in the tool stack.
     anchor.feature,
-    weather.feature,
     poi.feature,
     // Plugins' own features, right after POI so a plugin's POI layer row
     // sits next to the POI toggle.
-    ...pluginFeatures(),
+    ...pluginFeatures(pluginInstances),
     satellite.feature,
     osmWorld.feature,
     // Past track sits at the end: only contributes an overlay/Layers row/one
@@ -523,15 +488,7 @@ const App: Component = () => {
   const modes = createModeState(reg);
   // The mode is built before the state machine that owns it (registry needs
   // the feature first), so bind leave/enter here once both exist.
-  routes.model.bindExit(() => modes.leave());
-  routes.model.bindEnter(() => modes.enter("route-edit"));
   routeDraw.model.bindMode({ enter: () => modes.enter(ROUTE_DRAW_MODE_ID), leave: () => modes.leave() });
-  // "Beta autorouting" switched off (here or on another screen) while the
-  // editor is open: close it, since its button and settings are gone.
-  createEffect(() => {
-    if (!betaAutorouting() && modes.active() === "route-edit") modes.leave();
-  });
-  weather.model.bindExit(() => modes.leave());
   // Third bind (`bindLeft`, beyond enter/exit) — Settings is a true modal and
   // must reopen on every exit, not just a completed box.
   anchor.bindMode({ enter: modes.enter, leave: () => modes.leave() });
@@ -588,9 +545,9 @@ const App: Component = () => {
     marks.list.setOpen(false);
     setRoutesOpen(true);
   };
-  // Route editor's "Saved routes" link shares this with the palette/rail
+  // A plugin's route editor reaches the saved-routes list through this too
+  // (`PluginHost.routes.openList`).
   // (#RT-GONAV).
-  routes.model.bindOpenManager(openRoutes);
   // Follow from the leg table or the manual editor's card: always the SAVED
   // route (an open draft is offered Follow only while clean, i.e. equal to
   // it). From the editor, a started follow closes it, like its Go.
@@ -703,7 +660,7 @@ const App: Component = () => {
   // plus a module-local `boatReg` nothing else could see), which is why the
   // boat group used to bypass the registry for four of its sections.
   const settingsReg = createSettingsRegistry(
-    [...DEVICE_SETTINGS, ...BOAT_SETTINGS, ...COLLISION_SETTINGS, ...GNSS_SETTINGS, ...ROUTING_SETTINGS, ...featureSettings(features)],
+    [...DEVICE_SETTINGS, ...BOAT_SETTINGS, ...COLLISION_SETTINGS, ...GNSS_SETTINGS, ...featureSettings(features)],
     [...DEVICE_SECTIONS, ...BOAT_SECTIONS, ...featureSettingsSections(features)],
     [...DEVICE_CATEGORIES, ...BOAT_CATEGORIES, ...featureSettingsCategories(features)],
   );
@@ -715,33 +672,12 @@ const App: Component = () => {
   // go-to writes a fresh object so the same coordinate twice still moves.
   const [paletteOpen, setPaletteOpen] = createSignal(false);
   const [searchOpen, setSearchOpen] = createSignal(false);
-  // Is the search overlay currently open picking one of the route editor's
-  // From/Stop/To slots? A real result resolves through `setStop`/`insertStop`
-  // (or `setFromBoat`/`setFromPoint` for `{kind:"from"}`) instead of the
-  // ordinary goto/info-panel select — see `onSelect` below. Also picks which
-  // pinned rows are injected ahead of the real results (`routeSearchPinned`).
-  // Reset whenever the panel closes for any reason (picked or dismissed) so a
-  // later plain Ctrl/Cmd-F search never inherits a stale picking mode.
-  const [routeFieldPicking, setRouteFieldPicking] = createSignal<MapPickTarget | null>(null);
-  routes.model.bindOpenSearchForSlot((target) => {
-    setRouteFieldPicking(target);
-    setSearchOpen(true);
-  });
-  const routeSearchPinned = (): SearchResult[] => {
-    const field = routeFieldPicking();
-    if (!field) return [];
-    // "Use boat position" makes sense for From OR To (the boat can be
-    // either end) — but only while there IS a fix. Offering it with none
-    // would be a dead end: picking To first with no fix and no staged From
-    // is exactly the case `setStop` now stages-and-waits for instead of
-    // rejecting, but there is still nothing sensible to set the boat option
-    // itself TO in that state, so it stays off the list rather than
-    // resolving to a silent no-op.
-    if ((field.kind === "from" || field.kind === "to") && routes.model.hasFix()) {
-      return [USE_BOAT_POSITION_RESULT, CHOOSE_ON_MAP_RESULT];
-    }
-    return [CHOOSE_ON_MAP_RESULT];
-  };
+  // A plugin's pick in progress (`PluginHost.openSearch` — the route editor
+  // resolving a From/Stop/To slot): its pinned rows go ahead of the real
+  // results and a pick goes to its `onSelect` instead of the ordinary
+  // goto/info-panel select. Reset whenever the panel closes for any reason
+  // (picked or dismissed) so a later plain Ctrl/Cmd-F search never inherits it.
+  const [searchPick, setSearchPick] = createSignal<SearchPick | null>(null);
   // `{tab, n}` — `n` is a nonce so a repeat request for the same tab still
   // fires. Raised alongside the open-board request, so a tile tap lands on
   // the owning tab, not just the board.
@@ -974,7 +910,7 @@ const App: Component = () => {
           regionDraw={regionDraw.model}
           cursor={cursor.model}
           route={routes.model}
-          weatherMode={weather.model}
+          pluginMaps={pluginInstances.flatMap((i) => (i.attachMap ? [i.attachMap] : []))}
           osmWorldMinZoom={osmWorld.catalog.minZoom}
           osmWorldMaxZoom={osmWorld.catalog.maxZoom}
           overlays={featureOverlays(features)}
@@ -1000,11 +936,13 @@ const App: Component = () => {
             if (!catalogFailed()) setSplashStatus(text, detail);
           }}
           onBootFault={(text, detail) => setSplashFault(text, detail, () => location.reload())}
-          // "Go here" is the auto-router; with "Beta autorouting" off it is
-          // "Go to": a straight line from the boat, no router, no hazard check.
-          goHere={(to, label) =>
-            void (betaAutorouting() ? routes.model.goTo(to, label) : routes.model.goStraight(to, label))
-          }
+          // "Go here" is the route planner's (the autorouting plugin); with no
+          // planner it is "Go to": a straight line from the boat, no router,
+          // no hazard check.
+          goHere={(to, label) => {
+            const planner = routePlanner();
+            void (planner ? planner.goTo(to, label) : routes.model.goStraight(to, label));
+          }}
           canGoHere={routes.model.hasFix}
           isFollowing={routes.model.following}
           keyNav={chartKeys}
@@ -1059,7 +997,8 @@ const App: Component = () => {
           isFollowed={() => routes.model.activeRouteId() === routeDraw.model.draft()?.id}
           isSaved={draftSaved}
         />
-        <WeatherSheet model={weather.model} active={() => modes.active() === "weather"} />
+        {/* Plugins' own chrome (a mode's bottom sheet). */}
+        <For each={pluginInstances.filter((i) => i.Chrome)}>{(i) => <Dynamic component={i.Chrome} />}</For>
         <AnchorSheet
           control={anchor.control}
           active={() => modes.active() === ANCHOR_MODE_ID}
@@ -1072,11 +1011,12 @@ const App: Component = () => {
         <MobControl model={mob.model} />
         <AlarmStrip reg={reg} />
       </div>
-      {/* Route tool UI: a COLUMN SIBLING of the Rail (#RT-BARLAYOUT), not
-          inside the map pane — its phone bottom bar must occupy the SAME
-          72px slot the Rail widget bar does (mutually exclusive), so the
-          map pane height never jumps. Desktop is a portaled left drawer. */}
-      <RouteSheet route={routes.model} density={() => chrome().density} />
+      {/* Plugins' rail-side chrome (the route editor's sheet): a COLUMN
+          SIBLING of the Rail (#RT-BARLAYOUT), not inside the map pane — a
+          phone bottom bar must occupy the SAME 72px slot the Rail widget bar
+          does (mutually exclusive, `Mode.ownsBottomBar`), so the map pane
+          height never jumps. */}
+      <For each={pluginInstances.filter((i) => i.RailChrome)}>{(i) => <Dynamic component={i.RailChrome} />}</For>
       <Rail
         // withWidgets overrides byId only, leaving reg.instruments (what
         // alerts() scans) alone — no user widget can reach the alarm band.
@@ -1147,29 +1087,19 @@ const App: Component = () => {
         onOpenChange={(o) => {
           setSearchOpen(o);
           // Closed without a pick (Escape/backdrop) — a later plain search
-          // must not inherit a route-field picking mode. A pick itself
-          // already resets this in `onSelect` below, before this fires.
-          if (!o) setRouteFieldPicking(null);
+          // must not inherit a plugin's pick. A pick itself already resets
+          // this in `onSelect` below, before this fires.
+          if (!o) setSearchPick(null);
         }}
         providers={searchProviders}
         toInfoHit={searchResultToHit}
         center={mapCenter()}
-        pinned={routeSearchPinned()}
+        pinned={searchPick()?.pinned?.() ?? []}
         onSelect={(r) => {
-          const field = routeFieldPicking();
-          if (field) {
-            setRouteFieldPicking(null);
-            if (r.source === "choose-on-map") {
-              routes.model.beginPickOnMap(field);
-            } else if (r.source === "use-boat-position") {
-              // Only ever pinned for `{kind:"from"|"to"}` (`routeSearchPinned`).
-              if (field.kind === "to") routes.model.setToBoat();
-              else routes.model.setFromBoat();
-            } else if (r.lat !== null && r.lon !== null) {
-              const point = { lng: r.lon, lat: r.lat };
-              if (field.kind === "insert") void routes.model.insertStop(field.beforeId, point, r.title ?? undefined);
-              else void routes.model.setStop(field, point, r.title ?? undefined);
-            }
+          const pick = searchPick();
+          if (pick) {
+            setSearchPick(null);
+            pick.onSelect(r);
             return;
           }
           const hit = searchResultToHit(r);

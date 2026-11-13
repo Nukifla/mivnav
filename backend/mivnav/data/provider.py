@@ -12,6 +12,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from mivnav.plugins import feature_enabled
 from mivnav.config.base import dataset_dir, disabled_dataset_ids  # noqa: F401 -- re-exported
 from mivnav.feature import (
     DataProvider,
@@ -97,7 +98,9 @@ def build_registry(
         *[
             f.data_provider(config, feature_runtime(f.id))
             for f in features
-            if f.data_provider is not None
+            # A switched-off plugin's provider is gone: no /providers entry,
+            # and its datasets resolve to no runner (mivnav.plugins).
+            if f.data_provider is not None and feature_enabled(f.id)
         ],
         _signalk_provider(config, signalk),
     ]

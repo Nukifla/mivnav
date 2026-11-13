@@ -2,15 +2,12 @@
  * THE GENERIC OVERLAY REGISTRY, proved. The Layers panel renders map overlays
  * from `OverlayControl` descriptors (chrome/feature.ts), one per feature plus a
  * base list, with NO per-overlay special case. This builds the SAME registry
- * App.tsx does — the base OpenSeaMap descriptor plus the weather / satellite / POI
+ * App.tsx does — the base OpenSeaMap descriptor plus the satellite / POI
  * feature projections (`featureOverlayControls`) — and asserts:
  *
  *  (a) every real overlay contributes a descriptor with a working toggle, and an
- *      opacity slider iff the overlay carries one (weather ✓, satellite ✓; POI
- *      and OpenSeaMap toggle-only) — so the panel can render both shapes;
- *  (b) WEATHER's control drives `keepVisible` and NOT the interactive mode — the
- *      reported bug: toggling weather in the panel shows/hides the wash without
- *      entering the weather MODE. `visible` also reflects the in-mode state.
+ *      opacity slider iff the overlay carries one (satellite ✓; POI and
+ *      OpenSeaMap toggle-only) — so the panel can render both shapes;
  *  (c) SATELLITE / POI / OpenSeaMap toggles drive their ChartSettings fields, and
  *      satellite's opacity drives `satelliteOpacity`.
  */
@@ -22,28 +19,22 @@ import {
   type OverlayControl,
   type OverlayControlDeps,
 } from "./core/chrome/feature";
-import { createWeather } from "./features/weather";
 import { createSatellite } from "./features/satellite";
 import { createPoi } from "./features/poi";
 import { DEFAULT_SETTINGS, type ChartSettings } from "./core/style/settings";
 
 /** Build the real registry the way App does, under a reactive owner (the feature
  * catalogs use createSignal/onCleanup), with network fetches stubbed away and the
- * active mode driven by a signal so the weather in-mode path is exercisable. */
+ * active mode driven by a signal. */
 function harness() {
   return createRoot((dispose) => {
     const [settings, setSettings] = createSignal<ChartSettings>({ ...DEFAULT_SETTINGS });
     const [activeMode, setActiveMode] = createSignal<string | null>(null);
     const patch = (p: Partial<ChartSettings>) => setSettings((s) => ({ ...s, ...p }));
 
-    const weather = createWeather({
-      settings,
-      setSettings: (fn) => setSettings(fn),
-      toggleWindUnit: () => {},
-    });
     const satellite = createSatellite({ fetchSets: async () => [], fetchSources: async () => [] });
     const poi = createPoi({ fetch: async () => [] });
-    const features = [weather.feature, satellite.feature, poi.feature];
+    const features = [satellite.feature, poi.feature];
 
     // App's base list: OpenSeaMap (a chart-style raster, no feature module).
     const base: OverlayControl[] = [
@@ -62,17 +53,17 @@ function harness() {
 }
 
 describe("(a) the registry covers every overlay, toggle + opacity as declared", () => {
-  test("weather, satellite, POI and OpenSeaMap all appear", () => {
+  test("satellite, POI and OpenSeaMap all appear", () => {
     const h = harness();
     expect(h.controls.map((c) => c.id).sort()).toEqual(
-      ["openseamap", "poi", "satellite", "weather"].sort(),
+      ["openseamap", "poi", "satellite"].sort(),
     );
     h.dispose();
   });
 
-  test("opacity is present for weather + satellite, absent for POI + OpenSeaMap", () => {
+  test("opacity is present for satellite, absent for POI + OpenSeaMap", () => {
     const h = harness();
-    for (const id of ["weather", "satellite"]) {
+    for (const id of ["satellite"]) {
       const c = h.byId(id);
       expect(typeof c.opacity).toBe("function");
       expect(typeof c.setOpacity).toBe("function");
@@ -92,37 +83,6 @@ describe("(a) the registry covers every overlay, toggle + opacity as declared", 
       expect(typeof c.visible).toBe("function");
       expect(typeof c.setVisible).toBe("function");
     }
-    h.dispose();
-  });
-});
-
-describe("(b) weather's control drives keepVisible, NOT the mode", () => {
-  test("toggling on shows the wash via keepVisible and never enters the mode", () => {
-    const h = harness();
-    const w = h.byId("weather");
-    expect(w.visible()).toBe(false); // off, not in mode
-    w.setVisible(true);
-    expect(h.settings().weather.keepVisible).toBe(true); // it flipped keepVisible…
-    expect(w.visible()).toBe(true);
-    h.dispose();
-  });
-
-  test("visible() also reflects the in-mode state (wash shows while the tool is open)", () => {
-    const h = harness();
-    const w = h.byId("weather");
-    expect(w.visible()).toBe(false);
-    h.setActiveMode("weather"); // the interactive mode opened elsewhere
-    expect(w.visible()).toBe(true); // shown even though keepVisible is still off
-    expect(h.settings().weather.keepVisible).toBe(false);
-    h.dispose();
-  });
-
-  test("toggling off clears keepVisible", () => {
-    const h = harness();
-    const w = h.byId("weather");
-    w.setVisible(true);
-    w.setVisible(false);
-    expect(h.settings().weather.keepVisible).toBe(false);
     h.dispose();
   });
 });

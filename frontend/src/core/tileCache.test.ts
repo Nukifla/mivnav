@@ -29,6 +29,7 @@ import {
   resolveIcon,
   resolveTile,
   staleCacheNames,
+  TILE_CACHE_NAME,
   type CacheLike,
 } from "./tileCache";
 
@@ -166,6 +167,38 @@ describe("resolveTile", () => {
 
     expect(fetchMock.mock.calls.length).toBe(2);
   });
+
+  test("a no-store tile (licensed o-charts) is served but never stored", async () => {
+    // o-charts licence (plan W2): Cache Storage is on disk, and licensed
+    // content may only live in RAM. The server marks it `private, no-store`.
+    let n = 0;
+    const fetchMock = mock(
+      async () => new Response(tile(++n), { status: 200, headers: { "Cache-Control": "private, no-store" } }),
+    );
+    const cache = createFakeCache();
+
+    const first = await resolveTile(req(), cache, fetchMock);
+    expect(new Uint8Array(await first.arrayBuffer())).toEqual(tile(1));
+    expect(await cache.match(req())).toBeUndefined();
+
+    const second = await resolveTile(req(), cache, fetchMock);
+    expect(fetchMock.mock.calls.length).toBe(2);
+    expect(new Uint8Array(await second.arrayBuffer())).toEqual(tile(2));
+  });
+
+  test("a public, no-cache tile (free charts) is still stored", async () => {
+    const fetchMock = mock(
+      async () => new Response(tile(3), { status: 200, headers: { "Cache-Control": "public, no-cache" } }),
+    );
+    const cache = createFakeCache();
+    await resolveTile(req(), cache, fetchMock);
+    expect(await cache.match(req())).toBeDefined();
+  });
+
+  test("the cache is renamed past v1, which may hold licensed tiles, so activate sweeps it", () => {
+    expect(TILE_CACHE_NAME).toBe("mivnav-tiles-v2");
+    expect(staleCacheNames(["mivnav-tiles-v1", TILE_CACHE_NAME], [TILE_CACHE_NAME])).toEqual(["mivnav-tiles-v1"]);
+  });
 });
 
 describe("isTileRequest", () => {
@@ -198,6 +231,13 @@ describe("isTileRequest", () => {
     expect(isTileRequest(new URL(wash))).toBe(false);
     expect(isTileRequest(new URL("https://x/api/weather/tiles/wind/5/16/10.png"))).toBe(false);
     expect(isTileRequest(new URL("https://x/api/weather/data_spatial/dwd/x.om"))).toBe(false);
+  });
+
+  test("never matches the licensed o-charts union /tiles/all", () => {
+    expect(isTileRequest(new URL("https://x/api/tiles/all/5/16/10"))).toBe(false);
+    expect(isTileRequest(new URL("https://x/api/tiles/all/5/16/10?e=2"))).toBe(false);
+    // the free union stays cacheable
+    expect(isTileRequest(new URL("https://x/api/tiles/free/5/16/10"))).toBe(true);
   });
 
   test("still matches the chart/POI tiles the cache exists for", () => {

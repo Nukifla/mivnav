@@ -266,11 +266,14 @@ const Rail: Component<RailProps> = (props) => {
     return !!(id && props.reg.modes.get(id)?.solo);
   };
   const tiles = () => (soloActive() ? [] : bandList(props.reg, props.chrome(), "rail"));
-  // PHONE ONLY, gated on the mode id NOT `soloActive()`: the route editor
-  // brings its own bottom bar (RouteSheet's `RouteBar`), so this suppresses
+  // PHONE ONLY, gated on the mode's `ownsBottomBar`, NOT `soloActive()`: a
+  // mode with its own bottom bar (the route editor's `RouteBar`) suppresses
   // the widget strip entirely rather than doubling up with it underneath.
   // Weather is also solo but has no replacement bar, so it keeps this strip.
-  const routeBarActive = () => props.activeMode?.() === "route-edit";
+  const routeBarActive = () => {
+    const id = props.activeMode?.();
+    return !!(id && props.reg.modes.get(id)?.ownsBottomBar);
+  };
   // Driven by the registry, NOT the config: the alarm band is reserved chrome,
   // so a depth alarm counts whether or not you kept its tile on the rail.
   const alarms = () => alerts(props.reg).length;

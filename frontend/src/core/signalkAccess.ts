@@ -71,7 +71,7 @@ export interface AccessOptions {
   /** The message shown on `granted` — defaults to the autopilot's own wording
    * (this controller's first caller), since most existing call sites rely on
    * the default. A caller granting a DIFFERENT capability (RouteIQ's own
-   * access, say — `routeiqAccess.ts`) must override this: the default text
+   * access, say — the autorouting plugin's RouteIQ grant) must override this: the default text
    * names the autopilot specifically and would misdescribe what was actually
    * granted. */
   grantedMessage?: string;

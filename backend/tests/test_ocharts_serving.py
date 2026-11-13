@@ -597,7 +597,9 @@ def zoom_env(tmp_path: Path):
         _cell_with_landmark(set_dir / "HARB.senc", "HARB", HARBOUR[0], HARBOUR[1],
                          *PORT, "harbour-port")
 
-    yield from _serving_env(tmp_path, build)
+    # The gate's mechanism at a headroom of 4, pinned rather than read from
+    # DEFAULT_OVER_ZOOM (the boat runs 8), so these tests keep their edges.
+    yield from _serving_env(tmp_path, build, over_zoom=4, under_zoom=4)
 
 
 def _landmark_names(content: bytes) -> list[str]:
@@ -648,9 +650,9 @@ def crowded_env(tmp_path: Path):
         _cell_with_landmark(set_dir / "GEN.senc", "GEN", GENERAL[0], GENERAL[1],
                          *INLAND, "general-inland")
         for i in range(MAX_CELLS_PER_TILE + 4):
-            lon = 9.55 + i * 0.004
+            lon = 9.55 + i * 0.002  # all inside the one z10 tile, however many
             _cell_with_landmark(set_dir / f"H{i:02d}.senc", f"H{i:02d}", 90_000,
-                             (lon - 0.001, 56.29, lon + 0.001, 56.31), 56.3, lon,
+                             (lon - 0.0008, 56.29, lon + 0.0008, 56.31), 56.3, lon,
                              f"coastal-{i:02d}")
 
     yield from _serving_env(tmp_path, build)
@@ -1280,10 +1282,12 @@ def test_tiles_set_route_carries_no_set_tag(ocharts_env) -> None:
     assert all("set" not in t for t in tags)
 
 
-def test_tiles_all_etag_304_and_bump_on_either_set(tmp_path: Path) -> None:
+def test_tiles_free_etag_304_and_bump_on_either_set(tmp_path: Path) -> None:
     """The union ETag derives from `union_version()` -- (id, sequence) of
     EVERY subscribed set -- so a 304 must stop matching when either set
-    changes, not just whichever one the client happens to think of."""
+    changes, not just whichever one the client happens to think of. Pinned
+    on `/tiles/free` (both plain .senc sets are free here): `/tiles/all` has
+    no validator at all, see test_tiles_all_is_private_no_store."""
     z = 13
     x, y = tile_of(54.2, 11.2, z)
 
@@ -1302,7 +1306,7 @@ def test_tiles_all_etag_304_and_bump_on_either_set(tmp_path: Path) -> None:
     gen = _two_set_env(tmp_path, build_west, build_east)
     client, _ = next(gen)
     try:
-        url = f"/tiles/all/{z}/{x}/{y}"
+        url = f"/tiles/free/{z}/{x}/{y}"
         r = client.get(url)
         etag = r.headers["etag"]
         assert client.get(url, headers={"if-none-match": etag}).status_code == 304
@@ -1314,6 +1318,38 @@ def test_tiles_all_etag_304_and_bump_on_either_set(tmp_path: Path) -> None:
         r2 = client.get(url, headers={"if-none-match": etag})
         assert r2.status_code == 200
         assert r2.headers["etag"] != etag
+    finally:
+        gen.close()
+
+
+def test_tiles_all_is_private_no_store(tmp_path: Path) -> None:
+    """o-charts licence (plan W2): the licensed union is never cached on the
+    client's disk -- `private, no-store`, no ETag, and a conditional request
+    is answered in full, never 304 (a 304 implies the client kept a copy).
+    Holds even when no set is licensed: one rule for the route."""
+    z = 13
+    x, y = tile_of(54.2, 11.2, z)
+
+    def build(d: Path) -> None:
+        point_cell(
+            d / "WEST.senc", name="WEST", scale=180_000,
+            bounds=(11.16, 54.19, 11.21, 54.21), covr=(11.0, 54.0, 11.4, 54.4),
+        )
+
+    gen = _two_set_env(tmp_path, build, build)
+    client, _ = next(gen)
+    try:
+        url = f"/tiles/all/{z}/{x}/{y}"
+        r = client.get(url)
+        assert r.status_code == 200
+        assert r.headers["cache-control"] == "private, no-store"
+        assert "etag" not in r.headers
+        # Diagnostics only: which tier served it, never the tile itself.
+        assert r.headers["server-timing"].startswith("render;dur=")
+        assert client.get(url).headers["server-timing"].startswith("ram;dur=")
+        again = client.get(url, headers={"if-none-match": "*"})
+        assert again.status_code == 200
+        assert again.content == r.content
     finally:
         gen.close()
 

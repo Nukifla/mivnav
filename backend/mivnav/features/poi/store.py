@@ -101,7 +101,7 @@ class PoiStore(RescanRegistry[PoiSet]):
         root = self.root.resolve()
         removed: list[str] = []
         freed = 0
-        for source_id, source in poi_sources().items():
+        for source_id, source in poi_sources(include_disabled=True).items():
             if source_id == keep:
                 continue
             for path in source.extra_files(dataset_dir, set_id):

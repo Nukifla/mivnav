@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import logging
 import shutil
-from typing import cast, get_args
+from typing import cast
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, ValidationError, model_validator
@@ -19,7 +19,9 @@ from mivnav.config.dataset_layout import dataset_disk_stats, search_index_share
 from mivnav.config.model import (
     Config,
     DatasetConfig,
+    CORE_DATASET_PROVIDERS,
     DatasetProvider,
+    dataset_providers,
     fold_legacy_dataset_schedule,
 )
 from mivnav.data.provider import (
@@ -34,7 +36,6 @@ from mivnav.features.ocharts.runtime import OchartsRuntime
 from mivnav.features.osm_world.runtime import OsmWorldRuntime
 from mivnav.features.poi.runtime import PoiRuntime
 from mivnav.features.satellite.runtime import SatelliteRuntime
-from mivnav.features.weather.runtime import WeatherRuntime
 
 log = logging.getLogger(__name__)
 
@@ -104,12 +105,9 @@ def _entry(config: Config, dataset: DatasetConfig, runtime: Runtime) -> dict:
         # disk walk above reports 0; read real occupancy from the provider's
         # own stats() instead. See docs/architecture/dataset-api.md#_entry-live-cache-size-attribution.
         try:
-            if dataset.provider == "weather":
-                proxy = cast(WeatherRuntime, runtime.feature("weather")).proxy()
-                size = proxy.stats()["bytes"]
-            elif dataset.provider == "osm_world":
-                live_cache = cast(OsmWorldRuntime, runtime.feature("osm_world")).live_cache()
-                size = live_cache.stats()["bytes"]
+            spec = runtime.feature_spec(dataset.provider)
+            if spec is not None and spec.live_cache_bytes is not None:
+                size = spec.live_cache_bytes(runtime.feature(dataset.provider))
         except Exception:  # noqa: BLE001 — see comment above
             log.warning("could not size the %s live cache for %r", dataset.provider, dataset.id, exc_info=True)
     # attribute this dataset's row share of the SHARED search-index db back
@@ -192,8 +190,11 @@ def _provider_catalog(runtime: Runtime) -> list[dict]:
     stale before). See docs/architecture/dataset-api.md#_provider_catalog."""
     by_id = {p.id: p for p in runtime.provider_registry()}
     catalog = []
-    for provider_id in get_args(DatasetProvider):
+    for provider_id in dataset_providers():
         p = by_id.get(provider_id)
+        if p is None and provider_id not in CORE_DATASET_PROVIDERS:
+            continue  # a switched-off plugin's provider
+        spec = runtime.feature_spec(provider_id)
         catalog.append(
             {
                 "id": provider_id,
@@ -214,6 +215,8 @@ def _provider_catalog(runtime: Runtime) -> list[dict]:
                 # every 30 min) — the edit form pre-fills it for a fresh draft.
                 "schedule": (p.ingest.schedule if p is not None and p.ingest is not None else "manual"),
                 "ttl_s": (p.ingest.ttl_s if p is not None and p.ingest is not None else None),
+                # Whether a "live-cache" dataset may be declared for it.
+                "live_cache": spec is not None and spec.live_cache_bytes is not None,
             }
         )
     return catalog

@@ -16,9 +16,11 @@ from mivnav.config import Derived
 from mivnav.config.base import provider_root
 from mivnav.config.model import Config
 from mivnav.feature import FeatureCtx
+from mivnav.features.ocharts.clock import InstallClock, gps_date
 from mivnav.features.ocharts.config import OchartsConfig
 from mivnav.features.ocharts.devices import DeviceGate, DeviceStore
-from mivnav.features.ocharts.install import Installer
+from mivnav.features.ocharts.eulas import EulaAcceptances
+from mivnav.features.ocharts.install import Installer, sweep_stale_staging
 from mivnav.features.ocharts.service import OchartsService
 from mivnav.features.ocharts.updates import Updater
 
@@ -87,6 +89,15 @@ class OchartsRuntime:
         #: Which screens may show o-charts (see .devices). Outlives service
         #: rebuilds too: the list is the crew's, not derived from config.
         self.devices = DeviceGate(DeviceStore())
+        #: EULAs accepted before install (see .eulas). State, like devices;
+        #: seeded once from what the registered devices accepted.
+        self.eula_acceptances = EulaAcceptances(devices=self.devices.store)
+        #: Today's date for the install-period check: synchronised system
+        #: clock, else the GPS through SignalK (see .clock).
+        signalk = ctx.signalk
+        self.install_clock = InstallClock(
+            gps=(lambda: gps_date(signalk().snapshot())) if signalk is not None else None
+        )
 
     def service(self) -> OchartsService:
         return self.services.get(self._config.get())
@@ -98,7 +109,13 @@ class OchartsRuntime:
         service = self.service()
         with self._installer_lock:
             if self._installer is None or self._installer.service is not service:
-                self._installer = Installer(service)
+                if self._installer is not None:
+                    # A parked install belongs to the old service; its staged
+                    # set must not leak (it is re-downloaded if wanted).
+                    self._installer.discard()
+                self._installer = Installer(
+                    service, acceptances=self.eula_acceptances, clock=self.install_clock
+                )
             return self._installer
 
     def installer_busy(self) -> bool:
@@ -110,7 +127,9 @@ class OchartsRuntime:
 
     def close(self) -> None:
         with self._installer_lock:
-            self._installer = None
+            installer, self._installer = self._installer, None
+        if installer is not None:
+            installer.discard()
         self.services.dispose()  # stops oexserverd
 
 
@@ -125,6 +144,8 @@ def start_ocharts_at_boot(runtime) -> threading.Thread:
     the build loads the S-52 tables and must not hold up startup."""
 
     def build() -> None:
+        # A parked install's staging dir does not survive a crash cleanly.
+        sweep_stale_staging()
         try:
             runtime.feature("ocharts").service()
         except Exception:  # noqa: BLE001 — the first chart request retries the build

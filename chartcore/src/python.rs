@@ -4138,6 +4138,24 @@ fn serve_tile(
     Ok((Some(PyBytes::new(py, &merged).unbind()), overflow_out))
 }
 
+/// Every z/x/y in `min_zoom..=max_zoom` that some cell charts, coarsest zoom
+/// first: the disk pre-render plan. `cells` is `(extent (w, s, e, n), coverage
+/// or None)` per cell. See `chartcore::mvt::plan` — the backend's Python
+/// planner (`CellWarmer._pretile_tiles`) is the reference it matches.
+#[pyfunction]
+fn charted_tiles(
+    py: Python<'_>,
+    cells: Vec<((f64, f64, f64, f64), Option<PyRef<'_, Coverage>>)>,
+    min_zoom: u8,
+    max_zoom: u8,
+) -> Vec<(u8, u32, u32)> {
+    let cells: Vec<(crate::mvt::plan::Extent, Option<&crate::coverage::Coverage>)> = cells
+        .iter()
+        .map(|((w, s, e, n), c)| ([*w, *s, *e, *n], c.as_ref().map(|c| &c.inner)))
+        .collect();
+    py.detach(|| crate::mvt::plan::charted_tiles(&cells, min_zoom, max_zoom))
+}
+
 /// The union serve pipeline for `/tiles/all`: same selection as
 /// [`serve_tile`], run once over pooled cells from every subscribed chart
 /// set, plus per-feature `"set"` tags. See docs/architecture/ocharts-union-tile.md.
@@ -4792,6 +4810,7 @@ pub fn chartcore(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<MivnavRoute>()?;
     m.add_class::<MivnavCoarseRoute>()?;
     m.add_class::<MivnavBuildReport>()?;
+    m.add_function(wrap_pyfunction!(charted_tiles, m)?)?;
     m.add_function(wrap_pyfunction!(shortest_path, m)?)?;
     m.add_function(wrap_pyfunction!(resimplify_route, m)?)?;
     m.add_function(wrap_pyfunction!(verify_route, m)?)?;

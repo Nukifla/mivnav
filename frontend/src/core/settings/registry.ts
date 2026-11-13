@@ -192,7 +192,7 @@ export interface SettingsSection<C = unknown> {
    */
   render?: Component<{ ctx: C }>;
   /** Live, ctx-derived: true leaves the section out of its pane entirely
-   * (e.g. the auto-router's sections while "Beta autorouting" is off). */
+   * (e.g. a section that only applies to one choice of another setting). */
   hidden?: (ctx: C) => boolean;
 }
 

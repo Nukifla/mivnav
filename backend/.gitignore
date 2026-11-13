@@ -25,12 +25,3 @@ __pycache__/
 !/data/fnc/DE6OSTIM.S57
 !/data/fnc/DE6OSBRH.S57
 !/data/fnc/SOURCE.txt
-# ...and the committed DWD ICON-EU GRIB2 fixtures (~2.3 MB total, DWD open
-# data — see data/grib/SOURCE.txt): test_gribstore.py/test_grib_render.py's
-# real-decode fixtures (jt mzyvvmux's GRIB bake). No GRIB encoder was
-# available to hand-craft something smaller — see that SOURCE.txt for why.
-!/data/grib
-/data/grib/*
-!/data/grib/icon-eu_europe_regular-lat-lon_single-level_2026072600_000_U_10M.grib2
-!/data/grib/icon-eu_europe_regular-lat-lon_single-level_2026072600_000_V_10M.grib2
-!/data/grib/SOURCE.txt

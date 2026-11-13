@@ -37,10 +37,10 @@ export interface CollisionSettings {
 /** Exactly `CollisionConfig`'s defaults — what a screen uses until the first
  * snapshot says otherwise (and in tests). */
 export const DEFAULT_COLLISION_SETTINGS: CollisionSettings = {
-  mode: "tell",
+  mode: "show",
   sound: true,
-  publish: true,
-  danger_nm: 0.3,
+  publish: false,
+  danger_nm: 0.8,
   horizon_min: 15,
   warning_nm: 1,
   warning_horizon_min: 30,

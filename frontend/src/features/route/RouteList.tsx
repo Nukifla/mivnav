@@ -14,7 +14,7 @@ import DockPanel from "../../core/chrome/DockPanel";
 import { useBackDismiss } from "../../core/chrome/backStack";
 import { isCompact } from "../../core/media";
 import type { Route } from "../../core/routes";
-import { betaAutorouting } from "../../core/serverConfig";
+import { routePlanner } from "../../core/routePlanner";
 import type { RoutesModel } from "./index";
 import { downloadGpx } from "./download";
 
@@ -28,8 +28,9 @@ export interface RouteListProps {
   onOpenChange: (open: boolean) => void;
   routes: RoutesModel;
   /** The MANUAL editor (features/routeDraw): open a route in it, or start a
-   * blank one. With "Beta autorouting" off these are the list's open/New;
-   * with it on, the autorouter keeps those and this is a row's "Edit points". */
+   * blank one. With no route planner (core/routePlanner.ts) these are the
+   * list's open/New; with one, the planner's editor keeps those and this is a
+   * row's "Edit points". */
   editPoints?: (route: Route) => void;
   newManual?: () => void;
   /** "Make route from track" (features/track) — absent hides the button. */
@@ -62,12 +63,13 @@ const RouteList: Component<RouteListProps> = (props) => {
     props.onOpenChange(false);
   };
 
-  /** Does tapping a row open it — in the autorouter, else the manual editor? */
-  const rowOpens = () => betaAutorouting() || !!props.editPoints;
-  const canNew = () => betaAutorouting() || !!props.newManual;
+  /** Does tapping a row open it — in the planner's editor, else the manual one? */
+  const rowOpens = () => !!routePlanner() || !!props.editPoints;
+  const canNew = () => !!routePlanner() || !!props.newManual;
 
   const open = (r: Route) => {
-    if (betaAutorouting()) props.routes.editRoute(r);
+    const planner = routePlanner();
+    if (planner) planner.editRoute(r);
     else if (props.editPoints) props.editPoints(r);
     else return;
     props.onOpenChange(false);
@@ -80,7 +82,8 @@ const RouteList: Component<RouteListProps> = (props) => {
 
   // Works even while a route is being followed — the new draft is separate.
   const startNew = () => {
-    if (betaAutorouting()) props.routes.newRoute();
+    const planner = routePlanner();
+    if (planner) planner.newRoute();
     else props.newManual?.();
     props.onOpenChange(false);
   };
@@ -218,7 +221,7 @@ const RouteList: Component<RouteListProps> = (props) => {
                     </div>
                   </Show>
                   <div class="flex flex-wrap items-center gap-1.5">
-                    {/* Not beta-gated: following needs no autorouter. */}
+                    {/* Not planner-gated: following needs no autorouter. */}
                     <Show when={!following() && !switching()}>
                       <button
                         type="button"
@@ -277,8 +280,8 @@ const RouteList: Component<RouteListProps> = (props) => {
                       <Download size={13} aria-hidden="true" />
                       GPX
                     </button>
-                    {/* Beside the autorouter (the row opens it): hand-edit the points. */}
-                    <Show when={betaAutorouting() && props.editPoints}>
+                    {/* Beside the planner's editor (the row opens it): hand-edit the points. */}
+                    <Show when={routePlanner() && props.editPoints}>
                       <button
                         type="button"
                         class={btn}
@@ -292,7 +295,7 @@ const RouteList: Component<RouteListProps> = (props) => {
                         Edit points
                       </button>
                     </Show>
-                    {/* Not beta-gated, unlike the editor's own Stop following. */}
+                    {/* Not planner-gated, unlike the editor's own Stop following. */}
                     <Show when={following()}>
                       <button
                         type="button"

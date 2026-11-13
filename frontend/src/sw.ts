@@ -39,9 +39,10 @@ const ICON_CACHE_NAME = iconCacheName(
   buildHash(manifest.map((e) => (typeof e === "string" ? e : `${e.url}:${e.revision}`))),
 );
 
-// TILE_CACHE_NAME never changes on a deploy (tile bytes track the BACKEND;
-// see chartProtocol.ts's `chartEpoch`), so the only stale entry swept here
-// is a previous deploy's icon cache.
+// TILE_CACHE_NAME does not change per deploy (tile bytes track the BACKEND;
+// see chartProtocol.ts's `chartEpoch`), so the stale entries swept here are
+// a previous deploy's icon cache and, once, the `mivnav-tiles-v1` cache that
+// may hold licensed o-charts tiles (see tileCache.ts's TILE_CACHE_NAME).
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches

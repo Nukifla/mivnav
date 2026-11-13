@@ -13,7 +13,7 @@ import { ROUTE_LINE_LAYER, ROUTE_WAYPOINTS_LAYER } from "./layers";
 import type { RouteOverlay } from "./index";
 import type { GeoPoint } from "../../core/chrome/geo";
 import { lerpDensity, type Density } from "../../core/chrome/registry";
-import { groupApproximateRuns } from "../../core/routing";
+import { groupApproximateRuns } from "./runs";
 import { isMultiTouch } from "../../core/map/userGesture";
 import {
   PALETTES,
@@ -30,7 +30,7 @@ const SOURCE = "route";
 const ACTIVE_LEG_LAYER = "route-active-leg";
 // The APPROXIMATE run(s) of a "Go here" plan — one or more straight-line
 // stretches the router couldn't actually verify (`RouteOverlay.
-// approximateLegs`, `core/routing.ts`'s `PlanResult`), not only at the
+// approximateLegs`, the autorouting plugin's `PlanResult`), not only at the
 // two ends: a run can land anywhere along the route. Dashed and
 // warning-coloured, its own layer so it never inherits `ROUTE_LINE_
 // LAYER`'s solid route-pink paint. Not hit-tested — it draws exactly

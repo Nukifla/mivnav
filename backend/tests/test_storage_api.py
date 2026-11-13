@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 """``GET /storage`` — every byte under ``data_root`` lands in exactly one
 group (declared datasets split by implementation label, undeclared chart
-sets under their provider, routing/track/other), caches outside it are
+sets under their provider, track/other), caches outside it are
 listed separately, and the disk's free space is reported."""
 
 from __future__ import annotations
@@ -21,10 +21,6 @@ def runtime(tmp_path: Path):
     rt = isolated_runtime_at(tmp_path)
     rt.patch_config(
         {
-            "weather": {
-                "cache_dir": str(tmp_path / "cache" / "weather"),
-                "render_cache_dir": str(tmp_path / "cache" / "weather-render"),
-            },
             "osm_world": {"live_cache_dir": str(tmp_path / "cache" / "osm")},
         }
     )
@@ -69,8 +65,6 @@ def test_storage_covers_datasets_and_everything_else(sc, runtime, tmp_path: Path
     _write(data / "satellite" / "dk-sat" / "dk-sat.extra" / "a.bin", 30_000)
     _write(data / "poi" / "dk-osm" / "x.bin", 8_000)
     _write(data / "ocharts" / "fnc-de" / "cell.S57", 12_000)  # undeclared set
-    _write(data / "routing" / "mivnav" / "fnc-de.mivnav", 50_000)
-    _write(data / "routing" / "mivnav" / ".fnc-de.mivnav.tmp.1", 20_000)
     _write(data / "track" / "abc" / "t.bin", 4_000)
     _write(data / "grib" / "f.grib2", 4_000)
     _write(tmp_path / "ocharts" / "tiles" / "t.pbf", 16_000)
@@ -88,17 +82,12 @@ def test_storage_covers_datasets_and_everything_else(sc, runtime, tmp_path: Path
     ocharts = _group(body, "o-charts")
     assert [i["name"] for i in ocharts["items"]] == ["fnc-de"]
 
-    routing = _group(body, "Routing graphs")
-    names = {i["name"] for i in routing["items"]}
-    assert names == {"fnc-de.mivnav", ".fnc-de.mivnav.tmp.1 (unfinished build)"}
-
     assert _group(body, "Track history")["bytes"] >= 4_000
     assert [i["name"] for i in _group(body, "Other files")["items"]] == ["grib"]
 
     caches = {i["name"]: i["bytes"] for i in _group(body, "Caches & logs")["items"]}
     assert caches["Chart tile cache"] >= 16_000
     # No live-cache dataset declared, so the live caches are listed here.
-    assert "Weather download cache" in caches
     assert "OSM world live cache" in caches
 
     assert body["total"] == sum(g["bytes"] for g in body["groups"])

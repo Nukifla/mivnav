@@ -8,7 +8,7 @@
 // update is "restarting", not an error, and the page reloads once the server
 // answers with a different version than the one the update started from.
 //
-// Shape mirrors `mivnavBuild.ts`: fetch functions, then an injectable-seam
+// Shape mirrors the autorouting plugin's `mivnavBuild.ts`: fetch functions, then an injectable-seam
 // controller (`createSoftwareUpdate`) so the loop is deterministic in a test,
 // with the decisions themselves in pure functions (`isNewRun`, `watchStep`).
 

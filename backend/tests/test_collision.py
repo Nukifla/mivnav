@@ -244,7 +244,11 @@ class Clock:
 def pub(tmp_path: Path) -> tuple[CollisionPublisher, SpyWriter, Clock, Any]:
     runtime = isolated_runtime_at(tmp_path)
     runtime.config.patch(
-        {"signalk": {"enabled": True}, "credentials": {"signalk": {"token": "tok"}}}
+        {
+            "signalk": {"enabled": True},
+            "credentials": {"signalk": {"token": "tok"}},
+            "collision": {"publish": True, "mode": "tell"},
+        }
     )
     writer, clock = SpyWriter(), Clock()
     return CollisionPublisher(runtime, writer=writer, clock=clock), writer, clock, runtime
@@ -476,6 +480,7 @@ def test_end_to_end_over_real_sockets(tmp_path: Path) -> None:
             {
                 "signalk": {"enabled": True, "host": "127.0.0.1", "port": fake.port},
                 "credentials": {"signalk": {"token": "tok"}},
+                "collision": {"publish": True, "mode": "tell"},
             }
         )
         publisher.start()

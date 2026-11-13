@@ -105,9 +105,15 @@ def test_list_datasets_empty_by_default(dc):
 # CREATABLE_PROVIDERS/PROVIDER_LABEL literals.
 
 
-def test_providers_catalog_lists_the_closed_dataset_provider_vocabulary(dc):
+def test_providers_catalog_lists_the_built_in_dataset_providers(dc):
+    # Plugins are off in the core suite; a plugin's providers join this list.
     ids = {p["id"] for p in dc.get("/datasets").json()["providers"]}
-    assert ids == {"charts", "poi", "osm_world", "satellite", "ocharts", "weather", "notices"}
+    assert ids == {"charts", "poi", "osm_world", "satellite", "ocharts", "notices"}
+
+
+def test_providers_catalog_says_which_providers_have_a_live_cache(dc):
+    by_id = {p["id"]: p for p in dc.get("/datasets").json()["providers"]}
+    assert {i for i, p in by_id.items() if p["live_cache"]} == {"osm_world"}
 
 
 def test_providers_catalog_marks_only_the_generic_bake_path_providers_creatable(dc):
@@ -115,7 +121,6 @@ def test_providers_catalog_marks_only_the_generic_bake_path_providers_creatable(
     assert by_id["poi"]["creatable"] is True
     assert by_id["osm_world"]["creatable"] is True
     assert by_id["satellite"]["creatable"] is True
-    assert by_id["weather"]["creatable"] is True
     assert by_id["notices"]["creatable"] is True
     # o-charts declares an IngestSpec (bakeable, via its own standalone
     # Installer) but no runner_factory — not creatable through this generic
@@ -145,7 +150,6 @@ def test_providers_catalog_carries_the_live_registrys_own_labels(dc):
     assert by_id["poi"]["label"] == "POI (points of interest)"
     assert by_id["satellite"]["label"] == "Satellite imagery"
     assert by_id["ocharts"]["label"] == "o-charts"
-    assert by_id["weather"]["label"] == "Weather (offline forecast)"
 
 
 def test_providers_catalog_carries_per_implementation_labels(dc):

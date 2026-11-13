@@ -120,22 +120,10 @@
 .mivnav-indeterminate {
   animation: mivnav-indeterminate 1.15s ease-in-out infinite;
 }
-/* Wind vane LOADING spin (features/weather/WindVane.tsx). viewBox is centred
-   on the vane's pivot (12, 28), so a plain rotate spins about that point. */
-@keyframes mivnav-vane-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-.mivnav-vane-spin {
-  transform-origin: center;
-  animation: mivnav-vane-spin 2.6s linear infinite;
-}
 @media (prefers-reduced-motion: reduce) {
   .mivnav-pop-in,
   .mivnav-fade-in,
-  .mivnav-slide-fade-in,
-  .mivnav-vane-spin {
+  .mivnav-slide-fade-in {
     animation: none;
   }
   .mivnav-indeterminate {

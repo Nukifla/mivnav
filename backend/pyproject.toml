@@ -51,7 +51,8 @@ packages = ["mivnav"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-# `crosscheck` (test_weather_grid_crosscheck.py) is excluded by default: it's a
+# `crosscheck` (the weather plugin's test_weather_grid_crosscheck.py) is
+# excluded by default (here and in `just test-plugins`): it's a
 # live-network + Node-subprocess test whose duration depends on Open-Meteo, not
 # this repo. Run it explicitly with `just check-crosscheck`.
 addopts = "-m 'not crosscheck'"

@@ -2,6 +2,7 @@
 import { render } from "solid-js/web";
 import { registerSW } from "virtual:pwa-register";
 import { loadPlugins } from "./plugins";
+import { disabledPlugins } from "./core/pluginSwitch";
 import App from "./App";
 import { prefetchCatalog } from "./core/catalog";
 import { hasStored } from "./core/persist";
@@ -12,10 +13,14 @@ import { loadThemes } from "./core/style/themes/source";
 import { describeFetchError, faultHint, setSplashFault, setSplashStatus } from "./core/splash";
 import "./index.css";
 
-// Every plugin present under <repo>/plugins (none: an empty object),
-// registered before the app renders, so the POI feature, icons and Layers
+// Every plugin present under <repo>/plugins (none: an empty object) but the
+// ones switched off in Settings → Plugins, registered before anything reads
+// settings (the default-profile prefetch below coerces them, plugin slices
+// included) and before the app renders, so the POI feature, icons and Layers
 // panel see what they add.
-loadPlugins(import.meta.glob("../../plugins/*/frontend/index.ts", { eager: true }));
+const PLUGIN_MODULES = import.meta.glob("../../plugins/*/frontend/index.ts", { eager: true });
+// Bounded: an unreachable server falls back to the last list this screen saw.
+const pluginsLoaded = disabledPlugins(2500).then((off) => loadPlugins(PLUGIN_MODULES, off));
 
 // The app's JS is running: index.html's own load-failure messages stand down
 // and the splash status is ours from here (core/splash.ts).
@@ -76,7 +81,8 @@ void Promise.all([
   withTimeout(catalogProbe),
   withTimeout(seedChartDetail()),
   withTimeout(prefetchOsmWorldCatalog()),
-  withTimeout(prefetchDefaultProfile(hasStored("settings"))),
+  withTimeout(pluginsLoaded.then(() => prefetchDefaultProfile(hasStored("settings")))),
+  pluginsLoaded,
 ]).then(() => {
   clearTimeout(slowServer);
   try {

@@ -102,6 +102,10 @@ export interface ProviderCatalogEntry {
    * backend or a test fixture (→ manual). */
   schedule?: "manual" | "ttl";
   ttl_s?: number | null;
+  /** Whether the provider has a live fetch-through cache a "live-cache"
+   * dataset can name (osm_world's tile fallback, a plugin's). Optional for
+   * an older backend or a test fixture (→ no). */
+  live_cache?: boolean;
 }
 
 interface DatasetsResponse {
@@ -140,14 +144,10 @@ function hasRegion(providers: readonly ProviderCatalogEntry[], provider: string)
   return (providers.find((p) => p.id === provider)?.region_kind ?? "bbox") !== "none";
 }
 
-/** Providers with a real live, fetch-through cache today (weather's proxy,
- * osm_world's live tile fallback) — hardcoded since the catalog carries no
- * generic "supports a live cache" flag yet. Gates the Kind select and clears
- * a stale "live-cache" selection if a fresh draft's provider changes away. */
-const LIVE_CACHE_PROVIDERS: readonly string[] = ["weather", "osm_world"];
-
-function supportsLiveCache(provider: string): boolean {
-  return LIVE_CACHE_PROVIDERS.includes(provider);
+/** Gates the Kind select, and clears a stale "live-cache" selection if a
+ * fresh draft's provider changes away. */
+function supportsLiveCache(providers: readonly ProviderCatalogEntry[], provider: string): boolean {
+  return providers.find((p) => p.id === provider)?.live_cache === true;
 }
 /** Whether to offer Bake/Re-bake: a generic bake path AND the dataset must
  * be DECLARED — an orphan has no region/schedule to bake from, and
@@ -407,7 +407,7 @@ const DatasetEditForm: Component<DatasetEditFormProps> = (props) => {
   // while "live-cache" is selected, the Kind control disappears but the
   // signal would otherwise keep an undisplayable value.
   createEffect(() => {
-    if (!supportsLiveCache(provider()) && mode() === "live-cache") setMode("bake");
+    if (!supportsLiveCache(props.providers, provider()) && mode() === "live-cache") setMode("bake");
   });
   createEffect(() => {
     const id = provider();
@@ -551,7 +551,7 @@ const DatasetEditForm: Component<DatasetEditFormProps> = (props) => {
         {/* Kind is its OWN control, not a third Schedule option (jt rsmpwtmw):
             a live cache has no cadence, so putting it in Schedule conflated
             "when do we re-bake" with "does this bake at all". */}
-        <Show when={supportsLiveCache(provider())}>
+        <Show when={supportsLiveCache(props.providers, provider())}>
           <label class="block space-y-1">
             <span class="text-xs text-fg-2">Kind</span>
             <select
@@ -587,9 +587,9 @@ const DatasetEditForm: Component<DatasetEditFormProps> = (props) => {
               when={provider() === "osm_world"}
               fallback={
                 <>
-                  Not a bake: this names the boat's one shared, always-on weather cache — it fills
-                  lazily as views request forecast data, and is never triggered by a schedule or a Bake
-                  button. The domains below are which models may live-cache through it.
+                  Not a bake: this names the provider's one shared, always-on cache — it fills
+                  lazily as views request data, and is never triggered by a schedule or a Bake
+                  button.
                 </>
               }
             >

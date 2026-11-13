@@ -829,15 +829,15 @@ describe("stations render outside the risk/CPA machinery", () => {
 });
 
 describe("predictor — length is SOG x time", () => {
-  test("a 6 kn boat at the 1 h default draws a 6 nm vector", () => {
+  test("a 6 kn boat at the 30 min default draws a 3 nm vector", () => {
     const v: Vessel = { lng: 12.6, lat: 55.9, cogDeg: 90, sogMs: 6 * KN_TO_MS };
     const end = predictorEnd(v, DEFAULT_SETTINGS.predictorMinutes);
     expect(end).toBeDefined();
-    expectNm(distanceNm([v.lng, v.lat], end!), 6);
+    expectNm(distanceNm([v.lng, v.lat], end!), 3);
   });
 
-  test("the default is one hour, as asked for", () => {
-    expect(DEFAULT_SETTINGS.predictorMinutes).toBe(60);
+  test("the default is half an hour, as the boat runs it", () => {
+    expect(DEFAULT_SETTINGS.predictorMinutes).toBe(30);
   });
 
   test("length scales with the setting, not with anything hard-coded", () => {
@@ -1002,8 +1002,8 @@ describe("risk colouring", () => {
   });
 
   test("a target that will pass within the warning ring is yellow", () => {
-    // CPA 0.7 nm at TCPA 10 min: outside the 0.3 nm danger ring, inside 1 nm.
-    const scene = buildAisScene(own, [closing(2, 0.7)], settings());
+    // CPA 0.9 nm at TCPA 10 min: outside the 0.8 nm danger ring, inside 1 nm.
+    const scene = buildAisScene(own, [closing(2, 0.9)], settings());
     expect(symbolOf(scene).icon).toBe(hullIcon("yellow", PAL));
   });
 
@@ -1032,7 +1032,7 @@ describe("risk colouring", () => {
   });
 
   describe("thresholds are the boat's collision settings, not constants", () => {
-    const target = closing(2, 0.7); // CPA 0.7 nm, TCPA 10 min
+    const target = closing(2, 0.9); // CPA 0.9 nm, TCPA 10 min
 
     test("widening the danger ring turns the same target red", () => {
       // Same boat, same geometry, same instant — only the setting differs.
@@ -1081,10 +1081,10 @@ describe("risk colouring", () => {
   describe("the defaults", () => {
     test("are the server alarm's (CollisionConfig), so red on the chart is the alarm", () => {
       expect(DEFAULT_COLLISION_SETTINGS).toEqual({
-        mode: "tell",
+        mode: "show",
         sound: true,
-        publish: true,
-        danger_nm: 0.3,
+        publish: false,
+        danger_nm: 0.8,
         horizon_min: 15,
         warning_nm: 1,
         warning_horizon_min: 30,

@@ -5,7 +5,7 @@
 // `style.load`).
 //
 // SAFETY-CRITICAL: the z-stack (own-ship topmost, AIS targets above route,
-// measure above AIS targets, weather wash below the seamarks) is enforced by
+// measure above AIS targets, a raster wash below the seamarks) is enforced by
 // `Z` below and MUST stay in sync with it — see
 // docs/architecture/overlay-z-stack.md before changing any `z` value.
 //
@@ -42,7 +42,7 @@ export interface OverlayCtx {
 }
 // The measure/route MODELS are no longer carried on this ctx: their overlays
 // (`features/measure/overlay.ts`, `features/route/overlay.ts`) are factories
-// that close over the model (the POI/weather pattern), so this kernel interface
+// that close over the model (the POI pattern), so this kernel interface
 // stays feature-agnostic and `layers/overlay.ts` imports no feature. The route
 // overlay's `paint` still reads `settings`/`density` from this ctx.
 
@@ -54,7 +54,7 @@ export interface Overlay {
   /**
    * Explicit stacking key. Overlays sort by `z` ascending for the top-hoist, so
    * a higher `z` sits higher. A NEGATIVE `z` opts out of the hoist: that overlay
-   * self-positions below the seamarks (weather) and is never lifted to the top.
+   * self-positions below the seamarks (a wash) and is never lifted to the top.
    */
   z: number;
   /** Idempotent: (re-)create sources/layers (or construct+install a custom
@@ -73,7 +73,8 @@ export interface Overlay {
  * Gaps left between them so a future overlay can slot in without renumbering.
  */
 export const Z = {
-  weather: -10, // NEGATIVE — below the seamarks, excluded from the top-hoist
+  wash: -10, // a raster wash (the weather plugin's) — NEGATIVE: below the
+  // seamarks, excluded from the top-hoist
   satellite: 2, // imagery wash — over the chart, below every annotation/safety
   // overlay. Lowest positive `z`. See docs/architecture/overlay-z-stack.md.
   poiLive: 4, // a plugin's live (online) POI layer — just BELOW the baked
@@ -83,7 +84,7 @@ export const Z = {
   notices: 10, // Notices to Mariners (features/notices) — above POI (a
   // navigational warning outranks a marina marker), below the past track and
   // everything safety-hoisted above it. A band member: see the doc.
-  sectorLights: -5, // NEGATIVE, like weather — follows the "Aids & lights" ENC
+  sectorLights: -5, // NEGATIVE, like the wash — follows the "Aids & lights" ENC
   // group's own stack position instead (USER DECISION 2026-07-29); see the doc.
   track: 15, // past track — below route/AIS. DEFAULT only: a Layers-panel drag
   // grip makes it a reorderable-band member (#sonqwmry); see the doc.
@@ -112,7 +113,7 @@ export const Z = {
 // Only AIS/SignalK lives here — core, safety-critical infra with many
 // consumers. The measure/route overlay FACTORIES live in their feature dirs
 // and arrive via `props.overlays`; sector-lights' factory lives in
-// `features/sector-lights/overlay.ts` and, like weather, stays a MapView
+// `features/sector-lights/overlay.ts` and stays a MapView
 // baseOverlay because its custom WebGL layer is map-lifecycle-coupled.
 
 /** The AIS TARGET layer ids — every SignalK layer EXCEPT own-ship. `aisOverlay`
@@ -162,21 +163,17 @@ export const ownShipOverlay: Overlay = {
   update() {},
 };
 
-// The weather overlay's factory (`createWeatherOverlay`) and the sector-lights
-// overlay factory (`createSectorLightsOverlay`) now live with their feature
-// modules (`features/weather/overlay.ts`, `features/sector-lights/overlay.ts`)
-// so this kernel overlay interface imports no feature — MapView imports both
-// from there and keeps them baseOverlays because their machinery (weather's
-// double-buffer/wind-flow, sector-lights' custom WebGL layer) is
-// map-lifecycle-coupled. Their `z` keys (`Z.weather`, `Z.sectorLights`) stay
-// above.
+// The sector-lights overlay factory (`createSectorLightsOverlay`) lives with
+// its feature (`features/sector-lights/overlay.ts`) so this kernel overlay
+// interface imports no feature — MapView keeps it a baseOverlay because its
+// custom WebGL layer is map-lifecycle-coupled. Its `z` key stays above.
 
 // ── The generic wiring ───────────────────────────────────────────────────────
 
 /**
  * The concatenated re-hoist order, bottom → top: the layer ids of every overlay
  * with a non-negative `z`, sorted by `z`. This IS the safety-critical stack
- * above the chart — assert against it. Weather (negative `z`) is absent by
+ * above the chart — assert against it. A wash (negative `z`) is absent by
  * design; it sits below the seamarks and is never hoisted.
  */
 export function hoistOrder(overlays: readonly Overlay[]): string[] {

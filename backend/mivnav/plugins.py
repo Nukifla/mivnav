@@ -20,9 +20,19 @@ plugin's modules may import any part of mivnav without an import cycle):
 - ``migrate_config`` — a load-time rewrite of the raw config document (e.g.
   to move the plugin's old keys into ``plugins.<id>``), run before
   validation.
+- ``dataset_providers`` — ids of the dataset providers its features add
+  (a ``DatasetConfig.provider`` may name one).
 
 A plugin's own settings live in ``Config.plugins[<id>]`` — an opaque object
 the plugin validates itself.
+
+A plugin can be switched off without removing it: ``Config.plugins_disabled``
+lists the ids. Every installed plugin is still loaded and its routers stay
+mounted (FastAPI can't unmount), but a disabled plugin's routes answer 404,
+its features drop out of ``/providers`` and the dataset runners, and its POI
+sources are not offered — see :func:`active_plugins` and :func:`is_enabled`.
+The config store keeps the disabled set current (:func:`set_disabled`), so a
+``PATCH /config`` takes effect at once.
 
 Kernel module: imports nothing from the features or the composition root.
 """
@@ -55,17 +65,29 @@ class Plugin:
     """What one plugin registers. ``id`` keys its ``Config.plugins`` block."""
 
     id: str
+    #: What Settings shows for it (defaults to ``id``).
+    label: str = ""
     #: Feature registrations, built on first use.
     features: Callable[[], Sequence[Any]] = field(default=lambda: ())
     #: ``mivnav.features.poi.sources.PoiSource`` instances, built on first use.
     poi_sources: Callable[[], Sequence[Any]] = field(default=lambda: ())
     #: Raw config document -> migrated copy; must be pure and idempotent.
     migrate_config: Callable[[dict[str, Any]], dict[str, Any]] | None = None
+    #: Dataset provider ids its features register.
+    dataset_providers: tuple[str, ...] = ()
+
+    @property
+    def title(self) -> str:
+        return self.label or self.id
 
 
 _lock = threading.RLock()
 _loaded: tuple[Plugin, ...] | None = None
 _disabled = False
+#: ``Config.plugins_disabled``, as last set by the config store.
+_switched_off: frozenset[str] = frozenset()
+#: feature id -> the plugin that registered it (filled by plugin_features).
+_feature_owner: dict[str, str] = {}
 
 
 def disable() -> None:
@@ -136,8 +158,45 @@ def plugins(root: Path | None = None) -> tuple[Plugin, ...]:
         return result
 
 
+def set_disabled(ids: Sequence[str]) -> None:
+    """The plugins switched off in config (``Config.plugins_disabled``)."""
+    global _switched_off
+    _switched_off = frozenset(ids)
+
+
+def is_enabled(plugin_id: str) -> bool:
+    return plugin_id not in _switched_off
+
+
+def active_plugins() -> tuple[Plugin, ...]:
+    """The installed plugins that are not switched off."""
+    return tuple(p for p in plugins() if is_enabled(p.id))
+
+
 def plugin_features() -> tuple[Any, ...]:
-    return tuple(f for p in plugins() for f in p.features())
+    """Every installed plugin's features — disabled ones too: routers are
+    mounted once, at startup, and gated per request instead."""
+    out = []
+    for p in plugins():
+        for f in p.features():
+            _feature_owner[f.id] = p.id
+            out.append(f)
+    return tuple(out)
+
+
+def feature_owner(feature_id: str) -> str | None:
+    """The plugin that registered ``feature_id`` (``None``: a built-in one)."""
+    return _feature_owner.get(feature_id)
+
+
+def feature_enabled(feature_id: str) -> bool:
+    owner = feature_owner(feature_id)
+    return owner is None or is_enabled(owner)
+
+
+def plugin_dataset_providers() -> tuple[str, ...]:
+    """Dataset provider ids every installed plugin adds."""
+    return tuple(d for p in plugins() for d in p.dataset_providers)
 
 
 def migrate_config(raw: Mapping[str, Any]) -> dict[str, Any]:

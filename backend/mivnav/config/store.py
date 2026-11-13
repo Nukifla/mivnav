@@ -21,6 +21,7 @@ from pydantic import ValidationError
 from .dataset_layout import migrate_legacy_dataset_dirs
 from .migrate import migrate
 from mivnav.plugins import migrate_config as migrate_plugin_config
+from mivnav.plugins import set_disabled as set_plugins_disabled
 from .model import (
     CONFIG_VERSION,
     CREDENTIALS_KEY,
@@ -156,7 +157,13 @@ class ConfigStore:
         self.credentials_path = credentials_path or (self.path.parent / CREDENTIALS_FILENAME)
         self._legacy_credentials = legacy_credentials
         self._lock = threading.Lock()
-        self._config = self._read_or_seed()
+        self._install(self._read_or_seed())
+
+    def _install(self, config: Config) -> None:
+        """Make ``config`` current, and tell the plugin kernel which plugins
+        it switches off (so a toggle takes effect without a restart)."""
+        self._config = config
+        set_plugins_disabled(config.plugins_disabled)
 
     def get(self) -> Config:
         """The current config. Immutable — safe to hold and to compare."""
@@ -265,13 +272,13 @@ class ConfigStore:
         server was running. Derived objects pick the change up on their
         next access (mivnav.config.derived)."""
         with self._lock:
-            self._config = self._read()
+            self._install(self._read())
             return self._config
 
     def replace(self, config: Config) -> Config:
         with self._lock:
             self._write(config, previous=self._config)
-            self._config = config
+            self._install(config)
             return config
 
     def patch(self, patch: Mapping[str, Any], guard: Guard | None = None) -> Config:
@@ -288,7 +295,7 @@ class ConfigStore:
             if guard is not None:
                 guard(self._config, config)
             self._write(config, previous=self._config)
-            self._config = config
+            self._install(config)
             return config
 
     def _write(self, config: Config, previous: Config | None) -> None:

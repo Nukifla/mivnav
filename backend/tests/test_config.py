@@ -302,7 +302,7 @@ def test_poi_config_defaults_are_the_ingest_module_defaults(tmp_path: Path) -> N
 
     poi = PoiConfig()
     assert poi.overpass_url == DEFAULT_OVERPASS_URL
-    assert poi.min_zoom == DEFAULT_POI_MIN_ZOOM == 5
+    assert poi.min_zoom == DEFAULT_POI_MIN_ZOOM == 6
     assert poi.max_zoom == DEFAULT_POI_MAX_ZOOM == 14
 
 
@@ -371,10 +371,10 @@ def test_a_config_lacking_the_serving_knobs_loads_with_defaults(tmp_path: Path) 
     store.path.write_text(json.dumps(raw))
 
     oc = ConfigStore(store.path).get().ocharts
-    assert oc.over_zoom == DEFAULT_OVER_ZOOM == 4
-    assert oc.under_zoom == DEFAULT_UNDER_ZOOM == 4
+    assert oc.over_zoom == DEFAULT_OVER_ZOOM == 8
+    assert oc.under_zoom == DEFAULT_UNDER_ZOOM == 2
     assert oc.detail_gap == DEFAULT_DETAIL_GAP == 1
-    assert oc.max_cells_per_tile == DEFAULT_MAX_CELLS_PER_TILE == 48
+    assert oc.max_cells_per_tile == DEFAULT_MAX_CELLS_PER_TILE == 128
 
 
 def test_a_config_with_retired_finest_fill_keys_migrates_cleanly(tmp_path: Path) -> None:
@@ -403,7 +403,7 @@ def test_a_config_with_retired_finest_fill_keys_migrates_cleanly(tmp_path: Path)
     # the retired keys are gone (not attributes); the old serving_headroom
     # migrates to over_zoom (RENAMES); the new knobs default in
     assert oc.over_zoom == 5
-    assert oc.under_zoom == 4
+    assert oc.under_zoom == 2
     assert oc.detail_gap == 1
     assert not hasattr(oc, "finest_fill")
     assert not hasattr(oc, "serving_headroom")
@@ -750,11 +750,16 @@ def test_an_unknown_dataset_id_shape_is_rejected() -> None:
         Config.model_validate({"datasets": [{"id": "../escape", "provider": "poi", "name": "A"}]})
 
 
-def test_an_unknown_dataset_provider_is_rejected_at_the_schema_level() -> None:
-    # "weather" used to be the example here — #rktyytqx made it a real
-    # DatasetProvider, so this now needs a genuinely unknown string.
+def test_an_unknown_dataset_provider_still_loads() -> None:
+    # A plugin's provider: its datasets must survive the plugin being
+    # removed (inert), not stop the config loading.
+    config = Config.model_validate({"datasets": [{"id": "x", "provider": "gone_plugin", "name": "A"}]})
+    assert config.datasets[0].provider == "gone_plugin"
+
+
+def test_a_dataset_provider_must_be_a_safe_path_component() -> None:
     with pytest.raises(ValueError):
-        Config.model_validate({"datasets": [{"id": "x", "provider": "not-a-provider", "name": "A"}]})
+        Config.model_validate({"datasets": [{"id": "x", "provider": "../etc", "name": "A"}]})
 
 
 def test_data_root_defaults_and_round_trips(tmp_path: Path) -> None:

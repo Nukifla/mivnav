@@ -115,6 +115,29 @@ def test_a_restarted_service_serves_from_disk_without_rendering(tmp_path: Path) 
     second.close()
 
 
+def test_server_timing_names_the_tier_that_served_the_tile(tmp_path: Path) -> None:
+    """Server-Timing (mivnav.features.ocharts.timing): a fresh render, then
+    the RAM copy, then -- after a restart empties RAM -- the disk copy."""
+    from mivnav.features.ocharts import timing
+
+    def tier(svc: OchartsService) -> str:
+        _, header = timing.timed(lambda: svc.tile_all(7, 68, 40))
+        assert ";dur=" in header
+        return header.split(";")[0]
+
+    first = _service(tmp_path)
+    first._cut_tile_all = lambda z, x, y: b"mvt-bytes"
+    assert tier(first) == "render"
+    assert tier(first) == "ram"
+    first.close()
+
+    second = _service(tmp_path)
+    second._cut_tile_all = lambda z, x, y: pytest.fail("must come from disk")
+    assert tier(second) == "disk"
+    assert tier(second) == "ram"
+    second.close()
+
+
 def test_selection_settings_change_the_disk_version(tmp_path: Path) -> None:
     """A settings change rebuilds the service (emptying RAM) but the disk
     outlives it, so every byte-affecting knob must be in the version."""
@@ -465,3 +488,35 @@ def test_planning_matches_asking_every_cell_about_every_tile() -> None:
             cand |= {(x, y) for x in range(x0, x1 + 1) for y in range(y0, y1 + 1)}
         want += [(z, x, y) for x, y in sorted(cand) if _charting_cells(cells, z, x, y)]
     assert got == want and len(got) > 5
+
+
+def test_the_rust_planner_matches_the_python_one_on_real_coverages(tmp_path: Path) -> None:
+    """chartcore.charted_tiles plans real cells; _pretile_tiles_py is the
+    reference (pinned exhaustive above). Real chartcore.Coverage objects from
+    cell headers: overlapping, nested, and one with no coverage at all."""
+    import chartcore
+
+    from senc_fixture import point_cell
+
+    set_dir = tmp_path / "sets" / "set-A"
+    set_dir.mkdir(parents=True)
+    (set_dir / "keys.xml").write_text("<keyList><ChartInfo>Set A</ChartInfo></keyList>")
+    point_cell(set_dir / "A.senc", name="A", scale=90_000,
+               bounds=(10.0, 55.0, 11.5, 56.0), covr=(10.1, 55.1, 11.3, 55.9))
+    point_cell(set_dir / "B.senc", name="B", scale=22_000,
+               bounds=(10.9, 55.4, 11.9, 56.3), covr=(10.95, 55.45, 11.8, 56.2))
+    point_cell(set_dir / "C.senc", name="C", scale=12_000,
+               bounds=(10.5, 55.5, 10.6, 55.6), covr=(10.52, 55.52, 10.58, 55.58))
+    point_cell(set_dir / "D.senc", name="D", scale=12_000, bounds=(3.0, 51.0, 3.1, 51.1))
+    svc = _service(tmp_path, pretile_max_zoom=12)
+    try:
+        cells = [c for cs in svc.sets().values() for c in cs.cells]
+        assert len(cells) == 4
+        assert sum(isinstance(c.coverage, chartcore.Coverage) for c in cells) == 3
+        w = CellWarmer(svc, idle_grace=0.0, sweep_interval=60, startup_grace=0.0)
+        got = [tuple(t) for t in w._pretile_tiles()]
+        assert got == w._pretile_tiles_py(cells, 12)
+        assert sum(1 for t in got if t[0] == 12) > 100
+    finally:
+        svc.close()
+

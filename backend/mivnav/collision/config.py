@@ -31,16 +31,16 @@ class CollisionConfig(Frozen):
     """
 
     #: ``off`` / ``show`` / ``tell`` — see :data:`CpaMode`.
-    mode: CpaMode = "tell"
+    mode: CpaMode = "show"
     #: mivnav screens sound and vibrate for an unacknowledged alarm (``tell``
     #: only), whether or not it reached SignalK. Off = the screens only show
     #: it; a SignalK notification still sounds on the MFD, KIP etc.
     sound: bool = True
     #: Raise SignalK notifications at all. Off = the assessment still runs
     #: and every screen still shows and sounds it; nothing is written to SignalK.
-    publish: bool = True
+    publish: bool = False
     #: Red (``alarm``, sounds): a target passing closer than this ...
-    danger_nm: float = Field(default=0.3, gt=0)
+    danger_nm: float = Field(default=0.8, gt=0)
     #: ... within this many minutes.
     horizon_min: float = Field(default=15.0, gt=0)
     #: Yellow (``warn``, visual only): closer than this ...

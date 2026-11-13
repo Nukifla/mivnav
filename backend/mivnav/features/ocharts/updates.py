@@ -172,6 +172,12 @@ class Updater:
         # it tomorrow, and each attempt is the whole download again. In
         # memory only, so a restart (or a manual run) tries once more.
         self._failed: dict[tuple[str, str], str] = {}
+        # (chart id, edition) -> EULA id, for editions whose licence
+        # agreement changed: the install parked for a person to accept it
+        # (install.ST_EULA). Never accepted unattended, and — like a failure —
+        # not downloaded again unattended (a decline would otherwise mean a
+        # re-download every day); a manual run asks again.
+        self._awaiting: dict[tuple[str, str], str] = {}
 
     def status(self) -> dict:
         with self._lock:
@@ -181,7 +187,13 @@ class Updater:
                 "error": self._error,
                 "system_name": self._system_name,
                 "updates": [
-                    {**asdict(u), "failed": self._failed.get((u.chart_id, u.available_edition), "")}
+                    {
+                        **asdict(u),
+                        "failed": self._failed.get((u.chart_id, u.available_edition), ""),
+                        "awaiting_eula": self._awaiting.get(
+                            (u.chart_id, u.available_edition), ""
+                        ),
+                    }
                     for u in self._updates
                 ],
                 "installed": list(self._installed),
@@ -282,13 +294,27 @@ class Updater:
         self._set(state=ST_INSTALLING)
         for update in updates:
             key = (update.chart_id, update.available_edition)
-            if key in self._failed and not retry_failed:
+            if (key in self._failed or key in self._awaiting) and not retry_failed:
                 continue
+            if installer.parked():
+                # An install waits for a person to accept its licence
+                # agreement; it holds the installer until they decide.
+                break
             if stop is not None and stop.is_set():
                 return False
             error = self._install(installer, creds, update, stop)
             if error is None:
                 return False  # stopped mid-install; nothing to record yet
+            if not error and installer.parked():
+                eula = (installer.status().get("eula") or {}).get("id", "")
+                log.info(
+                    "o-charts update of %s to %s has a new licence agreement; "
+                    "waiting for it to be accepted",
+                    update.name, update.available_edition,
+                )
+                with self._lock:
+                    self._awaiting[key] = eula
+                break
             if error:
                 log.warning("o-charts update of %s failed: %s", update.name, error)
                 with self._lock:
@@ -302,6 +328,8 @@ class Updater:
                 self._failed.pop(key, None)
                 self._updates = [u for u in self._updates if u != update]
             self._record_installed(update.chart_id, update.name, update.available_edition)
+            with self._lock:
+                self._awaiting.pop(key, None)
         return True
 
     def _update_fnc(
@@ -334,6 +362,8 @@ class Updater:
             installed = fnc.installed_marker(sets_dir, region.id)
             if not fnc.update_available(version.as_dict(), installed):
                 continue
+            if installer.parked():
+                break  # an o-charts install waits for its licence agreement
             # The publisher's own identity for the bytes, as update_available
             # compares it: a new zip is a new key, and is tried.
             key = (f"fnc-{region.id}", version.etag or version.last_modified)

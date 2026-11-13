@@ -52,11 +52,50 @@ def test_migrate_renames_every_old_key() -> None:
         "rescan_interval_s": 7.5,
         "prefetch": False,
     }
-    assert out["weather"] == {
-        "cache_budget_bytes": 333,
-        "upstream_tiles_url": "https://tiles.example",
-        "upstream_forecast_url": "https://forecast.example",
-    }
+    # Weather is a plugin now: its old section moves, untouched, to its
+    # plugin block (the plugin renames its own keys — see its tests).
+    assert "weather" not in out
+    assert out["plugins"]["weather"] == OLD_WEATHER
+
+
+def test_migrate_keeps_an_existing_plugin_block_over_the_old_section() -> None:
+    out = migrate({"weather": {"a": 1}, "plugins": {"weather": {"b": 2}}})
+    assert "weather" not in out
+    assert out["plugins"] == {"weather": {"b": 2}}
+
+
+def test_migrate_moves_an_enabled_beta_routing_section_to_its_plugin() -> None:
+    """Autorouting is a plugin now: the old top-level ``routing`` section
+    moves to ``plugins.autorouting``; its ``beta_enabled`` switch is dropped,
+    and ``true`` means the plugin stays on."""
+    out = migrate({"routing": {"beta_enabled": True, "default_draft_m": 1.6}})
+    assert "routing" not in out
+    assert out["plugins"]["autorouting"] == {"default_draft_m": 1.6}
+    assert "autorouting" not in out.get("plugins_disabled", ())
+
+
+@pytest.mark.parametrize("section", [{}, {"beta_enabled": False}, {"beta_enabled": "yes"}])
+def test_migrate_switches_autorouting_off_unless_the_beta_was_on(section) -> None:
+    """The beta switch was off by default: moving it must not turn the
+    auto-router on for a boat that never had it."""
+    out = migrate({"routing": {**section, "algorithm": "graph"}})
+    assert "routing" not in out
+    assert out["plugins"]["autorouting"] == {"algorithm": "graph"}
+    assert out["plugins_disabled"] == ["autorouting"]
+
+
+def test_migrate_does_not_list_autorouting_twice_in_plugins_disabled() -> None:
+    out = migrate({"routing": {}, "plugins_disabled": ["weather", "autorouting"]})
+    assert out["plugins_disabled"] == ["weather", "autorouting"]
+    # Idempotent: a second pass (no routing section left) changes nothing.
+    assert migrate(out) == out
+
+
+def test_an_old_routing_section_loads_switched_off(tmp_path: Path) -> None:
+    path = write_config(tmp_path, {"routing": {"beta_enabled": False, "mivnav_beam_m": 3.0}})
+    config = ConfigStore(path).get()
+    assert config.plugins["autorouting"] == {"mivnav_beam_m": 3.0}
+    assert config.plugins_disabled == ("autorouting",)
 
 
 def test_migrate_does_not_mutate_its_argument() -> None:
@@ -68,7 +107,7 @@ def test_migrate_does_not_mutate_its_argument() -> None:
 def test_migrate_is_idempotent_on_a_new_document() -> None:
     new = {
         "ocharts": {"cell_budget_bytes": 1, "prefetch": True},
-        "weather": {"cache_budget_bytes": 2},
+        "plugins": {"weather": {"cache_budget_bytes": 2}},
         # every document the current code writes carries the notices slice
         # (without it, migrate_notices_datasets seeds the notices dataset)
         "notices": {"base_url": "https://niord.dma.dk"},
@@ -136,9 +175,8 @@ def test_an_old_config_file_loads_and_migrates(tmp_path: Path) -> None:
     assert config.ocharts.tile_budget_bytes == 222
     assert config.ocharts.rescan_interval_s == 7.5
     assert config.ocharts.prefetch is False
-    assert config.weather.cache_budget_bytes == 333
-    assert config.weather.upstream_tiles_url == "https://tiles.example"
-    assert config.weather.upstream_forecast_url == "https://forecast.example"
+    # Kept (opaque) for the weather plugin, installed or not.
+    assert config.plugins["weather"] == OLD_WEATHER
 
 
 def test_an_old_config_file_survives_a_reload(tmp_path: Path) -> None:

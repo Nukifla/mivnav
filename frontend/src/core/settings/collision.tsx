@@ -90,7 +90,7 @@ const field = (min: number, max: number, step: number): Control<SettingsCtx> => 
 
 const CPA_MODES: readonly CpaMode[] = ["off", "show", "tell"];
 const coerceMode = (raw: unknown): CpaMode =>
-  CPA_MODES.includes(raw as CpaMode) ? (raw as CpaMode) : "tell";
+  CPA_MODES.includes(raw as CpaMode) ? (raw as CpaMode) : "show";
 
 /** Defaults mirror `CollisionConfig` (and `DEFAULT_COLLISION_SETTINGS`). */
 export const COLLISION_SETTINGS: readonly Setting<SettingsCtx>[] = [
@@ -105,7 +105,7 @@ export const COLLISION_SETTINGS: readonly Setting<SettingsCtx>[] = [
     label: "Collision alarm",
     help: "Off draws no CPA lines and raises nothing. Show draws the CPA line to a close-passing target and shows the alarm, silently. Tell also sounds it. Also on the Tools menu.",
     order: 5,
-    default: "tell",
+    default: "show",
     coerce: coerceMode,
   }),
   collisionSetting({
@@ -123,8 +123,8 @@ export const COLLISION_SETTINGS: readonly Setting<SettingsCtx>[] = [
     label: "Alarm: closer than (nm)",
     help: "A target that will pass closer than this … (red on the chart; sounds in Tell)",
     order: 10,
-    default: 0.3,
-    coerce: (raw) => nm(raw, 0.3),
+    default: 0.8,
+    coerce: (raw) => nm(raw, 0.8),
   }),
   collisionSetting({
     key: "horizon_min",
@@ -168,8 +168,8 @@ export const COLLISION_SETTINGS: readonly Setting<SettingsCtx>[] = [
     label: "Raise on SignalK",
     help: "Also raise the alarm as a SignalK notification, so the MFD, KIP and other displays alarm too, and it keeps watching with every screen closed. Needs SignalK admin access (see SignalK).",
     order: 60,
-    default: true,
-    coerce: (raw) => coerceBoolean(raw, true),
+    default: false,
+    coerce: (raw) => coerceBoolean(raw, false),
   }),
   defineSetting<SettingsCtx>({
     id: "collision.feedback",

@@ -1,12 +1,9 @@
-// The route feature's command contribution — the route-editor launcher, plus
-// GO (moved here from `chrome/commands.ts` since a chart mode's launcher
-// belongs to the feature that owns the mode). GO is available only while
-// route-edit is active and carries no keybinding. Undo/Redo are gone with the
-// autorouting-only redesign: corrections are list actions (delete/reorder/Flip).
+// The route feature's command contribution: following a saved route by name,
+// skipping waypoints and stopping. The route editor's launcher, "New route"
+// and GO belong to the autorouting plugin, which owns that editor.
 
 import { defineCommand, type Command } from "../../core/chrome/command";
 import type { CommandDeps } from "../../core/chrome/commands";
-import { betaAutorouting } from "../../core/serverConfig";
 import type { Route } from "../../core/routes";
 import type { ParseResult, PromptSpec } from "../../core/chrome/command";
 import type { RoutesModel } from "./index";
@@ -28,42 +25,12 @@ export function pickRouteByName(routes: readonly Route[], raw: string): ParseRes
   return { ok: false, error: `${hits.length} routes match: ${names}${hits.length > 3 ? ", …" : ""}` };
 }
 
-/** Is the route editor the active mode? Gates the in-editor commands (and their
- * keybindings) so they neither clutter the palette nor fire outside the editor. */
-const editing = (deps: CommandDeps): boolean => deps.activeMode() === "route-edit";
-
-/** The route-editor launcher, and — while editing — Undo and GO. */
-export function routeCommands(deps: CommandDeps, model: RoutesModel): Command[] {
+/** The follow commands: pick a route by name; skip waypoints and stop while
+ * one is followed. (The route editor's own launcher and GO are the
+ * autorouting plugin's.) */
+export function routeCommands(_deps: CommandDeps, model: RoutesModel): Command[] {
   return [
-    defineCommand({
-      id: "mode-route",
-      label: deps.activeMode() === "route-edit" ? "Close route editor" : "Edit route",
-      group: "Chart modes",
-      hint: "Plan a route by tapping waypoints",
-      keywords: ["waypoint", "navigate", "plan", "leg"],
-      // The editor is the auto-router: hidden with "Beta autorouting" off.
-      enabled: betaAutorouting,
-      run: (ctx) => {
-        deps.toggleMode("route-edit");
-        ctx.close();
-      },
-    }),
-    // Seeds a BLANK draft regardless of any route being followed (the
-    // followed one keeps tracking) — same `newRoute` the route list's button calls.
-    defineCommand({
-      id: "route-new",
-      label: "New route",
-      group: "Chart modes",
-      hint: "Start a fresh blank route in the editor",
-      keywords: ["route", "new", "blank", "plan", "create", "waypoint"],
-      // The editor is the auto-router: hidden with "Beta autorouting" off.
-      enabled: betaAutorouting,
-      run: (ctx) => {
-        model.newRoute();
-        ctx.close();
-      },
-    }),
-    // Following, beta-independent (./follow.ts): pick a route by name; skip
+    // Following (./follow.ts): pick a route by name; skip
     // waypoints and stop while one is followed.
     defineCommand({
       id: "route-follow",
@@ -129,20 +96,6 @@ export function routeCommands(deps: CommandDeps, model: RoutesModel): Command[] 
       enabled: model.following,
       run: (ctx) => {
         void model.stopFollowing();
-        ctx.close();
-      },
-    }),
-    // Flushes the pending auto-save and names the nearest waypoint the active
-    // leg (invariant #8) — same `saveAndFollow` the sheet's GO button drives.
-    defineCommand({
-      id: "route-go",
-      label: "Follow this route (GO)",
-      group: "Chart modes",
-      hint: "Start following the route being edited",
-      keywords: ["go", "follow", "activate", "start", "route"],
-      enabled: () => editing(deps),
-      run: (ctx) => {
-        void model.saveAndFollow();
         ctx.close();
       },
     }),

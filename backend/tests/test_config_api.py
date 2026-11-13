@@ -292,11 +292,11 @@ def test_chart_detail_serving_knobs_are_live(
     o-charts service, so they live in its config slice: PATCHing one rebuilds
     the service carrying the new value, no restart."""
     service = runtime.feature("ocharts").service()
-    assert service.over_zoom == 4
-    assert service.under_zoom == 4
+    assert service.over_zoom == 8
+    assert service.under_zoom == 2
     assert service.detail_gap == 1
-    assert service.max_cells_per_tile == 48
-    assert service.chart_detail == 1.0
+    assert service.max_cells_per_tile == 128
+    assert service.chart_detail == 1.25
 
     client.patch(
         "/config",

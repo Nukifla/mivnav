@@ -3,7 +3,7 @@
  * line from its OWN layer only (via the C5 `scopedQuery` guard, scoped to
  * `ROUTE_LINE_LAYER`), builds a card with the route's name/distance/#waypoints
  * (+ live ETA while following) and a compact waypoint list, and its "Edit route"
- * action opens the editor on the route. Driven against a
+ * action opens the route planner's editor on the route (when one is registered). Driven against a
  * `queryRenderedFeatures`-shaped double, like poi/provider.test.ts.
  */
 
@@ -12,7 +12,6 @@ import type { MapGeoJSONFeature } from "maplibre-gl";
 import type { QueryableMap } from "../../core/info/queryGuard";
 import type { InfoDetail, InfoHit, InfoQuery } from "../../core/info/types";
 import { DEFAULT_PLAN_SPEED_KN, type Route } from "../../core/routes";
-import { setBetaAutoroutingForTest } from "../../core/serverConfig";
 import { ROUTE_LINE_LAYER } from "./layers";
 import { createRouteProvider, ROUTE_PROVIDER_ID, type RouteFollowMetrics } from "./provider";
 
@@ -46,6 +45,7 @@ interface ProviderOpts {
   editing?: boolean;
   following?: boolean;
   metrics?: RouteFollowMetrics | null;
+  /** A route planner is registered; its `editRoute` is this. */
   onEdit?: (r: Route) => void;
   activeRouteId?: string | null;
   onStop?: () => void;
@@ -58,7 +58,8 @@ const providerOver = (opts: ProviderOpts = {}) =>
     editing: () => opts.editing ?? false,
     following: () => opts.following ?? false,
     metrics: () => opts.metrics ?? null,
-    editRoute: opts.onEdit ?? (() => {}),
+    planner: () =>
+      opts.onEdit ? { editRoute: opts.onEdit, newRoute: () => {}, goTo: async () => true } : null,
     activeRouteId: () => opts.activeRouteId ?? null,
     stopFollowing: opts.onStop ?? (() => {}),
   });
@@ -99,7 +100,7 @@ describe("queryAt", () => {
       editing: () => false,
       following: () => false,
       metrics: () => null,
-      editRoute: () => {},
+      planner: () => null,
     });
     expect(p.queryAt(QUERY)).toEqual([]);
   });
@@ -152,14 +153,12 @@ describe("detail", () => {
     expect(rows.some((row) => row.label === "ETA")).toBe(false);
   });
 
-  test("no Edit route action while Beta autorouting is off", () => {
-    setBetaAutoroutingForTest(false);
+  test("no Edit route action with no route planner", () => {
     const detail = sync(providerOver({}).detail(hitFor(route())));
     expect(detail.actions?.find((a) => a.label === "Edit route")).toBeUndefined();
   });
 
-  test("the Edit route action opens the editor on the tapped route", () => {
-    setBetaAutoroutingForTest(true);
+  test("the Edit route action opens the planner's editor on the tapped route", () => {
     let edited: Route | null = null;
     const r = route();
     const detail = sync(providerOver({ onEdit: (x) => (edited = x) }).detail(hitFor(r)));
@@ -167,11 +166,9 @@ describe("detail", () => {
     expect(action).toBeDefined();
     action!.run();
     expect(edited).toBe(r);
-    setBetaAutoroutingForTest(false);
   });
 
-  test("Stop following is offered on the active route even with Beta autorouting off", () => {
-    setBetaAutoroutingForTest(false);
+  test("Stop following is offered on the active route even with no route planner", () => {
     let stopped = 0;
     const detail = sync(
       providerOver({ activeRouteId: "r1", onStop: () => stopped++ }).detail(hitFor(route())),
@@ -198,7 +195,7 @@ describe("detail", () => {
       editing: () => false,
       following: () => false,
       metrics: () => null,
-      editRoute: () => {},
+      planner: () => null,
       activeRouteId: () => null,
       stopFollowing: () => {},
       exportGpx: (x) => exported.push(x),

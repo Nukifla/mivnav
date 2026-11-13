@@ -93,7 +93,7 @@ const SearchPanel: Component<SearchPanelProps> = (props) => {
   });
 
   // Timer + AbortController, both torn down in onCleanup (same idiom as
-  // features/weather/mode.ts) so a fast retype can't land a stale response.
+  // the weather plugin's mode.ts) so a fast retype can't land a stale response.
   createEffect(() => {
     const q = query();
     if (!q.trim()) {

@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0-only
 """The POI source REGISTRY — the one place that knows which implementations
-of the ``poi`` provider exist (the POI counterpart of
-:mod:`mivnav.features.weather.sources`).
+of the ``poi`` provider exist.
 
 - ``"overpass"``: OpenStreetMap via an Overpass API, built in.
 - anything else: a :class:`PoiSource` contributed by a plugin
@@ -19,7 +18,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from mivnav.plugins import plugins
+from mivnav.plugins import active_plugins, plugins
 
 if TYPE_CHECKING:
     from pydantic import BaseModel
@@ -77,10 +76,12 @@ class PoiSource:
     extra_files: Callable[[Path, str], list[Path]] = field(default=lambda d, s: [])
 
 
-def poi_sources() -> dict[str, PoiSource]:
-    """Every plugin POI source by id (rebuilt per call — cheap)."""
+def poi_sources(*, include_disabled: bool = False) -> dict[str, PoiSource]:
+    """Every enabled plugin's POI source by id (rebuilt per call — cheap).
+    ``include_disabled``: a switched-off plugin's too — for cleaning up its
+    files, never for offering it."""
     out: dict[str, PoiSource] = {}
-    for plugin in plugins():
+    for plugin in plugins() if include_disabled else active_plugins():
         for source in plugin.poi_sources():
             if source.id == OVERPASS or source.id in out:
                 raise ValueError(f"duplicate POI source id {source.id!r}")

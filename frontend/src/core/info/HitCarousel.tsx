@@ -26,7 +26,7 @@ import { copyText } from "../clipboard";
 import { formatCoordinate } from "../coordinate";
 import { createPagerDrag, createScrubSelect, useSheetDrag } from "../gesture";
 import { isCompact } from "../media";
-import { betaAutorouting } from "../serverConfig";
+import { routePlanner } from "../routePlanner";
 import { SectionLabel } from "../ui/Text";
 import { createHitDetail, hitKey } from "./detail";
 import { HitIcon } from "./HitIcon";
@@ -531,10 +531,10 @@ export const HitSlide: Component<{
   const label = () => detail()?.title ?? props.hit()?.title;
   const canGo = () => (props.canGoHere ? props.canGoHere() : true);
   const following = () => (props.isFollowing ? props.isFollowing() : false);
-  // With "Beta autorouting" off, App wires the STRAIGHT-line Go to (no
-  // router, no hazard check) — the button says which one it is.
+  // With no route planner registered (core/routePlanner.ts), App wires the
+  // STRAIGHT-line Go to (no router, no hazard check) — the button says which.
   const goTitle = () =>
-    betaAutorouting() ? "Go here" : "Go to — straight line from the boat, not checked for hazards";
+    routePlanner() ? "Go here" : "Go to — straight line from the boat, not checked for hazards";
   const [armed, setArmed] = createSignal(false);
   const goHere = () => {
     const to = target();
@@ -618,7 +618,7 @@ export const HitSlide: Component<{
                     fallback={
                       <button
                         type="button"
-                        aria-label={betaAutorouting() ? "Go here" : "Go to"}
+                        aria-label={routePlanner() ? "Go here" : "Go to"}
                         title={goTitle()}
                         disabled={!canGo()}
                         class="flex size-7 items-center justify-center rounded text-accent hover:bg-line-2 active:bg-line-2 active:brightness-95 disabled:opacity-50 pointer-coarse:size-11 focus-ring"

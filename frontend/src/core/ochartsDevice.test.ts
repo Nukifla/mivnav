@@ -4,6 +4,10 @@ import type { ChartSet } from "./catalog";
 import {
   createOchartsDevice,
   defaultDeviceName,
+  DISCONNECT_GRACE_MS,
+  FAST_POLL_MS,
+  POLL_MS,
+  serverReachableAt,
   drawableSets,
   pendingEulaIds,
   seenText,
@@ -191,6 +195,120 @@ describe("the controller", () => {
     up = false;
     await d.refresh();
     expect(d.union()).toBe("all");
+  });
+});
+
+describe("no o-charts without a live connection (licence, plan W2)", () => {
+  test("unreachable only after the grace period, on either sign", () => {
+    const G = DISCONNECT_GRACE_MS;
+    expect(G).toBe(20_000);
+    expect(serverReachableAt(100_000, null, null)).toBe(true);
+    expect(serverReachableAt(100_000, 100_000 - G, null)).toBe(true); // a blip: not yet
+    expect(serverReachableAt(100_000, 100_000 - G - 1, null)).toBe(false);
+    expect(serverReachableAt(100_000, null, 100_000 - G - 1)).toBe(false);
+    expect(unionFor(ALLOWED, false)).toBe("free");
+    expect(unionFor(undefined, false)).toBe("free");
+  });
+
+  // A controller on a fake clock and tick timer, with a server that can be
+  // switched off, and the backend websocket's `linkDownSince` as a signal.
+  function harness() {
+    let t = 1_000_000;
+    let up = true;
+    let polls = 0;
+    let tick: () => void = () => {};
+    const [link, setLink] = createSignal<number | null>(null);
+    const fetchImpl = (async () => {
+      polls++;
+      if (!up) throw new TypeError("Failed to fetch");
+      return new Response(JSON.stringify(ALLOWED), { status: 200 });
+    }) as unknown as typeof fetch;
+    let cleared = 0;
+    const d = createOchartsDevice({
+      fetch: fetchImpl,
+      clearTiles: () => cleared++,
+      now: () => t,
+      setInterval: (fn) => {
+        tick = fn;
+        return 1;
+      },
+      clearInterval: () => {},
+    });
+    const flush = () => new Promise((r) => setTimeout(r, 0));
+    /** Advance the clock second by second, as the real 1 s tick would. */
+    const advance = async (ms: number) => {
+      for (let i = 0; i < ms / 1000; i++) {
+        t += 1000;
+        tick();
+        await flush();
+      }
+    };
+    return {
+      d,
+      link,
+      setLink,
+      advance,
+      flush,
+      now: () => t,
+      setUp: (v: boolean) => (up = v),
+      polls: () => polls,
+      cleared: () => cleared,
+    };
+  }
+
+  test("websocket down past the grace period → free; back up → all", async () => {
+    const h = harness();
+    const stop = h.d.start(h.link);
+    await h.flush();
+    expect(h.d.union()).toBe("all");
+
+    h.setUp(false);
+    h.setLink(h.now());
+    await h.advance(DISCONNECT_GRACE_MS);
+    expect(h.d.serverReachable()).toBe(true); // still within the grace
+    expect(h.d.union()).toBe("all");
+    await h.advance(2_000);
+    expect(h.d.serverReachable()).toBe(false);
+    expect(h.d.union()).toBe("free");
+    // Not the slot-loss path: the SW tile cache (free tiles only) is kept.
+    expect(h.cleared()).toBe(0);
+
+    // While lost it probes every few seconds, not once a minute.
+    const before = h.polls();
+    await h.advance(4 * FAST_POLL_MS);
+    expect(h.polls() - before).toBeGreaterThanOrEqual(3);
+
+    h.setUp(true);
+    h.setLink(null);
+    await h.advance(FAST_POLL_MS);
+    expect(h.d.serverReachable()).toBe(true);
+    expect(h.d.union()).toBe("all");
+    stop();
+  });
+
+  test("the status poll failing past the grace period → free, even with no websocket", async () => {
+    const h = harness();
+    const stop = h.d.start(); // no link wired: the poll alone decides
+    await h.flush();
+    h.setUp(false);
+    await h.advance(POLL_MS); // the next slow poll is the first to fail
+    expect(h.d.union()).toBe("all");
+    await h.advance(DISCONNECT_GRACE_MS + FAST_POLL_MS);
+    expect(h.d.union()).toBe("free");
+    h.setUp(true);
+    await h.advance(FAST_POLL_MS);
+    expect(h.d.union()).toBe("all");
+    stop();
+  });
+
+  test("a proxy's 502 for a stopped backend is a failure, not contact", async () => {
+    let t = 0;
+    const fetchImpl = (async () => new Response("bad gateway", { status: 502 })) as unknown as typeof fetch;
+    const d = createOchartsDevice({ fetch: fetchImpl, clearTiles: () => {}, now: () => t });
+    await d.refresh();
+    t += DISCONNECT_GRACE_MS + 1;
+    await d.refresh();
+    expect(d.union()).toBe("free");
   });
 });
 

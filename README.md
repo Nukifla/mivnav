@@ -1,7 +1,7 @@
 # mivnav
 
 A chart plotter for a sailing boat that runs in a web browser. A Raspberry Pi
-on board serves nautical charts, AIS, instruments and weather. Any phone,
+on board serves nautical charts, AIS and instruments. Any phone,
 tablet or laptop on the boat's network opens it in a browser. Nothing needs
 installing on those devices.
 
@@ -33,16 +33,18 @@ installing on those devices.
 - **Live boat data from [Signal K](https://signalk.org)** (what OpenPlotter
   ships): own ship, track, SOG/COG, AIS targets with CPA/TCPA collision
   alarms, and an autopilot remote.
-- **Routes**: plan them, follow them, and auto-route around land and hazards.
-  Routes are stored in Signal K, so other apps see them too.
-- **Anchor alarm**, **weather overlays** (wind, gusts, waves, pressure and
-  temperature forecasts from Open-Meteo, or GRIB files), **Notices to Mariners**, **points of
-  interest** (marinas, anchorages and fuel; more sources via plugins), search,
-  and a measuring tool.
+- **Routes and marks**: plan routes and follow them, and drop your own marks.
+  Both are stored in Signal K, so other apps see them too.
+- **Man overboard**: two taps mark the spot, raise the Signal K alarm and
+  offer to navigate back to it.
+- **Buddies**: follow friends' boats by MMSI. They stay on the chart after
+  they go out of AIS range.
+- **Anchor alarm**, **Notices to Mariners**, **points of interest** (marinas,
+  anchorages and fuel), search, and a measuring tool.
 - **Works on phones.** The UI suits touch screens, every screen on board can
   keep its own settings, and named profiles let you switch between them.
 - **Works offline.** The Pi keeps everything it has downloaded. You only need
-  internet to download or update charts, map regions and weather.
+  internet to download or update charts and map regions.
 
 | Dusk palette | On a phone | Chart library |
 |---|---|---|
@@ -56,8 +58,21 @@ installing on those devices.
 - **Signal K** on the Pi for live data (GPS, AIS, autopilot). OpenPlotter
   includes it. mivnav expects it at `localhost:3000`, and you can change that
   in the settings. Charts work without Signal K, but nothing live does.
+- These **Signal K plugins** for the features that use them (install them
+  from the Signal K App Store):
+  - [signalk-anchoralarm-plugin](https://www.npmjs.com/package/signalk-anchoralarm-plugin)
+    for the anchor alarm.
+  - An **autopilot provider plugin** for Signal K's v2 Autopilot API (we use
+    the pypilot one) for the autopilot remote.
+  - [@signalk/course-provider](https://www.npmjs.com/package/@signalk/course-provider)
+    so a followed route moves on to the next waypoint when you reach one.
+  - A **history plugin**, [signalk-parquet](https://www.npmjs.com/package/signalk-parquet)
+    or [signalk-to-influxdb2](https://www.npmjs.com/package/signalk-to-influxdb2),
+    for the past track. This needs signalk-server 2.25 or newer.
+  - Optionally [signalk-aiscast](https://www.npmjs.com/package/signalk-aiscast),
+    to see AIS targets from the internet as well as your own receiver.
 - **Internet on the Pi during installation.** After that it only needs
-  internet to download charts or weather.
+  internet to download charts.
 - A user account with `sudo` (on OpenPlotter that is the `pi` user).
 
 ## Install
@@ -148,8 +163,8 @@ journalctl -u mivnav -f      # live log
      sets and install them on this Pi. Registering the Pi uses one of the
      licence's device slots.
 2. **Download a basemap** under **Datasets** / **Regions**. Draw the area you
-   sail in, and the OpenStreetMap land, satellite imagery and weather for that
-   area will be available offline.
+   sail in, and the OpenStreetMap land and satellite imagery for that area
+   will be available offline.
 3. **Connect Signal K** under **SignalK**. The first time you connect, accept
    the access request in the Signal K admin UI. This lets mivnav write routes
    and control the autopilot.

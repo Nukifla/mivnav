@@ -1,7 +1,7 @@
 import { splitProps, type Component, type JSX } from "solid-js";
 
 /** All-caps section heading. A call site with a different tone/size
- * (RouteSheet's tighter tracking, a settings pane's `<h2>`) stays put. */
+ * (the route editor sheet's tighter tracking, a settings pane's `<h2>`) stays put. */
 export const SectionLabel: Component<JSX.HTMLAttributes<HTMLHeadingElement>> = (props) => {
   const [own, rest] = splitProps(props, ["class"]);
   return (

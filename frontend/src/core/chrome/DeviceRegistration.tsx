@@ -9,6 +9,7 @@ import { createEffect, createResource, createSignal, For, Show, type Component }
 import { Button } from "../ui/Button";
 import { useBackDismiss } from "./backStack";
 import { SHEET_Z } from "./Sheet";
+import { EulaFrame } from "./EulaFrame";
 import {
   defaultDeviceName,
   pendingEulaIds,
@@ -124,21 +125,6 @@ export const DeviceSlots: Component<{
     </div>
   );
 };
-
-/** One EULA, as the chart set ships it — sandboxed vendor HTML. */
-const EulaFrame: Component<{ id: string; sets: string[] }> = (props) => (
-  <div class="space-y-1">
-    <div class="text-xs text-fg-2">
-      Licence agreement for {props.sets.join(", ")}
-    </div>
-    <iframe
-      title={`Licence agreement for ${props.sets.join(", ")}`}
-      src={`/api/ocharts/eula/${encodeURIComponent(props.id)}`}
-      sandbox=""
-      class="h-[40dvh] w-full rounded border border-line bg-white"
-    />
-  </div>
-);
 
 const DeviceRegistration: Component<{
   device: OchartsDevice;

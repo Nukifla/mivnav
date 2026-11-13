@@ -10,6 +10,7 @@ import {
   untrack,
   type Accessor,
   type Component,
+  type JSX,
 } from "solid-js";
 import { Dynamic } from "solid-js/web";
 import maplibregl from "maplibre-gl";
@@ -26,17 +27,6 @@ import type { ChartSet } from "./core/catalog";
 import { drawingStatus, tileFault, tilesStalled, type TileTally } from "./core/splash";
 import { chartEpoch, registerChartProtocol } from "./core/chartProtocol";
 import { scaminBias } from "./core/serverConfig";
-import {
-  resolveWeatherRaster,
-  isDarkPalette,
-  sourceServes,
-  validTimeFor,
-  WEATHER_WASH_LAYER_ID,
-  WIND_VARIABLE,
-  type ResolvedWeatherRaster,
-} from "./features/weather/sources";
-import { WeatherReadoutBadge } from "./features/weather/ReadoutBadge";
-import { WEATHER_MODE_ID, type WeatherModeModel } from "./features/weather/mode";
 import type { GotoTarget } from "./core/chrome/commands";
 import type { CursorModel } from "./core/chrome/cursor";
 import type { MeasureModel } from "./features/measure";
@@ -52,8 +42,6 @@ import type { InfoAction, InfoHit, InfoPoint, InfoProvider } from "./core/info/t
 import type { AisVessel } from "./core/info/vessel";
 import { createInitialView, DEFAULT_ZOOM } from "./core/initialView";
 import { isCompact, prefersReducedMotion } from "./core/media";
-import { createWeatherOverlay } from "./features/weather/overlay";
-import { WindFlowOverlay } from "./features/weather/windFlow";
 import { ScaleBadgeControl } from "./core/map/scaleBadge";
 import { FpsCounter } from "./core/map/FpsCounter"; // TEMPORARY dev perf tool — remove me
 import { attachRouteDragging } from "./features/route/overlay";
@@ -105,7 +93,7 @@ import { CrosshairMarker } from "./core/map/CrosshairMarker";
 import { createFollowMoveGate, followMayRecentre, type FollowMoveEvent } from "./core/followGate";
 import { trackUserGestures, userGestureActive } from "./core/map/userGesture";
 import type { ChartKeyNav } from "./core/map/keyNav";
-import { pluginBandOverlayIds } from "./plugins";
+import { pluginBandOverlayIds, type PluginMapAttachment } from "./plugins";
 
 const METERS_PER_NM = 1852;
 const SCALE_MAX_WIDTH = 100; // px, matching MapLibre's ScaleControl default
@@ -241,8 +229,9 @@ interface MapViewProps {
   /** Boot failed rather than slowed: tiles came back failed, or none came.
    * Fired instead of `onReady`, which can still follow if tiles turn up. */
   onBootFault?: (text: string, detail: string) => void;
-  /** "Go here": route the boat straight to a point and follow it. Wired to
-   * `chrome/route.ts` `goTo`; `canGoHere` gates it on a fix. */
+  /** "Go here": route the boat to a point and follow it — the route
+   * planner's `goTo` when one is registered (core/routePlanner.ts), else the
+   * straight-line `goStraight`; `canGoHere` gates it on a fix. */
   goHere?: (to: InfoPoint, label?: string) => void;
   canGoHere?: Accessor<boolean>;
   /** Is a route currently FOLLOWED? So "Go here" confirms (two-tap) before
@@ -258,10 +247,9 @@ interface MapViewProps {
   addMark?: (at: InfoPoint) => void;
   /** Start the manual route editor with a pressed (open-water) point as point 1. */
   newRouteFrom?: (at: InfoPoint) => void;
-  /** Weather mode's model (`features/weather/mode.ts`). Given one, the chart
-   * feeds it the pointer (desktop) / centre crosshair (touch) while the mode
-   * is active, and draws its wind-at-cursor readout. */
-  weatherMode?: WeatherModeModel;
+  /** Plugins' map wiring (`PluginInstance.attachMap`, src/plugins.ts), run
+   * once the map exists. */
+  pluginMaps?: readonly ((map: maplibregl.Map) => PluginMapAttachment | void)[];
   /** FEATURE overlays (C4, `chrome/feature.ts`). Merged after `baseOverlays`;
    * z-order comes from each overlay's own `z` (layers/overlay.ts), not array
    * position. */
@@ -276,8 +264,8 @@ interface MapViewProps {
   providers?: readonly InfoProvider[];
   /** Extra buttons on a vessel's info panel. */
   vesselActions?: (v: AisVessel) => readonly InfoAction[];
-  /** Swap the global wind unit (m/s ⇄ kn). Wired to the weather readouts: the
-   * placed-marker value and the info-panel wind rows are tap-to-swap. */
+  /** Swap the global wind unit (m/s ⇄ kn). Wired to the wind readouts, which
+   * are tap-to-swap. */
   onToggleWindUnit?: () => void;
   /** Chrome registry, used ONLY to enumerate chart-mode tools (`reg.modes`)
    * for the PHONE tool stack. Absent → no tool stack. Toggling routes through
@@ -372,8 +360,11 @@ export function wireMap(
    * `mapStyle(props)`: the first post-`load` apply then skips an identical
    * re-apply, which is not free (maplibre serialises + validates + diffs). */
   constructedStyle?: string,
-): void {
+): PluginMapAttachment[] {
   const [loaded, setLoaded] = createSignal(false);
+  // Filled once the base wiring below is in place (see the end of this
+  // function); `resolveLayerIds` reads it lazily.
+  const pluginAttachments: PluginMapAttachment[] = [];
 
   // Permanently north-up: a rotated chart misreads bearings, so rotation is
   // disabled everywhere. Pinch-zoom survives — only its rotation half drops.
@@ -408,10 +399,6 @@ export function wireMap(
   // layer can't be JSON, and live GeoJSON must not be diffed away on setStyle.
   const sectorLayer = new SectorLightLayer();
 
-  // The wash's server-rendered tile source; a signal so `wireOverlays`' own
-  // tracked effect can read it reactively.
-  const [washRaster, setWashRaster] = createSignal<ResolvedWeatherRaster | null>(null);
-
   const overlayCtx: OverlayCtx = {
     settings: props.settings,
     signalk: props.signalk,
@@ -425,7 +412,6 @@ export function wireMap(
   // overlays here, but final stacking is each overlay's own `z`
   // (layers/overlay.ts) — SAFETY-CRITICAL z invariants live there, untouched.
   const baseOverlays: readonly Overlay[] = [
-    createWeatherOverlay({ raster: washRaster }),
     createSectorLightsOverlay(sectorLayer),
     aisOverlay,
     ownShipOverlay,
@@ -436,7 +422,6 @@ export function wireMap(
   // band membership is deliberate (#sonqwmry) — see
   // docs/architecture/mapview-layer-reorder.md.
   const BAND_OVERLAY_IDS = new Set([
-    "weather",
     "satellite",
     "poi",
     ...pluginBandOverlayIds(),
@@ -448,9 +433,9 @@ export function wireMap(
     const band = new Set([...BAND_OVERLAY_IDS, ...(props.bandOrder?.() ?? [])]);
     return overlays.filter((o) => !band.has(o.id));
   };
-  // A band id → its live maplibre layer ids. "weather" also carries the
-  // wind-flow particle layer; "enc:aids" also carries the sector-lights
-  // custom layer — both appended last so a drag moves them together.
+  // A band id → its live maplibre layer ids. "enc:aids" also carries the
+  // sector-lights custom layer, and a plugin's overlay whatever extra layers
+  // it names (`bandLayerIds`) — appended last so a drag moves them together.
   const resolveLayerIds = (id: string): string[] => {
     if (id.startsWith("enc:")) {
       const ids = encGroupLayerIds(map, id.slice(4) as EncGroupId);
@@ -462,7 +447,9 @@ export function wireMap(
     if (id === "openseamap") return map.getLayer?.("openseamap") ? ["openseamap"] : [];
     const ov = overlays.find((o) => o.id === id);
     const ids = ov ? [...ov.layerIds] : [];
-    if (id === "weather" && windFlow && map.getLayer?.(windFlow.layerId)) ids.push(windFlow.layerId);
+    for (const a of pluginAttachments) {
+      for (const lid of a.bandLayerIds?.(id) ?? []) if (map.getLayer?.(lid)) ids.push(lid);
+    }
     return ids;
   };
   // The anchor: the lowest fixed overlay layer present — the band is placed
@@ -525,72 +512,9 @@ export function wireMap(
   );
   createInitialView(map, { loaded, sets: visibleSets, self: props.signalk.self });
 
-  // Wash tile route is addressed by SOURCE ID + variable + instant (#qmnwrupv),
-  // no manifest fetch. `resolveWeatherRaster` returns null rather than
-  // substituting another source's data.
-  createEffect(() => {
-    const w = props.settings().weather;
-    const active = props.modes?.active() === WEATHER_MODE_ID;
-    const dark = isDarkPalette(props.settings().palette);
-    const on = active || w.keepVisible;
-    const source = props.weatherMode?.selected() ?? null;
-    setWashRaster(on ? resolveWeatherRaster(w, source, dark, Date.now()) : null);
-  });
-
-  // Wind-flow particles: a GPU particle sim rendered via a MapLibre custom
-  // layer (features/weather/windGpu.ts), so it tracks the camera for free.
-  // `WindFlowOverlay` fetches its own wind tiles directly. Created only
-  // against a REAL map (the test FakeMap has no `getCanvasContainer`).
-  const windFlow: WindFlowOverlay | undefined =
-    typeof map.getCanvasContainer === "function" && map.getCanvasContainer()
-      ? new WindFlowOverlay(map, {
-          reducedMotion: prefersReducedMotion,
-        })
-      : undefined;
-  onCleanup(() => windFlow?.destroy());
-
-  // A media-query flip on reduced-motion must re-evaluate whether the loop may run.
-  createEffect(() => {
-    prefersReducedMotion();
-    windFlow?.sync();
-  });
-
-  // Draws only the SELECTED source's own wind — #qmnwrupv deleted the "fall
-  // back to ICON" carve-out that silently drew a different dataset's wind.
-  createEffect(() => {
-    const w = props.settings().weather;
-    const active = props.modes?.active() === WEATHER_MODE_ID;
-    const source = props.weatherMode?.selected() ?? null;
-    const on = (active || w.keepVisible) && w.arrows && sourceServes(source, WIND_VARIABLE);
-    const time = on ? validTimeFor(source, w.hours, Date.now()) : null;
-    windFlow?.setEnabled(on && time !== null);
-    windFlow?.setSource(
-      on && time ? { sourceId: source!.id, variable: WIND_VARIABLE, time } : null,
-    );
-  });
-
-  // The wash's "is it still loading" flag for the sheet spinner. Runs
-  // regardless of the weather MODE (the overlay renders from persisted
-  // settings) but only tells the mode's model, if given.
-  const onWeatherData = (e?: { type?: string; sourceId?: string }) => {
-    // `sourcedata` fires for every source's every tile-load, so skip anything
-    // that isn't the wash; `idle` carries no sourceId and must always run —
-    // it's the catch-all for a load that finished between sourcedata events.
-    if (e?.type === "sourcedata" && e.sourceId !== WEATHER_WASH_LAYER_ID) return;
-    const loading =
-      !!map.getSource(WEATHER_WASH_LAYER_ID) && !map.isSourceLoaded(WEATHER_WASH_LAYER_ID);
-    props.weatherMode?.setTilesLoading(loading);
-  };
-  map.on("sourcedata", onWeatherData);
-  map.on("idle", onWeatherData);
-  onCleanup(() => {
-    map.off("sourcedata", onWeatherData);
-    map.off("idle", onWeatherData);
-  });
-
-  // Weather wash is NOT part of this style (applied imperatively elsewhere).
-  // Skip when content-equal to the last-applied style: a byte-identical
-  // re-emit used to remove+re-add the imperative weather sources, aborting fetches.
+  // Imperative overlays (a plugin's wash) are NOT part of this style. Skip
+  // when content-equal to the last-applied style: a byte-identical re-emit
+  // used to remove+re-add the imperative sources, aborting fetches.
   let lastStyleJson: string | undefined = constructedStyle;
   createEffect(() => {
     const style = mapStyle(props);
@@ -611,25 +535,36 @@ export function wireMap(
   // Outlines every o-charts cell's coverage (GET /api/debug/cells) so a detail
   // seam reads as a cell boundary rather than a tile edge. Added imperatively
   // and re-added on `style.load` so a settings-driven setStyle doesn't drop it.
+  // The licensed sets' outlines are o-charts data too (plan W12): the server
+  // only sends them to a screen that may see them, and the overlay follows the
+  // o-charts union — dropped and re-fetched when it changes, `?free=true` on
+  // the free union — so a lost device slot or a lost server
+  // (core/ochartsDevice.ts) clears them along with the licensed tiles.
   const CELL_SRC = "debug-cells";
   const CELL_LINE = `${CELL_SRC}-line`;
   const CELL_LABEL = `${CELL_SRC}-label`;
+  /** Bumped on every removal: a fetch begun before it must not add its answer. */
+  let cellGen = 0;
   const removeCellOverlay = (): void => {
+    cellGen++;
     if (typeof map.getLayer !== "function") return;
     for (const id of [CELL_LABEL, CELL_LINE]) if (map.getLayer(id)) map.removeLayer(id);
     if (map.getSource(CELL_SRC)) map.removeSource(CELL_SRC);
   };
   const addCellOverlay = async (): Promise<void> => {
     if (typeof map.addSource !== "function" || map.getSource(CELL_SRC)) return;
+    const gen = cellGen;
+    const free = props.ochartsUnion?.() === "free";
     let data: unknown;
     try {
-      const res = await fetch("/api/debug/cells");
+      const res = await fetch(`/api/debug/cells${free ? "?free=true" : ""}`, { cache: "no-store" });
       if (!res.ok) return;
       data = await res.json();
     } catch {
       return; // debug aid — a fetch failure just leaves the overlay off
     }
-    if (!props.debugCells() || !loaded() || map.getSource(CELL_SRC)) return; // toggled off mid-fetch
+    // Toggled off, or the union changed, mid-fetch.
+    if (gen !== cellGen || !props.debugCells() || !loaded() || map.getSource(CELL_SRC)) return;
     map.addSource(CELL_SRC, { type: "geojson", data } as maplibregl.GeoJSONSourceSpecification);
     map.addLayer({
       id: CELL_LINE,
@@ -652,8 +587,9 @@ export function wireMap(
     });
   };
   createEffect(() => {
+    props.ochartsUnion?.(); // tracked: a union change re-fetches (see above)
+    removeCellOverlay();
     if (props.debugCells() && loaded()) void addCellOverlay();
-    else removeCellOverlay();
   });
   map.on("style.load", () => {
     // setStyle drops non-style layers; re-add if the overlay is on.
@@ -783,15 +719,11 @@ export function wireMap(
       // the (always-present) boat anchor to the cursor across the whole app.
       if (measureActive()) props.measure?.hover(at);
       if (regionDrawActive()) props.regionDraw?.hover(at);
-      // Weather does NOT follow the desktop cursor — it is CLICK-to-place;
-      // only the mobile centre crosshair feeds it live, below.
     };
     const onOut = () => {
       props.cursor?.set(null);
       props.measure?.hover(null);
       props.regionDraw?.hover(null);
-      // Weather's placed marker persists on pointer-leave — it's a dropped
-      // pin, not a hover.
     };
     map.on("mousemove", onMove);
     map.on("mouseout", onOut);
@@ -831,21 +763,6 @@ export function wireMap(
     });
   }
 
-  if (props.weatherMode) {
-    const weather = props.weatherMode;
-    // A tap sets `at` on both surfaces; on mobile the weather sheet covers the
-    // bottom, so a hidden tap point scrolls into view.
-    createEffect(
-      on(
-        () => weather.at(),
-        (p) => {
-          if (!p || !isCompact()) return;
-          warpToReveal(map, p, measureObscured(map.getContainer()));
-        },
-      ),
-    );
-  }
-
   // In a mode the chart is an input surface. Set on the canvas directly
   // because MapLibre only writes cursor during a drag/hover — there's no API
   // for "the resting cursor".
@@ -855,6 +772,15 @@ export function wireMap(
     if (canvas) canvas.style.cursor = active ? "crosshair" : "";
   });
 
+  // Plugins' own map wiring (src/plugins.ts), under this same owner.
+  for (const attach of props.pluginMaps ?? []) {
+    const attachment = attach(map);
+    if (attachment) pluginAttachments.push(attachment);
+  }
+  // A plugin's custom layer may have been added after the band order was
+  // applied on `load`; re-seat once now.
+  if (loaded() && pluginAttachments.length) applyBandOrder();
+  return pluginAttachments;
 }
 
 // Transparent map-control treatment (no solid FAB fill): a chrome-coloured
@@ -888,7 +814,6 @@ const MapToolButton: Component<{
 
 const MapView: Component<MapViewProps> = (props) => {
   let container!: HTMLDivElement;
-  const weatherOn = () => props.modes?.active() === WEATHER_MODE_ID;
 
   // `attachInfoPanel`'s return, captured in onMount, so `showInfoHits` can
   // drive the SAME `InfoState.show()` a map tap does rather than re-querying
@@ -901,12 +826,6 @@ const MapView: Component<MapViewProps> = (props) => {
   // (region-draw, reachable only from Settings, kolmnrsk) are excluded here
   // but still enter/leave/pill through `modes` normally.
   const modeList = () => (props.reg ? [...props.reg.modes.values()].filter((m) => !isModeHidden(m)) : []);
-  // Wind-at-point sample at the anchor, or null while the debounced fetch is
-  // in flight/failed/has no point — drives WeatherReadoutBadge below.
-  const weatherPoint = () => props.weatherMode?.readout().point ?? null;
-  // The grid-sampled value (waves — a field the point-forecast API can't
-  // answer) the readout folds in once a tile has decoded.
-  const weatherSampled = () => props.weatherMode?.readout().sampled ?? null;
   const overlay = () => overlayColors(props.settings().palette);
   // Follow/centre controls stay mounted-but-disabled without a fix (mirroring
   // HitCarousel's "Go here") rather than vanishing with no explanation.
@@ -936,6 +855,8 @@ const MapView: Component<MapViewProps> = (props) => {
   // The same map as a SIGNAL, so JSX pinned markers can render the moment the
   // map exists. Kept apart from `mapRef` because reading that from JSX isn't reactive.
   const [readyMap, setReadyMap] = createSignal<maplibregl.Map>();
+  // Plugins' map chrome, from `wireMap`'s attachments.
+  const [pluginViews, setPluginViews] = createSignal<(() => JSX.Element)[]>([]);
 
   // Follow geometry against the LIVE map: where the boat projects on screen
   // and whether it's inside the margin-inset frame. ONE definition shared by
@@ -1170,7 +1091,8 @@ const MapView: Component<MapViewProps> = (props) => {
 
     if (import.meta.env.DEV) (window as { __mivnav?: object }).__mivnav = { map };
 
-    wireMap(map, props, initialStyleJson);
+    const attachments = wireMap(map, props, initialStyleJson);
+    setPluginViews(attachments.flatMap((a) => (a.view ? [a.view] : [])));
 
     // Boot readiness (see `onReady`). Registered after `wireMap` so its own
     // `load` handler has already applied the catalog's style when this runs.
@@ -1304,7 +1226,7 @@ const MapView: Component<MapViewProps> = (props) => {
       },
       // Cardinality 1: an open panel yields when a mode is entered.
       modeActive: () => !!props.modes?.active(),
-      // Getter: App drops `goHere` while "Beta autorouting" is off.
+      // Getter: read live, never captured.
       get goHere() {
         return props.goHere;
       },
@@ -1432,43 +1354,8 @@ const MapView: Component<MapViewProps> = (props) => {
   return (
     <div class="relative h-full w-full">
       <div ref={container} class="h-full w-full" />
-      {/* Weather marker: a dropped pin at the TAPPED point, not a cursor-follow
-          or fixed crosshair — the same `MapMarker` on both surfaces. On
-          mobile, wireMap scrolls the chart to reveal the point if the sheet
-          covers it (`warpToReveal`). */}
-      <Show when={readyMap()}>
-        {(map) => (
-          <MapMarker
-            map={map()}
-            lngLat={() => (weatherOn() ? (props.weatherMode?.at() ?? undefined) : undefined)}
-            class="pointer-events-none z-10"
-          >
-            {/* Readout badge floats above the crosshair via `bottom:100%`. */}
-            <Show when={weatherPoint()}>
-              {(pt) => (
-                <div
-                  style={{
-                    position: "absolute",
-                    bottom: "100%",
-                    left: "50%",
-                    transform: "translateX(-50%)",
-                    "margin-bottom": "6px",
-                  }}
-                >
-                  <WeatherReadoutBadge
-                    point={pt()}
-                    field={props.weatherMode!.weather().field}
-                    unit={props.settings().windUnit}
-                    sampled={weatherSampled()}
-                    onToggleUnit={props.onToggleWindUnit}
-                  />
-                </div>
-              )}
-            </Show>
-            <CrosshairMarker px={34} r={7} inner={9} outer={17} color={overlay().accent} halo={overlay().markerHalo} haloWidth={3.5} innerWidth={1.75} pop />
-          </MapMarker>
-        )}
-      </Show>
+      {/* Plugins' own map chrome (markers, badges) — `attachMap`'s views. */}
+      <For each={pluginViews()}>{(view) => view()}</For>
       {/* TEMPORARY: FPS/frame-time readout, dev/flag-gated. Remove with FpsCounter.tsx. */}
       <Show when={fpsDebugEnabled() && readyMap()}>
         {(map) => <FpsCounter map={map()} />}

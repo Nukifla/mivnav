@@ -10,6 +10,7 @@ pub mod decode;
 mod encode;
 pub(crate) mod mask;
 pub mod merge;
+pub mod plan;
 pub mod points;
 pub mod select;
 mod simplify;
@@ -779,7 +780,22 @@ pub fn coverage_tile_state(cov: &Coverage, zoom: u8, x: u32, y: u32) -> TileStat
     if (x as i64) >= n || (y as i64) >= n {
         return TileState::Uncovered;
     }
-    let Some(rings) = cov_rings_at_zoom(cov, zoom) else {
+    tile_state_with_rings(cov, cov_rings_at_zoom(cov, zoom).as_deref(), zoom, x, y)
+}
+
+/// [`coverage_tile_state`] given `cov_rings_at_zoom(cov, zoom)` already
+/// computed — that simplification is per cell and zoom, not per tile, so a
+/// caller asking about many tiles (the pre-render plan) does it once.
+/// The caller has checked `zoom` and `x`/`y` are on the grid.
+fn tile_state_with_rings(
+    cov: &Coverage,
+    rings: Option<&[Vec<WorldXy>]>,
+    zoom: u8,
+    x: u32,
+    y: u32,
+) -> TileState {
+    let n = 1i64 << zoom;
+    let Some(rings) = rings else {
         return TileState::Partial;
     };
     let ext = &cov.extent;

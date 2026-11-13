@@ -34,12 +34,20 @@ RENAMES: dict[str, dict[str, str]] = {
         "warm_overview": "prefetch",
         "serving_headroom": "over_zoom",
     },
-    "weather": {
-        "cache_budget": "cache_budget_bytes",
-        "tiles_url": "upstream_tiles_url",
-        "forecast_url": "upstream_forecast_url",
-    },
 }
+
+#: Top-level sections that became a plugin's settings block: ``section ->
+#: plugin id``, moved to ``plugins.<id>`` (when that block is not already
+#: set). Done here, not by the plugin, so a config that still has the old
+#: section loads — and keeps it — when the plugin is not installed.
+PLUGIN_SECTIONS: dict[str, str] = {"weather": "weather", "routing": "autorouting"}
+
+#: ``section -> flag``: an old :data:`PLUGIN_SECTIONS` section whose own
+#: on/off flag became the plugin's switch. The flag is dropped from the moved
+#: block, and unless it was ``true`` the plugin lands in ``plugins_disabled``
+#: — the beta autorouting switch was off by default, and moving it must not
+#: turn the auto-router on for a boat that never had it.
+PLUGIN_SECTION_SWITCHES: dict[str, str] = {"routing": "beta_enabled"}
 
 #: ``section -> {retired field names}``, stripped before validation
 #: (``extra="forbid"``). See docs/architecture/config-migrate.md (M-DATA-3).
@@ -118,6 +126,21 @@ def migrate(raw: Mapping[str, Any]) -> dict[str, Any]:
         out[section] = moved
     for section in RETIRED_SECTIONS:
         out.pop(section, None)
+    for section, plugin_id in PLUGIN_SECTIONS.items():
+        if section not in out:
+            continue
+        block = out.pop(section)
+        plugins = dict(out.get("plugins") or {})
+        if plugin_id not in plugins and isinstance(block, Mapping):
+            moved = dict(block)
+            switch = PLUGIN_SECTION_SWITCHES.get(section)
+            if switch is not None and moved.pop(switch, False) is not True:
+                disabled = list(out.get("plugins_disabled") or ())
+                if plugin_id not in disabled:
+                    disabled.append(plugin_id)
+                out["plugins_disabled"] = disabled
+            plugins[plugin_id] = moved
+        out["plugins"] = plugins
     out = drop_retired_provider_datasets(out)
     out = migrate_notices_datasets(out)
     return migrate_region_ids(out)

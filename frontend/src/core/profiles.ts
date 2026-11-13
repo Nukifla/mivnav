@@ -6,15 +6,7 @@ import { batch, createSignal, type Accessor } from "solid-js";
 import { PALETTES, type Palette } from "./style/colors";
 import { coerceEncGroups } from "./style/encGroups";
 import { DEFAULT_SETTINGS, normalizedContours, type ChartSettings } from "./style/settings";
-import {
-  DEFAULT_WEATHER,
-  isWeatherField,
-  isWeatherModel,
-  WEATHER_HOUR_STEP,
-  WEATHER_MAX_HOURS,
-  type WeatherFieldId,
-  type WeatherSettings,
-} from "./weatherSettings";
+import { coercePluginSettings } from "./pluginSettings";
 
 /** A profile as the backend returns it. `settings` is `unknown` on purpose:
  * the backend stores the blob verbatim and never looks inside it, so on the
@@ -133,34 +125,6 @@ function pickBoolean(raw: Record<string, unknown>, key: keyof ChartSettings, fal
   return typeof value === "boolean" ? value : fallback;
 }
 
-/** The weather block, coerced field by field: every key validated against the
- * current model/field vocabulary, an unknown one falling back to the default
- * rather than keying an absent model. */
-function weatherFromProfile(blob: unknown): WeatherSettings {
-  const raw =
-    blob !== null && typeof blob === "object" && !Array.isArray(blob)
-      ? (blob as Record<string, unknown>)
-      : {};
-  const field: WeatherFieldId = isWeatherField(raw.field) ? raw.field : DEFAULT_WEATHER.field;
-  const hours =
-    typeof raw.hours === "number" && Number.isFinite(raw.hours)
-      ? Math.max(0, Math.min(WEATHER_MAX_HOURS, Math.round(raw.hours / WEATHER_HOUR_STEP) * WEATHER_HOUR_STEP))
-      : DEFAULT_WEATHER.hours;
-  const opacity =
-    typeof raw.opacity === "number" && Number.isFinite(raw.opacity)
-      ? Math.max(0, Math.min(1, raw.opacity))
-      : DEFAULT_WEATHER.opacity;
-  return {
-    model: isWeatherModel(raw.model) ? raw.model : DEFAULT_WEATHER.model,
-    field,
-    arrows: typeof raw.arrows === "boolean" ? raw.arrows : DEFAULT_WEATHER.arrows,
-    hours,
-    keepVisible:
-      typeof raw.keepVisible === "boolean" ? raw.keepVisible : DEFAULT_WEATHER.keepVisible,
-    opacity,
-  };
-}
-
 /** `{layer id: visible}`, non-boolean entries dropped. */
 function coercePluginLayers(raw: unknown): Record<string, boolean> {
   if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return {};
@@ -219,7 +183,8 @@ export function settingsFromProfile(blob: unknown): ChartSettings {
     noticesPermanent: pickBoolean(raw, "noticesPermanent", DEFAULT_SETTINGS.noticesPermanent),
     noticesFiring: pickBoolean(raw, "noticesFiring", DEFAULT_SETTINGS.noticesFiring),
     noticesShowEnded: pickBoolean(raw, "noticesShowEnded", DEFAULT_SETTINGS.noticesShowEnded),
-    weather: weatherFromProfile(raw.weather),
+    // A plugin's slice via its own coercer; an unregistered one verbatim.
+    pluginSettings: coercePluginSettings(raw),
     // `layerOrder`'s members are validated to strings; a bad entry is dropped,
     // the surviving ids still order their layers.
     encGroups: coerceEncGroups(raw.encGroups),

@@ -29,7 +29,7 @@ export interface SatelliteSourceInfo {
 
 /** CONFIGURED imagery upstream (`GET /api/ingest/satellite/sources`) — the
  * bake-FROM configuration surface, not consumption (decision D1,
- * `docs/weather-sources-design.md`). The map/overlay never reads this. */
+ * the weather plugin's `docs/weather-sources-design.md`). The map/overlay never reads this. */
 export interface SatelliteSource {
   id: string;
   name: string;

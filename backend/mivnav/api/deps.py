@@ -255,6 +255,13 @@ class Runtime:
         # in place — true by construction.
         self.dataset_runners = DatasetRunnerManager(self.provider_registry)
 
+    def feature_spec(self, feature_id: str) -> Feature | None:
+        """The registration of ``feature_id`` (``None``: not registered)."""
+        return next((f for f in self._feature_specs if f.id == feature_id), None)
+
+    def feature_specs(self) -> tuple[Feature, ...]:
+        return self._feature_specs
+
     def feature(self, feature_id: str) -> FeatureRuntime:
         """This provider's own runtime object. Callers cast to the concrete
         type they registered — stays untyped here since this class must not

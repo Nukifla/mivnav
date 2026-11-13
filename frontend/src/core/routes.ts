@@ -15,7 +15,7 @@ export interface Waypoint {
   lon: number;
   /** Was the LEG ARRIVING at this waypoint a straight-line stand-in
    * `POST /routing/plan` could not actually verify (`PlanResult.
-   * approximateLegs`, `features/route/index.ts`'s `routeFromPlan`)?
+   * approximateLegs`, the autorouting plugin's `routeFromPlan`)?
    * Optional — absent (treated as `false`) for a route saved before this
    * field existed, or any waypoint a person placed by hand. #owqqcdqe,
    * 2026-08-10: this used to live ONLY in an ephemeral signal, gone the

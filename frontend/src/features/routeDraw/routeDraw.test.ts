@@ -477,7 +477,7 @@ const ids = (r: Route | null) => r?.waypoints.map((w) => w.id) ?? [];
 const flush = () => new Promise((r) => setTimeout(r, 0));
 
 describe("routeDraw model", () => {
-  test("the mode is visible regardless of beta autorouting and is not solo", () => {
+  test("the mode is visible regardless of the route planner and is not solo", () => {
     const h = harness();
     expect(h.mode.hidden).toBeUndefined();
     expect(h.mode.solo).toBeFalsy();

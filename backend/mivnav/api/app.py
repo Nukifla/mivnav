@@ -20,6 +20,8 @@ from mivnav.api.datasets import router as datasets_router
 from mivnav.api.deps import get_runtime
 from mivnav.api.features import FEATURES
 from mivnav.api.ingest import router as ingest_router
+from mivnav.api.plugins import plugin_gate
+from mivnav.api.plugins import router as plugins_router
 from mivnav.api.providers import router as providers_router
 from mivnav.api.search import router as search_router
 from mivnav.api.signalk import router as signalk_router
@@ -32,9 +34,7 @@ from mivnav.data.scheduler import DatasetScheduler
 from mivnav.shallow.publisher import ShallowPublisher
 from mivnav.features.ocharts.runtime import start_ocharts_at_boot
 from mivnav.features.ocharts.updates import UpdateLoop
-from mivnav.features.osm_world import close_live_http_client
 from mivnav.features.route.watcher import NavWatcher
-from mivnav.features.weather import close_http_client
 from mivnav.system import current_version
 
 log = logging.getLogger(__name__)
@@ -97,8 +97,12 @@ async def _lifespan(fastapi_app: FastAPI) -> AsyncIterator[None]:
         mob.stop()
         scheduler.stop()
         chart_updates.stop()
-        await close_http_client()  # weather proxy's process-wide pool
-        await close_live_http_client()  # osm_world live-cache fallback's pool
+        for feature in FEATURES:
+            if feature.shutdown is not None:
+                try:
+                    await feature.shutdown()
+                except Exception:  # noqa: BLE001 — one feature must not stop the rest
+                    log.exception("shutdown of feature %s failed", feature.id)
         if owns_runtime:
             runtime.close()
 
@@ -109,10 +113,14 @@ app.include_router(config_router)
 # Every registered feature mounts all of its routers via one loop over
 # FEATURES; see docs/architecture/api-app-composition.md.
 for _feature in FEATURES:
+    # A plugin's routes answer 404 while it is switched off (mivnav.plugins).
+    _gate = plugin_gate(_feature.id)
     for _router in _feature.routers:
-        app.include_router(_router)
+        app.include_router(_router, dependencies=[_gate] if _gate is not None else None)
 # Unified data-layer status surface (M-DATA-1); see mivnav.api.providers.
 app.include_router(providers_router)
+# Installed plugins and their on/off switch (Settings → Plugins).
+app.include_router(plugins_router)
 # Generic declared-dataset API (M-DATA-3's follow-on) — the only way to
 # declare/trigger a POI or satellite bake; see mivnav.api.datasets.
 app.include_router(datasets_router)

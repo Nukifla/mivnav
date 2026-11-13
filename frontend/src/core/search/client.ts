@@ -76,7 +76,7 @@ function approxDistanceM(a: { lng: number; lat: number }, b: { lng: number; lat:
  */
 export async function nearestPlace(
   point: { lng: number; lat: number },
-  // Same narrow shape `core/routing.ts`'s `PlanFetch` uses (not `typeof
+  // Same narrow shape the autorouting plugin's `PlanFetch` uses (not `typeof
   // fetch` — its extra overloads make a plain `(url, init) => Promise<Response>`
   // test double, or `routing.ts`'s own `fetchImpl`, fail to typecheck against it).
   fetchImpl: (input: string, init?: RequestInit) => Promise<Response> = fetch,

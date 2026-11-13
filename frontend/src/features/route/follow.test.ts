@@ -11,7 +11,6 @@ import type { Notice } from "../../core/chrome/notices";
 import type { SignalKState } from "../../core/signalk";
 import type { InfoAction } from "../../core/info/types";
 import { DESK, type ReadCtx } from "../../core/chrome/registry";
-import { setBetaAutoroutingForTest } from "../../core/serverConfig";
 import { createRoutes, GO_HERE_ROUTE_ID, type ArrivalNotice } from "./index";
 import { followStartIndex, skipTarget } from "./follow";
 import { pickRouteByName } from "./commands";
@@ -108,9 +107,8 @@ describe("skipTarget", () => {
   });
 });
 
-describe("follow (beta autorouting OFF)", () => {
+describe("follow (no route planner)", () => {
   test("a manual route followed via Follow publishes the nearest-leg-ahead waypoint", async () => {
-    setBetaAutoroutingForTest(false);
     await createRoot(async (dispose) => {
       const h = harness({ lng: 0.5, lat: 1.05 });
       const r = h.client.routes()[0]!;
@@ -274,8 +272,7 @@ describe("Go to — the straight line (no autorouter)", () => {
 });
 
 describe("the route card's follow controls", () => {
-  test("followed: Next/Previous/Start at/Stop, the target marked; none of it beta-gated", async () => {
-    setBetaAutoroutingForTest(false);
+  test("followed: Next/Previous/Start at/Stop, the target marked; none of it planner-gated", async () => {
     await createRoot(async (dispose) => {
       const h = harness({ lng: 0, lat: 0 });
       await h.model.follow(h.client.routes()[0]!); // target b

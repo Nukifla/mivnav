@@ -44,18 +44,33 @@ from mivnav.collision.config import CollisionConfig
 from mivnav.gnss.config import GnssConfig
 from mivnav.shallow.config import ShallowConfig
 from mivnav.features.route.config import NavConfig
-from mivnav.features.routing.config import RoutingConfig
 from mivnav.features.satellite.config import SatelliteConfig
 from mivnav.features.track.config import TrackConfig
-from mivnav.features.weather.config import WeatherConfig
 from mivnav.geo import countries
+from mivnav.plugins import plugin_dataset_providers
 
-#: The provider ids a :class:`DatasetConfig` may name. Hardcoded (kernel may
-#: not import the feature registry, see ``backend/.importlinter``), plus
-#: ``"charts"``. ``"osm"`` was retired; see docs/architecture/config-model.md.
-DatasetProvider = Literal[
-    "charts", "poi", "satellite", "ocharts", "weather", "osm_world", "notices"
-]
+#: The built-in provider ids a :class:`DatasetConfig` may name. Hardcoded
+#: (kernel may not import the feature registry, see ``backend/.importlinter``),
+#: plus ``"charts"``. ``"osm"`` was retired; see docs/architecture/config-model.md.
+#: A plugin adds its own (``Plugin.dataset_providers``): see
+#: :func:`dataset_providers`.
+CORE_DATASET_PROVIDERS: tuple[str, ...] = (
+    "charts", "poi", "satellite", "ocharts", "osm_world", "notices"
+)
+
+#: Kept in step with ``mivnav.config.migrate.RETIRED_PROVIDERS``.
+_RETIRED_DATASET_PROVIDERS = frozenset({"osm"})
+
+#: A dataset provider id — a built-in one or a plugin's.
+DatasetProvider = str
+
+
+def dataset_providers() -> tuple[str, ...]:
+    """Every provider id a dataset may be declared with: the built-in ones
+    plus every installed plugin's."""
+    return CORE_DATASET_PROVIDERS + tuple(
+        p for p in plugin_dataset_providers() if p not in CORE_DATASET_PROVIDERS
+    )
 
 # Each per-feature config SLICE class lives in its own feature directory
 # (allow-listed kernel->feature edges in backend/.importlinter); Config
@@ -274,7 +289,10 @@ class DatasetConfig(Frozen):
     """
 
     id: str = Field(min_length=1)
-    provider: DatasetProvider
+    #: A built-in provider or a plugin's. Not checked against the installed
+    #: plugins here: a dataset of a plugin that has since been removed (or is
+    #: switched off) must still load, inert, rather than break the config.
+    provider: DatasetProvider = Field(min_length=1)
     name: str = Field(min_length=1)
     region_id: str | None = None
     mode: DatasetMode = "bake"
@@ -293,6 +311,17 @@ class DatasetConfig(Frozen):
     @classmethod
     def _safe_id(cls, value: str) -> str:
         return _validate_safe_id("dataset", value, shape="a safe single path component")
+
+    @field_validator("provider")
+    @classmethod
+    def _safe_provider(cls, value: str) -> str:
+        # A path component too (``data_root/<provider>/<id>``).
+        value = _validate_safe_id("dataset provider", value, shape="a safe single path component")
+        if value in _RETIRED_DATASET_PROVIDERS:
+            # Dropped on READ (mivnav.config.migrate); a PATCH still naming
+            # one is a stale client.
+            raise ValueError(f"dataset provider {value!r} was retired")
+        return value
 
 
 def first_start_datasets() -> tuple[DatasetConfig, ...]:
@@ -480,8 +509,9 @@ class SignalKCredentials(Frozen):
 class RouteIQCredentials(Frozen):
     """The write token for a signalk-routeiq plugin's own HTTP API
     (``/plugins/signalk-routeiq/router/...``) — the alternative routing
-    ALGORITHM (``mivnav.features.routing.config.RoutingConfig.algorithm ==
-    "routeiq"``), not the boat's own SignalK connection.
+    ALGORITHM (the autorouting plugin's ``algorithm == "routeiq"``,
+    ``plugins/autorouting/backend/config.py``), not the boat's own SignalK
+    connection. Kept in core so the credentials file stays core-only.
 
     A SEPARATE credential from :class:`SignalKCredentials` above, on
     purpose, even though both are obtained from — and typically point at —
@@ -529,8 +559,8 @@ class Config(Frozen):
     version: int = CONFIG_VERSION
     ocharts: OchartsConfig = Field(default_factory=OchartsConfig)
     # The one boat-wide root every dataset-owning provider's directory sits
-    # under (M-DATA-3). `weather.cache_dir` NOT folded in — a fetch-through
-    # cache, not a dataset.
+    # under (M-DATA-3). A fetch-through cache (osm_world's live cache, a
+    # plugin's) is not folded in — not a dataset.
     data_root: Path = Field(default_factory=default_data_root)
     poi: PoiConfig = Field(default_factory=PoiConfig)
     osm_world: OsmWorldConfig = Field(default_factory=OsmWorldConfig)
@@ -547,8 +577,6 @@ class Config(Frozen):
     #: The shallow-water alarm (server-side, published to SignalK like the
     #: collision alarm) — see :mod:`mivnav.shallow`.
     shallow: ShallowConfig = Field(default_factory=ShallowConfig)
-    routing: RoutingConfig = Field(default_factory=RoutingConfig)
-    weather: WeatherConfig = Field(default_factory=WeatherConfig)
     track: TrackConfig = Field(default_factory=TrackConfig)
     notices: NoticesConfig = Field(default_factory=NoticesConfig)
     updates: UpdatesConfig = Field(default_factory=UpdatesConfig)
@@ -558,7 +586,7 @@ class Config(Frozen):
     # it doesn't tear down and re-dial the boat's SignalKService.
     signalk_client_id: str = ""
     # `signalk_client_id`'s twin for the RouteIQ access-request grant
-    # (`RouteIQCredentials`, `mivnav.features.routing.routeiq`) — a
+    # (`RouteIQCredentials`; used by the autorouting plugin's `routeiq.py`) — a
     # SEPARATE device identity, minted independently the first time THAT
     # flow runs, so the two grants stay independently revocable in the
     # SignalK admin even though both typically point at the same box. Same
@@ -580,6 +608,9 @@ class Config(Frozen):
     #: plugin id. Opaque here: the plugin validates its own block, so a
     #: config written while a plugin was installed still loads without it.
     plugins: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    #: Installed plugins switched off (by id) — Settings → Plugins. A plugin
+    #: listed here stays installed but serves nothing (``mivnav.plugins``).
+    plugins_disabled: tuple[str, ...] = Field(default_factory=tuple)
 
     @model_validator(mode="after")
     def _datasets_are_well_formed(self) -> "Config":

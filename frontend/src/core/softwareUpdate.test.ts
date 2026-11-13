@@ -3,7 +3,7 @@
  * controller's watch loop across a server restart.
  *
  * Driven with injected seams (no DOM, no network, no real time), the same way
- * `mivnavBuild.test.ts` drives its build loop. The Software section itself
+ * the autorouting plugin's `mivnavBuild.test.ts` drives its build loop. The Software section itself
  * (`settings/Software.tsx`) is a thin renderer over this controller.
  *
  * NB: needs `--conditions=browser` (the `test` script passes it).

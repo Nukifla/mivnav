@@ -14,8 +14,11 @@ import { DEFAULT_COLLISION_SETTINGS, type CollisionSettings } from "../collision
 /** The boat's collision settings with `patch` applied, as `CoreDeps.collision`. */
 const boat = (patch: Partial<CollisionSettings>) => (): CollisionSettings => ({
   ...DEFAULT_COLLISION_SETTINGS,
+  mode: "tell",
   ...patch,
 });
+/** The loud path most `ais.cpa` tests describe (the default is `show`). */
+const TELL = boat({});
 import { computeCpa, knotsFromMs, type RiskThresholds } from "../cpa";
 import { formatCpaNm, formatSpeedKn, formatTcpa, padDeg } from "../format";
 import { createRegistry, readInstrument, urgencyOf, alerts, type Instrument, type ReadCtx } from "./registry";
@@ -30,7 +33,7 @@ const HELM: ReadCtx = { density: 1, band: "rail" };
 const KN_TO_MS = 1 / 1.943844;
 
 /** The server's alarm defaults (`mivnav.collision.config.CollisionConfig`). */
-const SERVER_THRESHOLDS: RiskThresholds = { redCpaNm: 0.3, redTcpaMin: 15, yellowCpaNm: 1, yellowTcpaMin: 30 };
+const SERVER_THRESHOLDS: RiskThresholds = { redCpaNm: 0.8, redTcpaMin: 15, yellowCpaNm: 1, yellowTcpaMin: 30 };
 const RANK = { red: 3, yellow: 2, green: 1, unknown: 0 } as const;
 
 /** A stand-in for the server's assessment (`mivnav.collision.assess`, which
@@ -343,7 +346,7 @@ describe("ais.cpa", () => {
   test("reads the worst threat, and sheds the hundredth and the aspect at helm", () =>
     createRoot((dispose) => {
       const { state } = fakeSignalK({ self: OWN_N, targets: [RED] });
-      const f = core({ signalk: state });
+      const f = core({ signalk: state, collision: TELL });
       const desk = byId(f, "ais.cpa").read(DESK);
       const helm = byId(f, "ais.cpa").read(HELM);
       expect(desk.unit).toBe("nm");
@@ -364,14 +367,14 @@ describe("ais.cpa", () => {
   test("is granted `alarm`, and asks for exactly what classifyRisk decided", () =>
     createRoot((dispose) => {
       const { state, setTargets } = fakeSignalK({ self: OWN_N, targets: [RED] });
-      const f = core({ signalk: state });
+      const f = core({ signalk: state, collision: TELL });
       const cpa = byId(f, "ais.cpa");
       expect(cpa.maxUrgency).toBe("alarm");
       expect(urgencyOf(cpa)).toBe("alarm");
 
-      // The same collision, pushed out to a 0.6 nm miss: inside the yellow
-      // 1.0 nm, outside the red 0.3 nm.
-      setTargets([{ ...RED, lng: OWN_N.lng + 0.018 }]);
+      // The same collision, pushed out to a 0.9 nm miss: inside the yellow
+      // 1.0 nm, outside the red 0.8 nm.
+      setTargets([{ ...RED, lng: OWN_N.lng + 0.027 }]);
       expect(urgencyOf(cpa)).toBe("notice");
 
       setTargets([]);
@@ -383,7 +386,7 @@ describe("ais.cpa", () => {
   test("a red target fires the reserved alarm strip, and names the ship", () =>
     createRoot((dispose) => {
       const { state } = fakeSignalK({ self: OWN_N, targets: [RED] });
-      const reg = createRegistry([core({ signalk: state })]);
+      const reg = createRegistry([core({ signalk: state, collision: TELL })]);
       const fired = alerts(reg);
       expect(fired).toHaveLength(1);
       expect(fired[0].id).toBe("ais.cpa");
@@ -421,11 +424,12 @@ describe("ais.cpa", () => {
         dispose();
       }));
 
-    test("absent collision settings default to tell — an unwired caller alarms as before", () =>
+    test("absent collision settings are the defaults: show — drawn, silent", () =>
       createRoot((dispose) => {
         const { state } = fakeSignalK({ self: OWN_N, targets: [RED] });
-        const reg = createRegistry([core({ signalk: state })]);
-        expect(alerts(reg)).toHaveLength(1);
+        const f = core({ signalk: state });
+        expect(alerts(createRegistry([f]))).toHaveLength(0);
+        expect(urgencyOf(byId(f, "ais.cpa"))).toBe("notice");
         dispose();
       }));
   });
@@ -439,7 +443,7 @@ describe("ais.cpa", () => {
   test("reads the server's threat, not its own geometry", () =>
     createRoot((dispose) => {
       const { state, setCollision } = fakeSignalK({ self: OWN_N, targets: [RED] });
-      const reg = createRegistry([core({ signalk: state })]);
+      const reg = createRegistry([core({ signalk: state, collision: TELL })]);
       const cpa = reg.byId("ais.cpa")!;
       expect(urgencyOf(cpa)).toBe("alarm");
 
@@ -473,7 +477,7 @@ describe("ais.cpa", () => {
     test("with the boat's sound on, an unACKed red sounds — on SignalK or not", () =>
       createRoot((dispose) => {
         const { state, setNotices } = fakeSignalK({ self: OWN_N, targets: [RED] });
-        const reg = createRegistry([core({ signalk: state })]);
+        const reg = createRegistry([core({ signalk: state, collision: TELL })]);
         // Nothing on SignalK (publish off, no write access): sounds anyway.
         expect(alerts(reg)[0].sound).toBe(true);
         setNotices({ "NORDIC EMERALD": raised() });
@@ -494,7 +498,7 @@ describe("ais.cpa", () => {
     test("acknowledged ANYWHERE (the MFD, another screen) goes quiet here too", () =>
       createRoot((dispose) => {
         const { state, setNotices } = fakeSignalK({ self: OWN_N, targets: [RED] });
-        const reg = createRegistry([core({ signalk: state })]);
+        const reg = createRegistry([core({ signalk: state, collision: TELL })]);
         setNotices({ "NORDIC EMERALD": raised({ acknowledged: true, sound: false }) });
         // Seen: still elevated on the tile, gone from the strip, silent.
         expect(urgencyOf(reg.byId("ais.cpa")!)).toBe("notice");
@@ -513,7 +517,7 @@ describe("ais.cpa", () => {
           fixed: raised({ id: "n-4", canAcknowledge: false }),
         });
         const reg = createRegistry([
-          core({ signalk: state, ackCollision: async (ids) => (sent.push(ids), true) }),
+          core({ signalk: state, collision: TELL, ackCollision: async (ids) => (sent.push(ids), true) }),
         ]);
         alerts(reg)[0].ack!();
         expect(sent).toEqual([["n-1", "n-2"]]);
@@ -531,7 +535,7 @@ describe("ais.cpa", () => {
           fixed: raised({ id: "n-4", canSilence: false }),
         });
         const reg = createRegistry([
-          core({ signalk: state, silenceCollision: async (ids) => (sent.push(ids), true) }),
+          core({ signalk: state, collision: TELL, silenceCollision: async (ids) => (sent.push(ids), true) }),
         ]);
         const [alert] = alerts(reg);
         expect(alert.mute!.seconds).toBe(120);
@@ -543,7 +547,7 @@ describe("ais.cpa", () => {
     test("silenced ANYWHERE stays on the strip, quiet", () =>
       createRoot((dispose) => {
         const { state, setNotices } = fakeSignalK({ self: OWN_N, targets: [RED] });
-        const reg = createRegistry([core({ signalk: state })]);
+        const reg = createRegistry([core({ signalk: state, collision: TELL })]);
         setNotices({ "NORDIC EMERALD": raised({ silenced: true, sound: false }) });
         expect(urgencyOf(reg.byId("ais.cpa")!)).toBe("alarm");
         const [alert] = alerts(reg);
@@ -556,7 +560,7 @@ describe("ais.cpa", () => {
   test("an unnamed target still alarms — a ship that did not say its name is still a ship", () =>
     createRoot((dispose) => {
       const { state } = fakeSignalK({ self: OWN_N, targets: [{ ...RED, name: undefined }] });
-      const reg = createRegistry([core({ signalk: state })]);
+      const reg = createRegistry([core({ signalk: state, collision: TELL })]);
       expect(alerts(reg)[0].title).toContain("unnamed target");
       dispose();
     }));
@@ -578,7 +582,7 @@ describe("ais.cpa", () => {
         self: { ...OWN_N, positionAtIso: "2026-07-17T12:00:00Z" },
         targets: [RED],
       });
-      const reg = createRegistry([core({ signalk: state, now })]);
+      const reg = createRegistry([core({ signalk: state, collision: TELL, now })]);
       const cpa = reg.byId("ais.cpa")!;
 
       // Live fix: a real red alarm, firing the reserved strip.

@@ -23,8 +23,9 @@ from pydantic import BaseModel
 import chartcore
 
 from mivnav.api.deps import get_store
+from mivnav.features.ocharts import timing
 from mivnav.features.ocharts.devices import DeviceGate
-from mivnav.features.ocharts.routes import device_token, get_device_gate
+from mivnav.features.ocharts.routes import device_token, get_device_gate, network_refusal
 from mivnav.features.ocharts.routes import get_service as get_ocharts
 from mivnav.charts.pmtiles import (
     COMPRESSION_GZIP,
@@ -49,6 +50,12 @@ CACHE_CONTROL = "public, no-cache"
 # A cached negative (empty tile, unknown set) becomes a tile-shaped hole that
 # outlives a transient condition; `no-store` forbids caching it at all.
 NO_STORE = "no-store"
+# Licensed o-charts content (o-charts policy: no unencrypted copies at rest).
+# `private, no-store` keeps it out of the browser's HTTP cache and the Service
+# Worker's tile cache (tileCache.ts refuses `no-store`), so the only client
+# copy is MapLibre's RAM cache. No ETag/304 either: a 304 implies the client
+# kept a copy. See docs/ocharts-licence-compliance-plan.md, W2.
+LICENSED_NO_STORE = "private, no-store"
 MVT_CONTENT_TYPE = "application/vnd.mapbox-vector-tile"
 TEXT_SUFFIX = ".TXT"
 TEXT_CONTENT_TYPE = "text/plain; charset=utf-8"
@@ -62,19 +69,38 @@ __all__ = ["build_pmtiles_router", "get_store", "router"]
 #: device — the frontend switches to ``/tiles/free`` on it (see
 #: mivnav.features.ocharts.devices).
 DEVICE_NOT_REGISTERED = "device_not_registered"
+#: The 403 body's ``code`` when the client is not on the boat network
+#: (mivnav.features.ocharts.network).
+NOT_BOAT_NETWORK = "not_boat_network"
+
+
+def _licensed_refusal(gate: DeviceGate, service: OchartsService, request: Request) -> dict | None:
+    """Why this request may not be served licensed o-charts content (a 403
+    body's ``detail``), or None if it may. The one check behind every
+    licensed path — tiles, text, cell headers: the client must be on the
+    boat network and a registered device. Nothing is refused while no
+    licensed set is installed."""
+    if not gate.active(service):
+        return None
+    why = network_refusal(gate, request)
+    if why is not None:
+        return {
+            "code": NOT_BOAT_NETWORK,
+            "message": f"o-charts are served to the boat network (LAN or tailnet) only: {why}",
+        }
+    if not gate.allowed(service, device_token(request)):
+        return {
+            "code": DEVICE_NOT_REGISTERED,
+            "message": "this device is not registered for o-charts",
+        }
+    return None
 
 
 def _require_device(gate: DeviceGate, service: OchartsService, request: Request) -> None:
     """403 unless this browser may be served o-charts tiles."""
-    if not gate.allowed(service, device_token(request)):
-        raise HTTPException(
-            status_code=403,
-            detail={
-                "code": DEVICE_NOT_REGISTERED,
-                "message": "this device is not registered for o-charts",
-            },
-            headers={"Cache-Control": NO_STORE},
-        )
+    detail = _licensed_refusal(gate, service, request)
+    if detail is not None:
+        raise HTTPException(status_code=403, detail=detail, headers={"Cache-Control": NO_STORE})
 
 
 def _set_etag(cs: ChartSet) -> str:
@@ -307,27 +333,43 @@ class CellsAt(BaseModel):
 
 @router.get("/cells/at", response_model=CellsAt)
 def cells_at(
+    request: Request,
+    response: Response,
     lon: float = Query(ge=-180, le=180),
     lat: float = Query(ge=-90, le=90),
     free: bool = False,
     ocharts: OchartsService = Depends(get_ocharts),
+    gate: DeviceGate = Depends(get_device_gate),
 ) -> CellsAt:
     """The union cells charting (lon, lat), finest first — what the map's
     overscale / "zoom in for detail" badge reads its compilation scale from.
-    `free` mirrors `/tiles/free`: licensed sets left out. Header data only,
+    `free` mirrors `/tiles/free`: licensed sets left out. A screen that may
+    not see the licensed sets gets the `free` answer whatever it asked (not
+    a 403: the badge keeps working on the free charts). Header data only,
     no decode; not cached (the answer follows the installed sets)."""
+    if not free and _licensed_refusal(gate, ocharts, request) is not None:
+        free = True
+    response.headers["Cache-Control"] = NO_STORE
     return CellsAt(cells=[CellAt(**c) for c in ocharts.cells_at(lon, lat, free_only=free)])
 
 
 @router.get("/debug/cells")
 def debug_cells(
+    request: Request,
+    free: bool = False,
     ocharts: OchartsService = Depends(get_ocharts),
+    gate: DeviceGate = Depends(get_device_gate),
 ) -> Response:
     """DEBUG: every o-charts cell's coverage as GeoJSON for the client's
     "Cell coverage" overlay toggle. One Feature per cell; not cached, not
-    on the serve path."""
+    on the serve path. `free` leaves the licensed sets out, as on
+    `/cells/at`; they are left out anyway for a screen that may not see
+    them (their headers are o-charts data too)."""
+    show_licensed = not free and _licensed_refusal(gate, ocharts, request) is None
     features: list[dict] = []
     for cs in ocharts.sets().values():
+        if not show_licensed and ocharts.licensed(cs):
+            continue
         for cell in cs.cells:
             cov = cell.coverage
             lines: list[list[list[float]]] = []
@@ -413,7 +455,9 @@ def tile(
         if ocs is not None:
             if ocharts.licensed(ocs):
                 _require_device(gate, ocharts, request)
-            return _ocharts_tile(ocharts, ocs, z, x, y, request)
+            return _ocharts_tile(
+                ocharts, ocs, z, x, y, request, licensed=ocharts.licensed(ocs)
+            )
         raise HTTPException(
             status_code=404,
             detail=f"unknown chart set {set_id!r}",
@@ -527,10 +571,12 @@ def text(
     by a feature. `name` is chart data, untrusted — see `_resolve_text_file`
     for the path-safety contract. A licensed set's notes are its chart data
     too: registered devices only, like its tiles."""
+    licensed = False
     if store.get(set_id) is None:
         ocs = ocharts.get(set_id)
         if ocs is not None and ocharts.licensed(ocs):
             _require_device(gate, ocharts, request)
+            licensed = True
     resolved = _set_directory(set_id, store, ocharts)
     if resolved is None:
         raise HTTPException(status_code=404, detail=f"unknown chart set {set_id!r}")
@@ -538,10 +584,13 @@ def text(
     path = _resolve_text_file(directory, name)
     if path is None:
         raise HTTPException(status_code=400, detail=f"invalid text file name {name!r}")
-    etag = f'"{set_id}-{sequence}-{name}"'
-    headers = {"ETag": etag, "Cache-Control": CACHE_CONTROL}
-    if _if_none_match(request, etag):
-        return Response(status_code=304, headers=headers)
+    if licensed:
+        headers = {"Cache-Control": LICENSED_NO_STORE}
+    else:
+        etag = f'"{set_id}-{sequence}-{name}"'
+        headers = {"ETag": etag, "Cache-Control": CACHE_CONTROL}
+        if _if_none_match(request, etag):
+            return Response(status_code=304, headers=headers)
     try:
         data = path.read_bytes()
     except FileNotFoundError:
@@ -602,23 +651,31 @@ def icon(key: str, request: Request, roles: bool = False) -> Response:
     return Response(content=svg, media_type=ICON_CONTENT_TYPE, headers=headers)
 
 
-def _ocharts_tile(service, ocs, z: int, x: int, y: int, request: Request) -> Response:
-    """Serve an on-demand o-charts tile with PMTiles' caching semantics. ETag
-    also versions on TILE_SCHEMA_VERSION and scamin_bias_key, kept in
-    lockstep with the RAM tile-cache key in OchartsService._tile."""
+def _tile_headers(request: Request, etag: str, licensed: bool) -> tuple[dict, bool]:
+    """Response headers for an o-charts tile, and whether to answer 304.
+    Licensed content gets LICENSED_NO_STORE and no validator at all."""
+    if licensed:
+        return {"Cache-Control": LICENSED_NO_STORE, "Vary": "Accept-Encoding"}, False
+    headers = {"ETag": etag, "Cache-Control": CACHE_CONTROL, "Vary": "Accept-Encoding"}
+    return headers, _if_none_match(request, etag)
+
+
+def _ocharts_tile(
+    service, ocs, z: int, x: int, y: int, request: Request, licensed: bool
+) -> Response:
+    """Serve an on-demand o-charts tile with PMTiles' caching semantics (free
+    sets) or `private, no-store` (licensed). ETag also versions on
+    TILE_SCHEMA_VERSION and scamin_bias_key, kept in lockstep with the RAM
+    tile-cache key in OchartsService._tile."""
     bias = "-".join(str(v) for v in service.scamin_bias_key)
     etag = f'"{ocs.id}-{ocs.sequence}-v{TILE_SCHEMA_VERSION}-d{bias}"'
-    headers = {
-        "ETag": etag,
-        "Cache-Control": CACHE_CONTROL,
-        "Vary": "Accept-Encoding",
-    }
-    if _if_none_match(request, etag):
+    headers, not_modified = _tile_headers(request, etag, licensed)
+    if not_modified:
         return Response(status_code=304, headers=headers)
     if not (0 <= z < 32 and 0 <= x < (1 << z) and 0 <= y < (1 << z)):
         return Response(status_code=404, headers=headers)
     try:
-        data = service.tile(ocs, z, x, y)
+        data, server_timing = timing.timed(lambda: service.tile(ocs, z, x, y))
     except (chartcore.ChartError, DaemonUnavailable, TimeoutError) as e:
         # transient daemon/timeout: one-line warning (recurs per tile, a
         # traceback each would drown the log); ChartError is a real
@@ -633,6 +690,8 @@ def _ocharts_tile(service, ocs, z: int, x: int, y: int, request: Request) -> Res
         raise HTTPException(
             status_code=503, detail=f"chart set {ocs.id!r} unavailable: {e}"
         ) from e
+    # Where the tile came from and how long it took (see ocharts.timing).
+    headers["Server-Timing"] = server_timing
     if data is None:
         return Response(status_code=404, headers={**headers, "Cache-Control": NO_STORE})
     if _accepts_gzip(request):
@@ -649,26 +708,28 @@ def _ocharts_tile_all(service: OchartsService, z: int, x: int, y: int, request: 
 def _ocharts_tile_union(
     service: OchartsService, z: int, x: int, y: int, request: Request, free_only: bool
 ) -> Response:
-    """Serve the unified `/tiles/all` (or `/tiles/free`) tile. ETag versions
-    on service.union_version() (every subscribed set's id+sequence), kept in
-    lockstep with the RAM tile-cache key in OchartsService._tile_all/_tile_free."""
+    """Serve the unified `/tiles/all` (or `/tiles/free`) tile. `/tiles/all` is
+    always `private, no-store`, even with no licensed set installed: it is the
+    licensed union by definition, the server RAM cache absorbs the re-fetches,
+    and one rule is simpler than a per-install one. `/tiles/free` keeps its
+    ETag, which versions on service.union_version() (every subscribed set's
+    id+sequence), kept in lockstep with the RAM tile-cache key in
+    OchartsService._tile_all/_tile_free."""
     digest = hashlib.sha1(
         ";".join(f"{set_id}-{seq}" for set_id, seq in service.union_version(free_only)).encode()
     ).hexdigest()[:16]
     bias = "-".join(str(v) for v in service.scamin_bias_key)
     prefix = "free" if free_only else "all"
     etag = f'"{prefix}-{digest}-v{TILE_SCHEMA_VERSION}-d{bias}"'
-    headers = {
-        "ETag": etag,
-        "Cache-Control": CACHE_CONTROL,
-        "Vary": "Accept-Encoding",
-    }
-    if _if_none_match(request, etag):
+    headers, not_modified = _tile_headers(request, etag, licensed=not free_only)
+    if not_modified:
         return Response(status_code=304, headers=headers)
     if not (0 <= z < 32 and 0 <= x < (1 << z) and 0 <= y < (1 << z)):
         return Response(status_code=404, headers=headers)
     try:
-        data = service.tile_free(z, x, y) if free_only else service.tile_all(z, x, y)
+        data, server_timing = timing.timed(
+            lambda: service.tile_free(z, x, y) if free_only else service.tile_all(z, x, y)
+        )
     except (chartcore.ChartError, DaemonUnavailable, TimeoutError) as e:
         if isinstance(e, chartcore.ChartError):
             log.exception("o-charts tile-%s z%d/%d/%d cut failed", prefix, z, x, y)
@@ -680,6 +741,8 @@ def _ocharts_tile_union(
         raise HTTPException(
             status_code=503, detail=f"chart set union unavailable: {e}"
         ) from e
+    # Where the tile came from and how long it took (see ocharts.timing).
+    headers["Server-Timing"] = server_timing
     if data is None:
         return Response(status_code=404, headers={**headers, "Cache-Control": NO_STORE})
     if _accepts_gzip(request):

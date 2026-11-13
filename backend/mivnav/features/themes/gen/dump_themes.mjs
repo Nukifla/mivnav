@@ -21,7 +21,7 @@
 //   - 5 slice `S52_TABLES`, 7 declare a hand-authored `S52Colors`.
 // Evaluating the real modules flattens all of that BY CONSTRUCTION, so the
 // JSON cannot drift from the TS by a transcription slip. Same precedent as
-// `mivnav/features/weather/gen/dump_colorscales.mjs`.
+// the weather plugin's `backend/gen/dump_colorscales.mjs`.
 //
 // THREE THINGS THE JSON ADDS that no `ThemeDef` carries:
 //

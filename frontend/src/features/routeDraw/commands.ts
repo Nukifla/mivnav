@@ -1,5 +1,5 @@
 // The manual route editor's commands: the launcher (palette, visible whether
-// or not "Beta autorouting" is on) and the in-editor keys — Ctrl/⌘-Z undo,
+// or not the autorouting plugin is loaded) and the in-editor keys — Ctrl/⌘-Z undo,
 // Ctrl/⌘-Shift-Z or Ctrl/⌘-Y redo, Enter = Done, Delete/Backspace deletes
 // the selected point. Escape is the shell's `exit-mode`, which asks the mode
 // (`requestLeave`) — Cancel, with a discard confirm when dirty.

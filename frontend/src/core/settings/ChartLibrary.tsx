@@ -5,12 +5,15 @@ import type { ServerConfigController } from "../serverConfig";
 import { AccordionSection } from "../ui/Accordion";
 import { Button } from "../ui/Button";
 import { Toggle } from "../ui/Controls";
+import { EulaFrame } from "../chrome/EulaFrame";
+import { NOT_OFFICIAL_CHARTS } from "../ochartsLicence";
 
 /** The three chart-install request bodies this section sends, straight off
  * the OpenAPI schema (`mivnav.api.ocharts.routes`) rather than hand-mirrored. */
 type RegisterBody = components["schemas"]["RegisterBody"];
 type InstallBody = components["schemas"]["InstallBody"];
 type FncInstallBody = components["schemas"]["FncInstallBody"];
+type InstallAcceptBody = components["schemas"]["InstallAcceptBody"];
 
 // The boat's chart library: the o-charts sets installed on the server, the
 // shop account that supplies them, chart install with progress, and delete.
@@ -47,6 +50,9 @@ export interface ChartUpdate {
   available_edition: string;
   /** Why this edition's last install attempt failed; "" if it has not. */
   failed: string;
+  /** The EULA id this edition's install waits on (its licence agreement
+   * changed, so it is never installed unattended); "" if none. */
+  awaiting_eula?: string;
 }
 
 export interface UpdatesStatus {
@@ -73,7 +79,10 @@ export function updatesSummary(u: UpdatesStatus | null | undefined, now: number)
   if (u.error) return `Could not check (${when}): ${u.error}`;
   if (u.updates.length === 0) return `Up to date — ${when}.`;
   const n = u.updates.length;
-  return `${n} update${n === 1 ? "" : "s"} available — ${when}.`;
+  const line = `${n} update${n === 1 ? "" : "s"} available — ${when}.`;
+  return u.updates.some((x) => x.awaiting_eula)
+    ? `${line} A new licence agreement needs accepting.`
+    : line;
 }
 
 /** The free charts' own line: they come from another publisher, so they can
@@ -98,6 +107,8 @@ interface InstallStatus {
   detail: string;
   error: string;
   set_id: string;
+  /** While `awaiting_eula`: the licence agreement the install waits on. */
+  eula?: { id: string; set: string } | null;
 }
 
 interface ShopSlot {
@@ -186,6 +197,9 @@ async function getJson<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 const ACTIVE_INSTALL_STATES = new Set(["download", "unpack", "test", "parse"]);
+/** An install waiting for its EULA holds the server's one install place too:
+ * nothing else can start until it is accepted or declined. */
+const INSTALL_HELD_STATES = new Set([...ACTIVE_INSTALL_STATES, "awaiting_eula"]);
 
 // Only `download` reports a percentage; later phases get a "…" label and an
 // indeterminate bar rather than a static full-width bar that reads as stuck.
@@ -194,6 +208,8 @@ const PHASE_LABEL: Record<string, string> = {
   unpack: "Unpacking…",
   test: "Testing cells…",
   parse: "Parsing…",
+  awaiting_eula: "Waiting for the licence agreement to be accepted",
+  cancelled: "Cancelled — licence agreement declined, nothing installed",
 };
 
 interface ChartLibraryProps {
@@ -360,6 +376,24 @@ const ChartLibrarySection: Component<ChartLibraryProps> = (props) => {
       setInstall(st);
     });
 
+  // Accept before install: the set is downloaded and unpacked but not
+  // installed until this; declining deletes the download.
+  const acceptEula = (eulaId: string) =>
+    act(async () => {
+      const st = await getJson<InstallStatus>("/api/ocharts/install/accept", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ eula_id: eulaId } satisfies InstallAcceptBody),
+      });
+      setInstall(st);
+    });
+
+  const declineEula = () =>
+    act(async () => {
+      setInstall(await getJson<InstallStatus>("/api/ocharts/install/decline", { method: "POST" }));
+      void refetchStatus();
+    });
+
   const deleteSet = (id: string) =>
     act(async () => {
       await getJson(`/api/ocharts/sets/${encodeURIComponent(id)}`, { method: "DELETE" });
@@ -488,6 +522,11 @@ const ChartLibrarySection: Component<ChartLibraryProps> = (props) => {
                       <Show when={u.failed}>
                         <div class="text-alarm">Last attempt failed: {u.failed}</div>
                       </Show>
+                      <Show when={u.awaiting_eula}>
+                        <div class="text-notice">
+                          Its licence agreement changed — read and accept it under Install below.
+                        </div>
+                      </Show>
                     </li>
                   )}
                 </For>
@@ -517,7 +556,7 @@ const ChartLibrarySection: Component<ChartLibraryProps> = (props) => {
                   disabled={
                     busy() ||
                     updatesState()?.state !== "idle" ||
-                    ACTIVE_INSTALL_STATES.has(installState()?.state ?? "")
+                    INSTALL_HELD_STATES.has(installState()?.state ?? "")
                   }
                   onClick={installUpdates}
                 >
@@ -529,6 +568,12 @@ const ChartLibrarySection: Component<ChartLibraryProps> = (props) => {
 
         <section class="space-y-2">
           <h3 class="font-medium">o-charts shop</h3>
+          <p class="text-xs font-medium">{NOT_OFFICIAL_CHARTS}</p>
+          <Show when={installState()?.state === "awaiting_eula"}>
+            <p class="text-xs text-notice">
+              An install is waiting for its licence agreement — see Install below.
+            </p>
+          </Show>
           <Show
             when={status()?.credentials_present}
             fallback={
@@ -621,7 +666,7 @@ const ChartLibrarySection: Component<ChartLibraryProps> = (props) => {
                                       variant="success"
                                       disabled={
                                         busy() ||
-                                        ACTIVE_INSTALL_STATES.has(installState()?.state ?? "")
+                                        INSTALL_HELD_STATES.has(installState()?.state ?? "")
                                       }
                                       onClick={() => installChart(chart, mySlot())}
                                     >
@@ -662,7 +707,7 @@ const ChartLibrarySection: Component<ChartLibraryProps> = (props) => {
                 <For each={regions()}>
                   {(entry) => {
                     const action = () =>
-                      fncAction(entry, busy(), ACTIVE_INSTALL_STATES.has(installState()?.state ?? ""));
+                      fncAction(entry, busy(), INSTALL_HELD_STATES.has(installState()?.state ?? ""));
                     return (
                       <li class="rounded border border-line-2 p-2">
                         <div class="flex items-center justify-between gap-2">
@@ -716,7 +761,7 @@ const ChartLibrarySection: Component<ChartLibraryProps> = (props) => {
               type="file"
               accept=".zip"
               class="mt-1 block w-full text-xs"
-              disabled={busy()}
+              disabled={busy() || INSTALL_HELD_STATES.has(installState()?.state ?? "")}
               onChange={(e) => {
                 const file = e.currentTarget.files?.[0];
                 if (file) void upload(file);
@@ -747,6 +792,30 @@ const ChartLibrarySection: Component<ChartLibraryProps> = (props) => {
                       }}
                     />
                   </div>
+                </Show>
+                <Show when={st().state === "awaiting_eula" && st().eula}>
+                  {(eula) => (
+                    <div class="space-y-2">
+                      <p class="text-xs text-fg-2">
+                        Downloaded, not installed yet. Read the licence agreement that comes with
+                        this chart set; it is installed only once you accept it.
+                      </p>
+                      <EulaFrame id={eula().id} sets={[eula().set]} />
+                      <p class="text-xs font-medium">{NOT_OFFICIAL_CHARTS}</p>
+                      <div class="flex gap-2">
+                        <Button
+                          variant="primary"
+                          disabled={busy()}
+                          onClick={() => acceptEula(eula().id)}
+                        >
+                          Accept and install
+                        </Button>
+                        <Button disabled={busy()} onClick={declineEula}>
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </Show>
                 <Show when={st().state === "error"}>
                   <p class="text-xs text-alarm">{st().error}</p>

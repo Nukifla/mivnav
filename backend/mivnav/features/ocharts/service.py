@@ -31,6 +31,7 @@ from .admission import (
 from .cache import SingleFlightLRU
 from .disk_tiles import DEFAULT_TILE_DISK_BUDGET, MISSING, DiskTileStore, tile_bounds_deg
 from .licence import LicenceCheck, disk_key
+from . import timing
 from .sets import CellInfo, OchartsSet, OchartsStore
 from .warm import CellWarmer
 
@@ -38,33 +39,33 @@ log = logging.getLogger(__name__)
 
 # Last-resort bound on cold decodes per tile; see
 # docs/architecture/ocharts-serving-knobs.md for the tuning history (why 48,
-# not 8 or 16).
-DEFAULT_MAX_CELLS_PER_TILE = 48
+# not 8 or 16). 128 is what the boat runs.
+DEFAULT_MAX_CELLS_PER_TILE = 128
 MAX_CELLS_PER_TILE = DEFAULT_MAX_CELLS_PER_TILE
 
 # `ocharts.*` config defaults (over_zoom/under_zoom/detail_gap); tuned live,
 # no restart. Selection is anchored to the tile's zoom vs each cell's
 # max_zoom. See docs/architecture/ocharts-serving-knobs.md.
-DEFAULT_OVER_ZOOM = 4
-DEFAULT_UNDER_ZOOM = 4
+DEFAULT_OVER_ZOOM = 8
+DEFAULT_UNDER_ZOOM = 2
 DEFAULT_DETAIL_GAP = 1
 
 # Upper bound on zooms finer than the reference the detail fill may reach;
 # must be > over_zoom (#Z5-FRAG, else overview tiles decode far more than
 # SCAMIN shows). See docs/architecture/ocharts-serving-knobs.md.
-DEFAULT_OVERVIEW_DETAIL_CUTOFF = 6
+DEFAULT_OVERVIEW_DETAIL_CUTOFF = 10
 
 # Global chart-detail bias `B`: shows iff display_scale_denom(z) <= scamin*B.
 # BOAT-WIDE not per-device — server hard-drops SCAMIN-hidden features off
 # the shared tile. See docs/architecture/ocharts-serving-knobs.md.
-DEFAULT_CHART_DETAIL = 1.0
+DEFAULT_CHART_DETAIL = 1.25
 CHART_DETAIL_MIN = 0.1
 CHART_DETAIL_MAX = 10.0
 
 # SCAMIN turn-on spread `k` about anchor `A` (#qqlzrkkn): `B` shifts every
 # feature's turn-on zoom uniformly, `k` reshapes spacing around `A` instead.
 # See docs/architecture/ocharts-serving-knobs.md.
-DEFAULT_CHART_DETAIL_SPREAD = 1.0
+DEFAULT_CHART_DETAIL_SPREAD = 0.9
 CHART_DETAIL_SPREAD_MIN = 0.1
 CHART_DETAIL_SPREAD_MAX = 2.0
 DEFAULT_CHART_DETAIL_ANCHOR = 350_000.0
@@ -82,13 +83,13 @@ TILE_SCHEMA_VERSION = 40
 DEFAULT_PARALLELISM = 3
 PARALLELISM_MAX = 16
 
-DEFAULT_CELL_BUDGET = 512 * 1024 * 1024
-DEFAULT_TILE_BUDGET = 64 * 1024 * 1024
+DEFAULT_CELL_BUDGET = 1024 * 1024 * 1024
+DEFAULT_TILE_BUDGET = 2048 * 1024 * 1024
 # A HazardIndex is just the buffered unsafe-water rings for one cell at one
 # (safety_depth_m, margin_m, air_draft_m) — far lighter than a decoded cell's full
 # feature/attribute model (`chartcore::python::hazard_bytes` vs. `cell_bytes`),
 # so this budget is a fraction of `DEFAULT_CELL_BUDGET`. See `OchartsService.
-# hazards`/`hazard_index` below, and the repo root's `ROUTING_TODO.md`
+# hazards`/`hazard_index` below, and the autorouting plugin's notes
 # ("HazardIndex cache"): `/routing/plan` rebuilt every candidate cell's
 # hazard union on every request, measured as the largest remaining
 # per-request cost (~0.44s/request even with the cell itself warm) before
@@ -134,11 +135,11 @@ DEFAULT_WARM_OVERVIEW = True
 # The finest zoom the warmer pre-renders `/tiles/all` for, into the disk
 # tile cache (see .disk_tiles and .warm's pre-render phase). Zoomed-out
 # union tiles are the slow ones cold (z7 4.2 s, z5-6 ~9 s measured on the
-# Pi) while z12+ are ~0.1 s, so pre-rendering stops at 11: the whole chart
-# area down to z11 is a few thousand tiles, done once in idle time and kept
-# across restarts. None disables pre-rendering (the disk cache still fills
-# from real requests).
-DEFAULT_PRETILE_MAX_ZOOM: int | None = 11
+# Pi) while z12+ are ~0.1 s; pre-rendering goes down to z12 too (as the
+# boat ran it) so the first zoom-in to harbour scale is also instant. Done
+# once in idle time and kept across restarts; z12 is ~4x the tiles of z11.
+# None disables pre-rendering (the disk cache still fills from real requests).
+DEFAULT_PRETILE_MAX_ZOOM: int | None = 12
 
 
 def _intersects(a: tuple[float, float, float, float], b: tuple[float, float, float, float]) -> bool:
@@ -492,7 +493,7 @@ class OchartsService:
         """The cell's `chartcore.HazardIndex` at `safety_depth_m`/`margin_m`/
         `air_draft_m` — cached, or built now via `load_cell` (itself cached).
 
-        `mivnav.features.routing.hazards.hazard_indexes_for_line` calls this
+        `mivnav_plugin_autorouting.hazards.hazard_indexes_for_line` calls this
         once per candidate cell per request; before this cache existed that
         rebuilt the same union from the same decoded cell on EVERY request,
         measured as the largest remaining per-request cost even with the
@@ -529,7 +530,7 @@ class OchartsService:
     def land_hazard_index(self, cs: OchartsSet, cell: CellInfo, margin_m: float):
         """The cell's `chartcore.HazardIndex` from `LNDARE`/`UNSARE`/
         `SLCONS` ALONE — cached, or built now via `load_cell` (itself
-        cached). For `mivnav.features.routing.hazards.hazard_indexes_for_bbox`
+        cached). For `mivnav_plugin_autorouting.hazards.hazard_indexes_for_bbox`
         to union in WITHOUT ever authority-clipping it — see
         `chartcore::routing::hazards`' own "Authority-clipping exemption
         for land" docs for the real bug this exists to close: a coarser
@@ -677,6 +678,7 @@ class OchartsService:
         )
 
         def load():
+            timing.note("render")
             data = self._cut_tile(cs, z, x, y)
             # Level 1, not 6: the Pi's CPU is the scarce resource here, not
             # LAN bandwidth (see CLAUDE.md's deployment invariant).
@@ -871,7 +873,10 @@ class OchartsService:
         def load():
             version = self.disk_version()
             packed = self.disk_tiles.get(version, z, x, y)
-            if packed is MISSING:
+            if packed is not MISSING:
+                timing.note("disk")
+            else:
+                timing.note("render")
                 data = self._cut_tile_all(z, x, y)
                 packed = gzip.compress(data, 1) if data is not None else None
                 self.disk_tiles.put(version, z, x, y, packed)
@@ -905,6 +910,7 @@ class OchartsService:
         )
 
         def load():
+            timing.note("render")
             data = self._cut_tile_all(z, x, y, sets)
             packed = gzip.compress(data, 1) if data is not None else None
             return packed, len(packed) if packed else 1

@@ -80,7 +80,7 @@ class Waypoint(Frozen):
     #: Was the LEG ARRIVING at this waypoint (the previous waypoint to
     #: this one) a straight-line stand-in `POST /routing/plan` could not
     #: actually verify — `PlanResponse.approximate_legs[i-1]` for this
-    #: waypoint's own index `i` (`mivnav.features.routing.routes`)?
+    #: waypoint's own index `i` (the autorouting plugin's `routes.py`)?
     #: Always `False` for a route's first waypoint (no incoming leg) and
     #: for any waypoint a person placed by hand (the route editor never
     #: sets this — only `features/route/index.ts`'s `routeFromPlan`

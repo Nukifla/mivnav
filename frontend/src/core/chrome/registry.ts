@@ -148,6 +148,10 @@ export interface Mode {
    * helm widgets so only the map, the mode's own surface, and reserved chrome
    * (the alarm band) remain. Reserved chrome is never suppressed. */
   solo?: boolean;
+  /** Brings its own PHONE bottom bar, which takes the Rail's widget-strip
+   * slot while the mode is active (Rail.tsx) — the route editor's
+   * `RouteBar`. A solo mode without one keeps the strip. */
+  ownsBottomBar?: boolean;
   /** Registered but not enumerated into either tool stack's button row
    * (`modeList()` in MapView.tsx) — for a mode reachable only from a specific
    * settings/menu affordance, where a stray button would have no obvious "why am I here".

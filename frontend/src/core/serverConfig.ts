@@ -39,14 +39,6 @@ export const clampChartDetailSpread = (k: number): number =>
 const [scaminBias, setScaminBiasSignal] = createSignal<ScaminBias>(NEUTRAL_SCAMIN_BIAS);
 export { scaminBias };
 
-// Boat-wide "Beta autorouting" switch (`routing.beta_enabled`), mirrored as a
-// global like `scaminBias` so the map chrome can gate the auto-router UI
-// without the lazily-mounted settings controller. Off until the server says on.
-const [betaAutorouting, setBetaAutorouting] = createSignal(false);
-export { betaAutorouting };
-/** Tests only — the app sets it from the server config. */
-export const setBetaAutoroutingForTest = setBetaAutorouting;
-
 /** Just the `B` multiplier of {@link scaminBias} — the historical accessor
  * for call sites that only ever cared about it. */
 export const chartDetail = (): number => scaminBias().detail;
@@ -145,222 +137,6 @@ export interface NavServerConfig {
   course_match_tolerance_m: number;
 }
 
-/** Safety depth/margin and several optional soft preferences for
- * `POST /routing/plan` (mivnav.features.routing.config.RoutingConfig) —
- * shallow-water, TSS avoidance, fairway preference, buoyage-side
- * avoidance, cable/pipeline avoidance, caution-area avoidance. Each
- * preference's own weight is OFF at `0` — see the individual fields' own
- * docs. */
-export interface RoutingServerConfig {
-  /** Show the auto-router UI (route editor, "Go here", its settings). Beta, off by default. */
-  beta_enabled: boolean;
-  /** Metres. Fallback draft when a plan request omits `draft_m` and
-   * SignalK has no fix/no draft reported. */
-  default_draft_m: number;
-  /** Metres, added to draft to get the depth a router must treat as
-   * unsafe. */
-  under_keel_margin_m: number;
-  /** Metres, HARD lateral clearance from a charted hazard's own boundary
-   * — buffered directly into the hazard union before the search runs. */
-  lateral_margin_m: number;
-  /** Metres, the boat's own mast height above the waterline — a HARD
-   * block: a bridge/overhead cable the boat cannot clear joins the
-   * unsafe-water union outright, the same way a too-shallow depth area
-   * does. `0` (the default) means OFF — no bridge/cable is ever
-   * consulted, unlike the depth fields above (which are always-on hard
-   * thresholds with a conservative placeholder default): there is no
-   * sane universal non-zero default for a mast height, and a wrong guess
-   * risks letting a route pass under a bridge that does not actually
-   * clear. */
-  air_draft_m: number;
-  /** Metres beyond `lateral_margin_m` the soft shallow-water preference
-   * still has some pull. Moot while `shallow_avoidance_weight` is `0`. */
-  shallow_avoidance_radius_m: number;
-  /** How strongly the search prefers water further from a hazard, within
-   * `shallow_avoidance_radius_m` — `0` is OFF (today's plain
-   * shortest-distance search). */
-  shallow_avoidance_weight: number;
-  /** How strongly the search prefers avoiding TSS-family zones (traffic
-   * lanes, roundabouts, crossings, precautionary areas) — `0` is OFF. A
-   * FLAT in-zone penalty, unlike the shallow-water field above: the full
-   * weight applies everywhere inside the zone, not just a thin band near
-   * its edge. Never a hard block — the router still crosses directly
-   * when no reasonable alternative exists. */
-  tss_avoidance_weight: number;
-  /** How strongly the search prefers the "preferred route" family — a
-   * marked fairway, recommended track, navigation line, or deep-water
-   * route part, unioned into one shared preference — when one already
-   * connects the route — `0` is OFF; never forces a detour into one that
-   * doesn't actually help. */
-  fairway_preference_weight: number;
-  /** How strongly the search prefers avoiding a submarine cable or
-   * pipeline (`CBLSUB`/`PIPSOL`) — `0` is OFF. A FLAT in-zone penalty
-   * like `tss_avoidance_weight`, no distance falloff. A SEPARATE weight
-   * from `caution_area_avoidance_weight` below — a genuinely different
-   * kind of concern (protecting ground tackle/seabed infrastructure) —
-   * not one shared dial. Briefly crossing a cable, as most routes
-   * roughly perpendicular to the coast must, costs little regardless:
-   * what this discourages is running ALONG one for real distance. Never
-   * a hard block. */
-  cable_avoidance_weight: number;
-  /** How strongly the search prefers avoiding an anchorage
-   * (`ACHARE`), caution area (`CTNARE`), or permitted-transit
-   * restricted/military-practice area (`RESARE`/`MIPARE` not legally
-   * entry-prohibited) — `0` is OFF. A FLAT in-zone penalty like
-   * `tss_avoidance_weight`. These three share ONE weight: the router has
-   * no way to distinguish them more precisely than "navigate here with
-   * more general caution". Never a hard block — an entry-prohibited
-   * `RESARE`/`MIPARE` is already a HARD block elsewhere (the safety
-   * depth/margin fields above), never counted here too. */
-  caution_area_avoidance_weight: number;
-  /** How strongly the search prefers avoiding a charted low-confidence
-   * survey — an `M_QUAL` zone whose CATZOC (Category of Zone of
-   * Confidence) reads C, D, or U, or carries no CATZOC at all — `0` is
-   * OFF. A FLAT in-zone penalty like `tss_avoidance_weight`, no distance
-   * falloff. A genuinely different, more precise fact than chart
-   * compilation scale: a large-scale harbour chart can still be compiled
-   * from an old or coarse survey. Never a hard block. */
-  low_confidence_survey_avoidance_weight: number;
-  /** How strongly the search penalises a HEADING CHANGE, per grid step
-   * DURING the search itself — not a zone/distance term like every other
-   * field above; it costs a turn, not a place. `0` is OFF (today's plain
-   * search, whose only zigzag cleanup is a post-hoc geometric shortcut
-   * pass). Scales with how SHARP the turn is: a gentle 45° bend costs
-   * less than a 90°+ one — a route curving through small bends to round a
-   * headland or thread a channel is normal, not the pathology this
-   * discourages; a route sawing back and forth is. Never a hard block —
-   * a genuinely necessary sharp turn still gets taken, just at a real,
-   * bounded extra cost. */
-  turn_cost_weight: number;
-  /** §6 charted-depth soft tiers — `artifact`/`mivnav` engines only, on
-   * top of the hard depth floor (`default_draft_m + under_keel_margin_m`).
-   * Water charted in `(floor, avoid_depth_below_m]` costs
-   * `avoid_depth_weight` (heavy — taken only when there's no way around);
-   * water in `(avoid_depth_below_m, soft_prefer_depth_below_m]` costs
-   * `soft_prefer_depth_weight` (light "prefer deeper"). A preference on
-   * charted depth VALUE, not distance from a hazard edge. All `0` is OFF. */
-  avoid_depth_below_m: number;
-  avoid_depth_weight: number;
-  soft_prefer_depth_below_m: number;
-  soft_prefer_depth_weight: number;
-  /** `"A"`/`"B"` — the IALA buoyage region a lateral mark's `COLOUR` is
-   * read against when the mark itself carries no `CATLAM`. Only a
-   * fallback: a chart's own charted `M_NSYS`/`MARSYS` meta-object, when
-   * present, wins over this default. */
-  iala_region: "A" | "B";
-  /** Metres — how far from a lateral mark (`BOYLAT`/`BCNLAT`) the "wrong
-   * side" preference below reaches. A FLAT in-zone penalty like
-   * `tss_avoidance_weight`, not distance-graded. */
-  buoyage_avoidance_radius_m: number;
-  /** How strongly the search prefers passing a lateral mark on its
-   * charted-correct side (port-hand kept to port, starboard-hand to
-   * starboard, for the direction actually being sailed) — `0` is OFF.
-   * Scoped to pure lateral marks only, not preferred-channel or
-   * cardinal/isolated-danger/safe-water marks. Never a hard block. */
-  buoyage_avoidance_weight: number;
-  /** Try a coarse, land-only macro pass when the ordinary per-leg search
-   * (even after its own recursive refinement) still comes back badly
-   * unreachable — the fix for a request that can only be completed by a
-   * real detour around a whole landmass (e.g. ~150nm off the direct
-   * line), entirely outside the ordinary search's own corridor by
-   * construction. Default ON. When it fires, the response's own warning
-   * text always says plainly that a long automatic detour has not been
-   * checked for bridge/lock/cable clearance. */
-  macro_route_enabled: boolean;
-  /** Which engine `POST /routing/plan` uses: `"raster"` (the built-in
-   * chartcore search, every field above); `"routeiq"` (a remote call to a
-   * real signalk-routeiq plugin instance over the boat's own SignalK
-   * connection — see `meta.routeiq_token_set` for whether it's actually
-   * usable yet); `"graph"` (a local, structurally different second
-   * algorithm — an adaptive-resolution graph, modelled on RouteIQ's own
-   * approach but running against this boat's own charts, no SignalK/
-   * remote dependency); or `"artifact"` (a local, from-scratch fourth
-   * algorithm implementing a stricter/more-complete hard-constraint set
-   * than any of the other three — the breakwater-family construction
-   * features, unsurveyed water, individual soundings, and CATZOC-derived
-   * horizontal/depth buffers none of the others check — plus deterministic
-   * route output for the same request. Newer and less battle-tested than
-   * the built-in raster search; not the full precomputed-artifact/portal-
-   * topology architecture it is modelled on, just its hazard/determinism
-   * rules computed fresh per request); or `"mivnav"` (a fifth engine that
-   * runs that SAME `"artifact"` search — identical route out, today — with
-   * the real precomputed-topology pipeline (depth bands, connected
-   * components, portals, contracted shortcuts, a topology-graph search)
-   * running alongside it purely for cross-check diagnostics. An early,
-   * honestly-labelled testability build toward the full v3 architecture,
-   * not that architecture finished — see the backend's own
-   * `RoutingConfig.algorithm` docstring and `MIVNAV_ARTIFACT_TODO.md` at
-   * the repo root for exactly how much of it is built). All five are
-   * comparable live against the same request. Default `"raster"`. */
-  algorithm: "raster" | "routeiq" | "graph" | "artifact" | "mivnav";
-  /** Metres, sent as RouteIQ's own `beam` constraint, and (halved, plus
-   * the hard lateral margin above) the graph algorithm's own beam-based
-   * clearance filter. Live only for `algorithm === "routeiq" | "graph"` —
-   * "raster" has no beam constraint at all, and "artifact" leaves
-   * beam/width out of its own current MVP scope. */
-  routeiq_beam_m: number;
-  /** Metres, sent as RouteIQ's own `airDraft` constraint (mast height
-   * above the waterline). Moot while `algorithm !== "routeiq"`. */
-  routeiq_air_draft_m: number;
-  /** Nautical miles, sent as RouteIQ's own `minCoastDistance`. Moot while
-   * `algorithm !== "routeiq"`. */
-  routeiq_min_coast_distance_nm: number;
-  /** Metres. Only the FIRST and LAST leg of an `"artifact"` route may pass
-   * through no-coverage or unsurveyed (`UNSARE`) water within this radius
-   * of the actually-requested start/destination point — the fix for those
-   * two being hard blocks for this algorithm (unlike the other three,
-   * which treat `UNSARE` as a soft caution area): a marina or anchorage
-   * sitting in genuinely unsurveyed water stays reachable without quietly
-   * softening the hazard everywhere else along the route. Moot unless
-   * `algorithm === "artifact"`. */
-  artifact_endpoint_grace_radius_m: number;
-  /** How much the `"artifact"` algorithm derates charted hazards by their
-   * own CATZOC (Category of Zone of Confidence) survey grade — a
-   * geometry-changing buffer, not a cost weight: `"full"` both grows every
-   * hard-hazard boundary outward and subtracts a depth allowance before
-   * comparing to the required depth, sized per feature from its own
-   * cell's CATZOC (worse confidence = bigger buffer); `"half"` halves both
-   * numbers; `"depth_only"` keeps the depth allowance but skips the
-   * horizontal buffer; `"off"` applies neither, matching what the other
-   * three algorithms already do. Default `"full"`. Moot unless
-   * `algorithm === "artifact"`. */
-  artifact_catzoc_allowance_mode: "full" | "half" | "depth_only" | "off";
-  /** Overrides, for the `"artifact"` algorithm only, two of its default
-   * hard blocks that the other algorithms don't implement at all:
-   * `RESARE`/`MIPARE` entry-restricted (`RESTRN=8`) areas, and
-   * marine-farm/fish-stake areas (`MARCUL`/`FSHFAC`). Does NOT override an
-   * entry-PROHIBITED (`RESTRN=7`) area, a depth/hazard block, land, or a
-   * blocking construction feature — those stay hard regardless. Default
-   * `false`. Moot unless `algorithm === "artifact"`. */
-  artifact_allow_restricted_entry: boolean;
-  /** The vessel's beam in metres, for `algorithm === "mivnav"` only
-   * (§8.3/§12.4). When `> 0`, a marginal-width crossing on the
-   * precomputed topology route is re-routed locally against the chart's
-   * own hazard geometry and re-verified against the draft-aware hard
-   * constraints — the one case a `"mivnav"` route departs from the
-   * `"artifact"` fine search's. `0` (default) disables it. Moot unless
-   * `algorithm === "mivnav"`. */
-  mivnav_beam_m: number;
-  /** Directional / buoyage semantics for `algorithm === "mivnav"` only
-   * (§11). When `true`, a precomputed-topology crossing taken against a
-   * charted traffic flow (`TSSLPT` / one-way `DWRTPT` / `RECTRC` with
-   * `ORIENT`) is forbidden, and a crossing on the wrong side of a
-   * lateral mark for its direction of travel is soft-penalised. Can
-   * change which corridor the topology layer reports, so it is opt-in;
-   * it never moves the fine-search route itself, only the diagnostics
-   * (`debug_legs[...].mivnav.topology_directional_penalized_portals`).
-   * Default `false`. Moot unless `algorithm === "mivnav"`. */
-  mivnav_directional_rules: boolean;
-  /** `algorithm === "mivnav"` only. When `true`, a plan request whose
-   * topology layer did not read a persisted `.mivnav` (none built, stale,
-   * or the corridor spans several chart sets) is refused — straight line
-   * plus a warning — instead of served from the per-request topology
-   * rebuild. Changes no route a boat gets (the rebuild produces the same
-   * fine-search route); it lets a test be certain it is on the artifact
-   * read path. Default `false`. */
-  mivnav_require_artifact: boolean;
-}
-
 /** The collision alarm (mivnav.collision.config.CollisionConfig) — boat-wide:
  * the server runs it and raises it on SignalK, and every screen colours and
  * sounds by it. One shape with the snapshot's `collisionSettings`. */
@@ -420,7 +196,6 @@ export interface ServerConfig {
    * backend migrates an existing config.json's `charts.dir` on load. */
   data_root: string;
   nav: NavServerConfig;
-  routing: RoutingServerConfig;
   signalk: SignalKServerConfig;
   collision: CollisionServerConfig;
   gnss?: GnssServerConfig;
@@ -432,6 +207,10 @@ export interface ServerConfig {
    * read-modify-write for this list. */
   regions: Region[];
   credentials: { ocharts: OchartsCredentialsView };
+  /** Each out-of-tree plugin's own settings block, by plugin id
+   * (mivnav.config.model.Config.plugins) — opaque to the core: a plugin reads
+   * and coerces its own slice. Absent from a server that has none stored. */
+  plugins?: Record<string, unknown>;
 }
 
 /** Read-only facts the UI needs and must never send back — kept out of
@@ -447,9 +226,9 @@ export interface ConfigMeta {
    * (signalkAccess.ts) is how it becomes true. */
   signalk_token_set: boolean;
   /** Whether the RouteIQ access token is configured, never its value —
-   * the routing settings' RouteIQ section shows "connected" vs "not
-   * connected" from this, and its own access-request button
-   * (routeiqAccess.ts) is how it becomes true. A SEPARATE grant from
+   * the autorouting plugin's RouteIQ section shows "connected" vs "not
+   * connected" from this, and its own access-request button is how it
+   * becomes true. A SEPARATE grant from
    * `signalk_token_set`: RouteIQ is a plugin on the same box, but its own
    * device access-request grant is independently revocable. */
   routeiq_token_set: boolean;
@@ -480,7 +259,6 @@ export interface ConfigPatch {
   ocharts?: Partial<OchartsServerConfig>;
   data_root?: string;
   nav?: Partial<NavServerConfig>;
-  routing?: Partial<RoutingServerConfig>;
   signalk?: Partial<SignalKServerConfig>;
   collision?: Partial<CollisionServerConfig>;
   gnss?: Partial<GnssServerConfig>;
@@ -491,6 +269,9 @@ export interface ConfigPatch {
    * — see `regionPatch` (settings/regions.tsx), every writer's path. */
   regions?: object[];
   credentials?: { ocharts?: OchartsCredentialsPatch };
+  /** A plugin's own settings, deep-merged by the server: send
+   * `{plugins: {<id>: {<field>: value}}}` with only the fields changed. */
+  plugins?: Record<string, Record<string, unknown>>;
 }
 
 const BASE = "/api/config";
@@ -548,7 +329,6 @@ export async function seedChartDetail(): Promise<void> {
   try {
     const payload = await fetchServerConfig();
     setScaminBiasSignal(biasFromConfig(payload.config.ocharts));
-    setBetaAutorouting(payload.config.routing?.beta_enabled === true);
     noteBootId(payload.meta.boot_id);
   } catch {
     // unreachable server → keep the neutral default
@@ -633,8 +413,7 @@ export function createServerConfig(): ServerConfigController {
       setOffline("");
       // Keep the SCAMIN-bias global in step: style must use the same B/k/A the server drops features by.
       setScaminBiasSignal(biasFromConfig(payload.config.ocharts));
-      setBetaAutorouting(payload.config.routing?.beta_enabled === true);
-      // Also a chance to notice the backend restarted mid-session
+        // Also a chance to notice the backend restarted mid-session
       // (`noteBootId`, shared module scope with `seedChartDetail`).
       noteBootId(payload.meta.boot_id);
     });

@@ -1,6 +1,6 @@
 // THE MANUAL ROUTE EDITOR: straight legs a person places by hand. No hazard
 // check, no planner — every point is exactly where it was put. Separate from
-// the beta autorouting editor (features/route's `route-edit` mode) by design:
+// the autorouting plugin's editor (its `route-edit` mode) by design:
 // its own mode, draft, overlay and card; it only shares the route STORE
 // (`core/routes.ts`) and the route display's colours.
 //

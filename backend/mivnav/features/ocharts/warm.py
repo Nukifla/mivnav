@@ -15,6 +15,8 @@ import threading
 import time
 from typing import TYPE_CHECKING
 
+import chartcore
+
 
 if TYPE_CHECKING:  # only the types cycle
     from .service import OchartsService
@@ -245,14 +247,28 @@ class CellWarmer:
     def _pretile_tiles(self) -> list[tuple[int, int, int]]:
         """Every z/x/y in the pre-render range that some installed cell
         charts (coverage, not just extent — see ``_charting_cells``),
-        coarsest zoom first. Each cell is asked only about the tiles in its
-        own extent, and a tile some cell already claimed is not asked again:
-        the same tiles as testing every candidate against every cell, at a
-        small fraction of the calls."""
-        from .service import _intersects, tile_bounds_deg  # deferred: service imports this module
+        coarsest zoom first.
 
+        Real cells go to ``chartcore.charted_tiles``: one call without the
+        GIL, simplifying each cell's coverage once per zoom rather than per
+        tile — on the Pi, planning to z12 took over 30 min here in Python.
+        :meth:`_pretile_tiles_py` is the reference it matches tile for tile,
+        and still plans for coverages that are not chartcore's (tests)."""
         cells = [c for cs in self._service.sets().values() for c in cs.cells]
         max_zoom = self._service.pretile_max_zoom
+        if all(c.coverage is None or isinstance(c.coverage, chartcore.Coverage) for c in cells):
+            return chartcore.charted_tiles(
+                [(tuple(c.extent), c.coverage) for c in cells], PRETILE_MIN_ZOOM, max_zoom
+            )
+        return self._pretile_tiles_py(cells, max_zoom)
+
+    def _pretile_tiles_py(self, cells: list, max_zoom: int) -> list[tuple[int, int, int]]:
+        """The Python planner. Each cell is asked only about the tiles in its
+        own extent, and a tile some cell already claimed is not asked again:
+        the same tiles as testing every candidate against every cell, at a
+        small fraction of the calls. Holds the GIL, hence the slices."""
+        from .service import _intersects, tile_bounds_deg  # deferred: service imports this module
+
         out: list[tuple[int, int, int]] = []
         deadline = [time.monotonic() + PLAN_SLICE_S]
         for z in range(PRETILE_MIN_ZOOM, max_zoom + 1):

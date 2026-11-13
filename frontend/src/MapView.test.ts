@@ -86,8 +86,7 @@ const { createModeState } = await import("./core/chrome/modes");
 const { createRegistry } = await import("./core/chrome/registry");
 const { MEASURE_LAYER_IDS, createMeasureOverlay } = await import("./features/measure/overlay");
 const { ROUTE_LAYER_IDS, createRouteOverlay } = await import("./features/route/overlay");
-const { WEATHER_LAYER_IDS, createWeatherOverlay } = await import("./features/weather/overlay");
-const { aisOverlay, ownShipOverlay, hoistOrder } = await import("./core/layers/overlay");
+const { aisOverlay, ownShipOverlay, hoistOrder, Z } = await import("./core/layers/overlay");
 const { SectorLightLayer, createSectorLightsOverlay } = await import("./features/sector-lights");
 const { TRACK_LAYER_IDS, createTrackOverlay } = await import("./features/track/overlay");
 const { NOTICES_LAYER_IDS, createNoticesOverlay } = await import("./features/notices/overlay");
@@ -240,11 +239,9 @@ class FakeMap {
     });
     return this;
   }
-  // features/weather/overlay.ts (applyWeatherSources, run from ensureOverlays) reconciles
-  // its four double-buffer slots against the map. Weather is off in these tests
-  // (DEFAULT_SETTINGS), so `weatherDesired` is empty and it only ever tries to
-  // REMOVE slots. No-ops: the overlay's real behaviour is a browser concern,
-  // exercised there; here it must just not throw.
+  // An imperative overlay (a plugin's wash) may try to REMOVE layers/sources it
+  // never added. No-ops: the real behaviour is a browser concern; here it
+  // must just not throw.
   removeLayer() {
     return this;
   }
@@ -325,6 +322,8 @@ function harness(
     disabledSets?: Accessor<string[]>;
     bandOrder?: Accessor<string[] | null>;
     showGrid?: Accessor<boolean>;
+    debugCells?: Accessor<boolean>;
+    ochartsUnion?: Accessor<"all" | "free">;
     /** The FEATURE overlays App drills in (C4). Defaults to route + measure,
      * the pre-C4 internal array the ensure/re-hoist assertions below assume; a
      * test that cares about another feature's overlay passes its own list. */
@@ -349,15 +348,16 @@ function harness(
       signalk: signalk.state,
       debugLayers: () => false,
       debugTiles: () => false,
-      debugCells: () => false,
+      debugCells: opts.debugCells ?? (() => false),
+      ochartsUnion: opts.ochartsUnion,
       fpsDebug: () => false,
       showGrid: opts.showGrid ?? (() => false),
       modes,
       measure: measure.model,
       cursor: cursor.model,
       // The feature overlays (C4) are now drilled in as a prop, the way App
-      // projects them from its one `features` list; base overlays (weather,
-      // sector-lights, AIS) live inside wireMap. This reproduces the pre-C4
+      // projects them from its one `features` list; base overlays
+      // (sector-lights, AIS) live inside wireMap. This reproduces the pre-C4
       // internal array so the ensure/re-hoist assertions below still hold.
       overlays: opts.overlays ?? [createRouteOverlay(undefined), createMeasureOverlay(measure.model)],
       bandOrder: opts.bandOrder,
@@ -424,6 +424,69 @@ describe("the lat/long graticule follows showGrid", () => {
     map.fire("move");
     expect((map.sourceData.get("graticule") ?? []).length).toBeGreaterThan(before);
     dispose();
+  });
+});
+
+/**
+ * The "Cell coverage" debug overlay follows the o-charts union (plan W12): the
+ * licensed sets' outlines are o-charts data, so a lost device slot or a lost
+ * server — both flip the union to "free" — must take them off the map.
+ */
+describe("the cell-coverage overlay follows the o-charts union", () => {
+  async function withFetch(run: (calls: { url: string; resolve: (body: unknown) => void }[]) => Promise<void>) {
+    const calls: { url: string; resolve: (body: unknown) => void }[] = [];
+    const saved = globalThis.fetch;
+    globalThis.fetch = ((url: string) =>
+      new Promise((done) => {
+        calls.push({ url, resolve: (body) => done(new Response(JSON.stringify(body))) });
+      })) as typeof fetch;
+    try {
+      await run(calls);
+    } finally {
+      globalThis.fetch = saved;
+    }
+  }
+  const settle = () => new Promise((r) => setTimeout(r, 0));
+  const FC = { type: "FeatureCollection", features: [] };
+
+  // Loading fetches twice (the toggle effect and the first `style.load`); the
+  // overlay's add-once guard takes the first answer. Hence urls as a set.
+  const urls = (calls: { url: string }[]) => [...new Set(calls.map((c) => c.url))];
+
+  test("a union change drops the overlay and re-fetches it for the new union", async () => {
+    await withFetch(async (calls) => {
+      const [union, setUnion] = createSignal<"all" | "free">("all");
+      const { map, dispose } = harness({ debugCells: () => true, ochartsUnion: union });
+      expect(urls(calls)).toEqual(["/api/debug/cells"]);
+      for (const c of calls) c.resolve(FC);
+      await settle();
+      expect(map.getSource("debug-cells")).toBeDefined();
+
+      const before = calls.length;
+      setUnion("free"); // say, the server lost for longer than the grace period
+      expect(map.getSource("debug-cells")).toBeUndefined();
+      expect(urls(calls.slice(before))).toEqual(["/api/debug/cells?free=true"]);
+      for (const c of calls.slice(before)) c.resolve(FC);
+      await settle();
+      expect(map.getSource("debug-cells")).toBeDefined();
+      dispose();
+    });
+  });
+
+  test("an answer fetched for the old union is never added", async () => {
+    await withFetch(async (calls) => {
+      const [union, setUnion] = createSignal<"all" | "free">("all");
+      const { map, dispose } = harness({ debugCells: () => true, ochartsUnion: union });
+      const old = calls.length;
+      setUnion("free"); // before the "all" answer arrived
+      for (const c of calls.slice(0, old)) c.resolve(FC); // the licensed outlines, late
+      await settle();
+      expect(map.getSource("debug-cells")).toBeUndefined();
+      for (const c of calls.slice(old)) c.resolve(FC);
+      await settle();
+      expect(map.getSource("debug-cells")).toBeDefined();
+      dispose();
+    });
   });
 });
 
@@ -533,7 +596,7 @@ describe("the measure overlay joins ensureOverlays", () => {
  * pinning it here pins the stack: own-ship must be topmost; AIS TARGETS (traffic,
  * safety-critical) must sit above the ROUTE overlay so planning UI never hides
  * them; MEASURE stays above the AIS targets (an actively-held interactive tool
- * needs a grabbable handle) yet below own-ship; and the weather wash must sit
+ * needs a grabbable handle) yet below own-ship; and a raster wash must sit
  * below every overlay (it is excluded from the hoist and inserted below the
  * seamarks). A drift in any `z` shows up as a failure here rather than as a boat
  * — or traffic — lost behind planning UI on the water.
@@ -556,6 +619,16 @@ describe("the measure overlay joins ensureOverlays", () => {
  * tests).
  */
 describe("overlay z-order (the safety-critical stack)", () => {
+  // A raster wash at `Z.wash` (the weather plugin's slot): below the
+  // seamarks, never hoisted.
+  const WASH_LAYER_IDS = ["test-wash"];
+  const washOverlay = () => ({
+    id: "test-wash",
+    layerIds: WASH_LAYER_IDS,
+    z: Z.wash,
+    ensure() {},
+    update() {},
+  });
   // AIS targets = every id `aisOverlay` itself hoists (own-ship is split out
   // into `ownShipOverlay` — see core/layers/overlay.ts).
   const AIS_TARGET_IDS = aisOverlay.layerIds;
@@ -567,7 +640,7 @@ describe("overlay z-order (the safety-critical stack)", () => {
     expect(AIS_TARGET_IDS).not.toContain(ownShipOverlay.layerIds[0]);
   });
   const overlays = [
-    createWeatherOverlay({ raster: () => null }),
+    washOverlay(),
     createSectorLightsOverlay(new SectorLightLayer() as never),
     createRouteOverlay(undefined),
     createMeasureOverlay(undefined),
@@ -578,7 +651,7 @@ describe("overlay z-order (the safety-critical stack)", () => {
   test("hoist order is route → AIS targets → measure → own-ship", () => {
     // sector-lights is NOT here any more: it follows the "Aids & lights" ENC
     // group's stack position (USER DECISION 2026-07-29), so its `z` went
-    // negative and it opts out of the hoist exactly as the weather wash does.
+    // negative and it opts out of the hoist exactly as a wash does.
     expect(hoistOrder(overlays)).toEqual([
       ...ROUTE_LAYER_IDS,
       ...AIS_TARGET_IDS,
@@ -606,9 +679,9 @@ describe("overlay z-order (the safety-critical stack)", () => {
     expect(last(MEASURE_LAYER_IDS)).toBeLessThan(order.indexOf("signalk-own-ship"));
   });
 
-  test("the weather wash is excluded from the hoist (it stays below the seamarks)", () => {
+  test("a wash is excluded from the hoist (it stays below the seamarks)", () => {
     const order = hoistOrder(overlays);
-    for (const id of WEATHER_LAYER_IDS) expect(order).not.toContain(id);
+    for (const id of WASH_LAYER_IDS) expect(order).not.toContain(id);
   });
 
   // Notices to Mariners (Z.notices): above POI, below the past track and every
@@ -632,10 +705,10 @@ describe("overlay z-order (the safety-critical stack)", () => {
       ownShipOverlay,
       aisOverlay,
       createMeasureOverlay(undefined),
-      createWeatherOverlay({ raster: () => null }),
+      washOverlay(),
       createRouteOverlay(undefined),
     ];
-    // Same relative order regardless of input order (weather still excluded).
+    // Same relative order regardless of input order (the wash still excluded).
     expect(hoistOrder(shuffled)).toEqual([
       ...ROUTE_LAYER_IDS,
       ...AIS_TARGET_IDS,

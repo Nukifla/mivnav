@@ -86,6 +86,9 @@ const BACKEND_ONLY: Record<string, string> = {
   // Each out-of-tree plugin's own settings block (backend mivnav.plugins),
   // validated by that plugin; the core settings UI never reads or writes it.
   "Config.plugins": "per-plugin settings, opaque to the core UI",
+  // Read and written through /plugins (Settings → Plugins), not the config
+  // document — the switch also has to list what is installed.
+  "Config.plugins_disabled": "switched via /plugins (Settings → Plugins)",
   // The device's stable SignalK identity, minted once by the access-request
   // handshake and never edited by a human. The backend owns it end to end
   // (signalkAccess.ts); nothing in the settings UI reads or writes it.
@@ -93,7 +96,7 @@ const BACKEND_ONLY: Record<string, string> = {
     "device identity minted by the access-request flow; never shown or edited",
   // signalk_client_id's twin for the RouteIQ access-request grant — same
   // reasoning, same posture: the backend mints and owns it end to end
-  // (routeiqAccess.ts), nothing in the settings UI reads or writes it.
+  // (the autorouting plugin), nothing in the settings UI reads or writes it.
   "Config.routeiq_client_id":
     "device identity minted by the RouteIQ access-request flow; never shown or edited",
   // The autopilot write token: a secret, always null on the wire (redacted),
@@ -105,17 +108,11 @@ const BACKEND_ONLY: Record<string, string> = {
     "write-only token from the access-request flow; presence shown via meta.signalk_token_set",
   // CredentialsConfig.signalk's exact twin for RouteIQ's own access-request
   // grant — a write-only token, presence shown via meta.routeiq_token_set
-  // (routing.tsx's RouteIQAccess), never modelled as an editable field.
+  // (the autorouting plugin's RouteIQ access UI), never modelled as an editable field.
   "CredentialsConfig.routeiq":
     "write-only token from the RouteIQ access-request flow; presence shown via meta.routeiq_token_set",
-  // The weather proxy's cache dir/budget and upstream host — backend-only
-  // tuning for mivnav.weather.proxy. The client only picks model/field/time,
-  // which are per-DEVICE display settings (ChartSettings.weather), not server
-  // config; nothing in the settings panel reads or writes this slice.
-  "Config.weather":
-    "weather proxy cache/upstream tuning; the client's model/field/time are device settings, not server config",
-  // The POI PMTiles directory — a data-LOCATION tuning, the exact parallel of
-  // the weather slice above. The client only toggles the overlay (the device
+  // The POI PMTiles directory — a data-LOCATION tuning, a backend-only
+  // tuning. The client only toggles the overlay (the device
   // setting `showPois`, ChartSettings); it does not manage where the boat's POI
   // files live, so the server-config document models no poi slice.
   "Config.poi":

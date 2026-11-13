@@ -6,7 +6,6 @@ from __future__ import annotations
 from pathlib import Path
 
 from mivnav.data import CachePolicy, DataProvider, IngestSpec, Refresh
-from mivnav.features.weather import WeatherProxy
 
 EXPECTED_IDS = {
     "chart-store",
@@ -14,15 +13,11 @@ EXPECTED_IDS = {
     "osm_world",
     "satellite",
     "ocharts",
-    "weather",
     "signalk",
     "autopilot",
     # Commanding the anchoralarm plugin — the autopilot's shape exactly.
     "anchor",
     "route",
-    # `routing_data_provider` — registered alongside the `/routing/*`
-    # feature (the mivnav `.mivnav` artifact store's stats live here).
-    "routing",
     # The one `kind="static-asset"` entry: files served whole (package data
     # plus a ~/.config shadow), not tiles/ranges/a stream — see
     # mivnav.features.themes.provider on why the vocabulary gained a fifth
@@ -66,13 +61,6 @@ def test_providers_declare_their_policies(client):
     assert by_id["signalk"]["cache"] is None
     assert by_id["signalk"]["refresh"]["mode"] == "live"
 
-    # weather: immutable disk range-mirror
-    w = by_id["weather"]
-    assert w["kind"] == "range-mirror"
-    assert w["cache"]["tier"] == "disk"
-    assert w["cache"]["negative"] == "none"
-    assert w["refresh"]["mode"] == "immutable"
-
     # o-charts: RAM byte-LRU, single-flight, error-memo, rescan-refresh
     o = by_id["ocharts"]
     assert o["kind"] == "tiled"
@@ -103,7 +91,6 @@ def test_providers_reference_existing_config_slices(client):
     # M-DATA-3: the pre-baked chart store's Derived now keys on the shared
     # `data_root` (no more dedicated `charts` config section/field).
     assert by_id["chart-store"]["config_slice"] == "data_root"
-    assert by_id["weather"]["config_slice"] == "weather"
     assert by_id["signalk"]["config_slice"] == "signalk"
     # autopilot has no config slice of its own — see
     # mivnav.features.autopilot's module docstring — so it points at the
@@ -114,7 +101,7 @@ def test_providers_reference_existing_config_slices(client):
 def test_providers_declare_whether_they_are_bakeable(client):
     """Phase A: the optional ``ingest`` field DECLARES a source is bakeable.
     A serve-time-only source (signalk/chart-store) carries ``None``; a
-    Mode-B source (POI, and — since #rktyytqx — weather) carries an
+    Mode-B source (POI) carries an
     ``IngestSpec`` folded into the summary as a plain dict."""
     by_id = {p["id"]: p for p in client.get("/providers").json()["providers"]}
 
@@ -123,22 +110,6 @@ def test_providers_declare_whether_they_are_bakeable(client):
 
     assert by_id["signalk"]["ingest"] is None
     assert by_id["chart-store"]["ingest"] is None
-
-    # weather is ALSO proxied (the byte-range mirror, unchanged) but is now
-    # bakeable too: a mirrored tree of full `.om` files OR a tree of fetched
-    # GRIB files, chosen per-dataset (jt mzyvvmux) — `region="none"`,
-    # `artifact="file-mirror"` (see mivnav.features.weather.provider's module
-    # docstring).
-    assert by_id["weather"]["ingest"] == {
-        "id": "weather",
-        "source": "http",
-        "out_dir_slice": "weather",
-        "region": "none",
-        "artifact": "file-mirror",
-        "schedule": "manual",
-        "ttl_s": None,
-        "params": {},
-    }
 
     # POI is a Mode-B Overpass→pmtiles bake into its scanned dir. M-DATA-3:
     # `out_dir_slice` is now just the `data_root` subdirectory name (no more
@@ -218,17 +189,12 @@ def test_ingest_spec_defaults_and_serialises():
 def test_ocharts_stats_wire_to_the_real_lru(client):
     o = {p["id"]: p for p in client.get("/providers").json()["providers"]}["ocharts"]
     # wired straight to SingleFlightLRU.stats() for all four caches (cells,
-    # tiles, the routing HazardIndex cache — ROUTING_TODO.md's "HazardIndex
-    # cache" item — and the LandHazardBake cache alongside it, not on any
+    # tiles, the HazardIndex cache the autorouting plugin builds through —
+    # and the LandHazardBake cache alongside it, not on any
     # live serve path yet but a real cache with a real byte budget).
     for cache in ("cell_cache", "tile_cache", "hazard_cache", "land_bake_cache"):
         assert cache in o["stats"]
         assert {"entries", "bytes", "budget", "hits", "loads"} <= set(o["stats"][cache])
-
-
-def test_weather_stats_surface_appears(client):
-    w = {p["id"]: p for p in client.get("/providers").json()["providers"]}["weather"]
-    assert {"runs", "chunks", "bytes", "budget", "chunk_bytes"} <= set(w["stats"])
 
 
 def test_signalk_stats_report_liveness(client):
@@ -277,43 +243,6 @@ def test_a_future_ais_provider_fits_as_one_descriptor():
     assert web.summary()["kind"] == "area-query"
     assert web.summary()["refresh"] == {"mode": "ttl", "interval": 60.0}
     assert web.summary()["cache"]["negative"] == "ttl"
-
-
-# -- the new weather-proxy stats surface (unit) ----------------------------
-
-
-def test_weather_proxy_stats_empty(tmp_path: Path):
-    proxy = WeatherProxy(
-        cache_dir=tmp_path / "absent",  # not created yet
-        cache_budget=1000,
-        tiles_url="http://x",
-        forecast_url="http://y",
-    )
-    assert proxy.stats() == {
-        "runs": 0,
-        "chunks": 0,
-        "bytes": 0,
-        "budget": 1000,
-        "chunk_bytes": proxy._chunk,
-    }
-
-
-def test_weather_proxy_stats_counts_runs_and_chunks(tmp_path: Path):
-    proxy = WeatherProxy(
-        cache_dir=tmp_path,
-        cache_budget=1000,
-        tiles_url="http://x",
-        forecast_url="http://y",
-    )
-    run = tmp_path / "deadbeef"
-    run.mkdir()
-    (run / "0").write_bytes(b"aaaa")
-    (run / "1").write_bytes(b"bbbbbb")
-    (run / "size").write_text("10")  # the sidecar is bytes, not a chunk
-    s = proxy.stats()
-    assert s["runs"] == 1
-    assert s["chunks"] == 2  # size sidecar excluded
-    assert s["bytes"] == 4 + 6 + 2  # both chunks + the "10" sidecar bytes
 
 
 # -- the descriptor as a value type ----------------------------------------
@@ -368,7 +297,7 @@ def test_resolve_dataset_provider_matches_by_id():
     assert resolve_dataset_provider([poi, sat], "poi") is poi
     assert resolve_dataset_provider([poi, sat], "satellite") is sat
     try:
-        resolve_dataset_provider([poi, sat], "weather")
+        resolve_dataset_provider([poi, sat], "nope")
         raise AssertionError("expected UnknownDatasetProvider")
     except UnknownDatasetProvider:
         pass

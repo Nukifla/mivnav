@@ -386,7 +386,9 @@ export interface paths {
          * Cells At
          * @description The union cells charting (lon, lat), finest first — what the map's
          *     overscale / "zoom in for detail" badge reads its compilation scale from.
-         *     `free` mirrors `/tiles/free`: licensed sets left out. Header data only,
+         *     `free` mirrors `/tiles/free`: licensed sets left out. A screen that may
+         *     not see the licensed sets gets the `free` answer whatever it asked (not
+         *     a 403: the badge keeps working on the free charts). Header data only,
          *     no decode; not cached (the answer follows the installed sets).
          */
         get: operations["cells_at_cells_at_get"];
@@ -576,28 +578,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/datasets/weather/models": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Weather Models
-         * @description Which Open-Meteo models this boat can currently show. Deliberately
-         *     separate from ``GET /weather/baked``: "what can I pick" vs "how far
-         *     offline does it reach" are different questions.
-         */
-        get: operations["weather_models_datasets_weather_models_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/datasets/{dataset_id}": {
         parameters: {
             query?: never;
@@ -725,7 +705,9 @@ export interface paths {
          * Debug Cells
          * @description DEBUG: every o-charts cell's coverage as GeoJSON for the client's
          *     "Cell coverage" overlay toggle. One Feature per cell; not cached, not
-         *     on the serve path.
+         *     on the serve path. `free` leaves the licensed sets out, as on
+         *     `/cells/at`; they are left out anyway for a screen that may not see
+         *     them (their headers are o-charts data too).
          */
         get: operations["debug_cells_debug_cells_get"];
         put?: never;
@@ -1172,8 +1154,10 @@ export interface paths {
         };
         /**
          * Eula
-         * @description One EULA document as the chart set ships it. Vendor HTML, so it is
-         *     served sandboxed: no script, no same-origin access.
+         * @description One EULA document as the chart set ships it: an installed set's, or
+         *     the one an install is waiting on (not installed yet — it must be read
+         *     before it is). Vendor HTML, so it is served sandboxed: no script, no
+         *     same-origin access. Not device-gated.
          */
         get: operations["eula_ocharts_eula__eula_id__get"];
         put?: never;
@@ -1236,8 +1220,79 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Install Status */
+        /**
+         * Install Status
+         * @description The install in progress or last finished. ``awaiting_eula``: the set
+         *     is unpacked but not installed until its licence agreement (``eula.id``,
+         *     readable at ``GET /eula/{id}``) is accepted — ``POST /install/accept`` —
+         *     or declined — ``POST /install/decline``.
+         */
         get: operations["install_status_ocharts_install_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/ocharts/install/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Install Accept
+         * @description Accept the waiting install's licence agreement; the install resumes.
+         *     Recorded, so a later update shipping the same text installs without
+         *     asking again.
+         */
+        post: operations["install_accept_ocharts_install_accept_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/ocharts/install/decline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Install Decline
+         * @description Decline the waiting install's licence agreement: the downloaded set
+         *     is deleted and nothing is installed.
+         */
+        post: operations["install_decline_ocharts_install_decline_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/ocharts/licences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Licences
+         * @description Every installed licensed set with its licence agreement and when it
+         *     was accepted — the EULA must be retrievable at any time. Not
+         *     device-gated: an agreement is not chart data.
+         */
+        get: operations["licences_ocharts_licences_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1509,6 +1564,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/plugins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Plugins
+         * @description Every installed plugin, whether it is switched on.
+         */
+        get: operations["list_plugins_plugins_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/plugins/{plugin_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Plugin Enabled
+         * @description Switch an installed plugin on or off.
+         */
+        put: operations["set_plugin_enabled_plugins__plugin_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/poi/catalog": {
         parameters: {
             query?: never;
@@ -1682,232 +1777,6 @@ export interface paths {
          *     it — see RouteStore._settle_active.
          */
         delete: operations["delete_route_routes__route_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/routing/mivnav/artifacts": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Mivnav Artifacts
-         * @description One entry per installed chart set: whether its ``.mivnav`` artifact
-         *     exists, whether it may be USED right now, and if not, precisely why.
-         *
-         *     This is the surface that makes the route path's fallback checkable
-         *     rather than merely honest — `_plan_via_mivnav` names its reason on
-         *     every request it serves, but only here can you ask the question
-         *     without planning a route first. ``reason`` is
-         *     ``chartcore::mivnav::Staleness``' own text, which NAMES the stale
-         *     component (schema/derivation/authority/band-ladder/resolution-policy,
-         *     or the chart-set/sequence mismatch); ``kind`` is the same fact
-         *     machine-readable (``missing``/``unreadable``/``chart_set``/
-         *     ``sequence``/``versions``, or ``null`` when usable).
-         *
-         *     Reported against the CURRENT
-         *     ``RoutingConfig.artifact_catzoc_allowance_mode``, because that is what
-         *     a route request would look for — an artifact built under a different
-         *     mode reads as ``missing`` here, which is the honest answer to "is
-         *     there one this boat can use", not a claim that no file exists.
-         */
-        get: operations["list_mivnav_artifacts_routing_mivnav_artifacts_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/routing/mivnav/build": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Mivnav Build Status
-         * @description The current (or most recent) ``.mivnav`` build's status — the same
-         *     blob ``POST /routing/mivnav/build`` returns, polled.
-         *
-         *     ``state`` is ``idle`` before the first build of this process,
-         *     ``fetch``/``bake`` while running, ``done``, or ``error`` (with
-         *     ``error`` text; ``"cancelled"`` for a cancelled one). Everything the
-         *     build measured rides on the same blob — see
-         *     :class:`mivnav.features.routing.artifact_build.JobStatus`.
-         */
-        get: operations["mivnav_build_status_routing_mivnav_build_get"];
-        put?: never;
-        /**
-         * Build Mivnav Artifact
-         * @description Start a background build of one chart set's precomputed ``.mivnav``
-         *     routing artifact, and return the job status immediately.
-         *
-         *     The build runs every rung of the band ladder over the WHOLE chart set
-         *     (§6 forbids it knowing any vessel's draft, so it precomputes all bands
-         *     or none) — minutes of CPU, which is exactly why it is a background job
-         *     and never part of a route request. Poll ``GET /routing/mivnav/build``;
-         *     the finished status carries §20's record per run (tile counts, tiles
-         *     per resolution rung, blocked/no-coverage/charted-depth cells), which
-         *     is the only evidence that the build saw the charts it should have.
-         *
-         *     The CATZOC allowance mode is taken from
-         *     ``RoutingConfig.artifact_catzoc_allowance_mode`` at the moment the job
-         *     starts and is part of the artifact's file name — a route request
-         *     running under a different mode will not find this artifact and will
-         *     say so rather than silently use one built under a laxer policy (see
-         *     :mod:`mivnav.features.routing.mivnav_artifact`).
-         *
-         *     409 for an unknown/ambiguous chart set, a set with no readable cells,
-         *     or a build already running; 422 for a chart-set id that cannot be
-         *     turned into a path at all.
-         */
-        post: operations["build_mivnav_artifact_routing_mivnav_build_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/routing/mivnav/build/cancel": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Cancel Mivnav Build
-         * @description Ask a running build to stop. 409 when none is running.
-         *
-         *     Cancellation is COARSE and says so: the per-cell decode stage checks
-         *     between cells and stops promptly, but the build itself is one
-         *     ``chartcore.mivnav_build_artifact`` call with no checkpoint inside it,
-         *     so a cancel during that stage is recorded and takes effect when the
-         *     call returns. Either way the job settles to
-         *     ``state: "error"``/``error: "cancelled"`` rather than sticking in
-         *     ``bake`` forever.
-         */
-        post: operations["cancel_mivnav_build_routing_mivnav_build_cancel_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/routing/plan": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Plan Route
-         * @description A hazard-avoiding route from ``body.from_`` to ``body.to``.
-         *
-         *     See the module docstring for the fallback-to-a-straight-line case and
-         *     why it still always returns something to draw.
-         */
-        post: operations["plan_route_routing_plan_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/routing/routeiq/access-request": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Start Routeiq Access Request
-         * @description Ask the SignalK server for RouteIQ access. Returns
-         *     ``{"state": "PENDING", "requestId": <id>}``; the frontend polls
-         *     :func:`poll_routeiq_access_request` with that id while a human
-         *     approves the request in the SignalK admin (Security → Access
-         *     Requests, listed as "mivnav routing" — see
-         *     ``mivnav.features.routing.routeiq``'s import of ``AccessRequestClient``
-         *     default description, overridden below to tell it apart from the
-         *     autopilot's own "mivnav" request).
-         */
-        post: operations["start_routeiq_access_request_routing_routeiq_access_request_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/routing/routeiq/access-request/{request_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Poll Routeiq Access Request
-         * @description Poll a pending RouteIQ access request; on approval, store the
-         *     granted token in ``credentials.routeiq.token`` — same shape as
-         *     ``mivnav.api.signalk.poll_access_request``, see its own docstring for
-         *     the approved/denied/still-pending contract.
-         */
-        get: operations["poll_routeiq_access_request_routing_routeiq_access_request__request_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/routing/verify": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Verify Route
-         * @description Exact per-leg hazard check for a route this app never searched —
-         *     a user-drawn or otherwise already-fixed waypoint chain.
-         *
-         *     Unlike `/plan`, nothing here is routed, simplified, or approximated:
-         *     every leg of `body.waypoints`, EXACTLY as given, is checked against
-         *     the same hard hazard union `/plan` itself builds (same depth/margin/
-         *     air-draft rules — `hazard_indexes_for_bbox`, `_HARD_LATERAL_FLOOR_M`,
-         *     `cfg.air_draft_m`), via chartcore's own exact `verify_route` (no
-         *     `simplify_path` shortcutting, unlike `chartcore.resimplify_route` —
-         *     see that function's own docs for why this endpoint needed its own
-         *     entry point rather than reusing it: renumbering the caller's own legs
-         *     would silently break `flagged_legs`' own "same order as the request"
-         *     contract).
-         *
-         *     Only the HARD hazard union is checked — no TSS/fairway/buoyage/
-         *     caution/survey preference layer (those are soft cost terms for a
-         *     SEARCH to weigh, meaningless for a plain "does this exact line cross
-         *     charted danger" check) — `VerifyResponse.warnings` says so.
-         */
-        post: operations["verify_route_routing_verify_post"];
-        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -2457,211 +2326,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/weather/baked": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Baked
-         * @description Which domains this boat has ON DISK, and each one's forecast span —
-         *     the one route distinguishing "answers offline" from "falls through to
-         *     the live proxy". Derived from the filesystem, not ``Config.datasets``.
-         */
-        get: operations["baked_weather_baked_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/weather/data_spatial/{path}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Data Spatial */
-        get: operations["data_spatial_weather_data_spatial__path__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        /**
-         * Data Spatial Head
-         * @description The reader HEADs a ``.om`` before ranging it — without this a GET-only
-         *     proxy 405s it. A baked file answers first with no network attempt; a MISS
-         *     falls through to the live proxy only if allow-listed.
-         */
-        head: operations["data_spatial_head_weather_data_spatial__path__head"];
-        patch?: never;
-        trace?: never;
-    };
-    "/weather/forecast": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Forecast */
-        get: operations["forecast_weather_forecast_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/weather/point": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Point
-         * @description `{"value": ..., "direction": ...}` at a point — replaces the deleted
-         *     client-side `sampleWeatherPoint`; used today only for `waves`, which the
-         *     plain point-forecast API can't answer. Reuses `GridDecoder`'s LRU, so
-         *     near-free once the view's wash tile already decoded the same variable.
-         */
-        get: operations["point_weather_point_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/weather/sources": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Weather Sources
-         * @description ``{"sources": [...]}`` — every weather source this boat can select.
-         *     ids are OPAQUE, never parsed by any consumer (a `grib:` id leaked into
-         *     the frontend once already) — see docs/architecture/weather-tiles-serving.md.
-         */
-        get: operations["weather_sources_weather_sources_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/weather/sources/{source_id}/field/{variable}/{z}/{x}/{y}.png": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Source Field Tile
-         * @description The RGBA vector texture the particle sim samples. ``field``, not
-         *     ``wind``: waves carry a direction too, so no second route is needed. A
-         *     variable with no direction 404s rather than encoding zeros (a plausible-looking but wrong still texture).
-         */
-        get: operations["source_field_tile_weather_sources__source_id__field__variable___z___x___y__png_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/weather/sources/{source_id}/point": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Source Point
-         * @description ``{"value": ..., "direction": ...}`` at one position. ``no-store``,
-         *     matching the legacy point route: the whole point is "matches what is on
-         *     screen right now".
-         */
-        get: operations["source_point_weather_sources__source_id__point_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/weather/sources/{source_id}/wash/{variable}/{z}/{x}/{y}.png": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Source Wash Tile
-         * @description The colourized raster wash for one source's variable at one instant.
-         */
-        get: operations["source_wash_tile_weather_sources__source_id__wash__variable___z___x___y__png_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/weather/tiles/wash/{z}/{x}/{y}.png": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Wash Tile */
-        get: operations["wash_tile_weather_tiles_wash__z___x___y__png_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/weather/tiles/wind/{z}/{x}/{y}.png": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Wind Tile */
-        get: operations["wind_tile_weather_tiles_wind__z___x___y__png_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2699,6 +2363,11 @@ export interface components {
         AdjustBody: {
             /** Degrees */
             degrees: number;
+        };
+        /** Body_set_plugin_enabled_plugins__plugin_id__put */
+        Body_set_plugin_enabled_plugins__plugin_id__put: {
+            /** Enabled */
+            enabled: boolean;
         };
         /** Body_upload_ocharts_upload_post */
         Body_upload_ocharts_upload_post: {
@@ -2750,11 +2419,8 @@ export interface components {
             params?: {
                 [key: string]: unknown;
             };
-            /**
-             * Provider
-             * @enum {string}
-             */
-            provider: "charts" | "poi" | "satellite" | "ocharts" | "weather" | "osm_world" | "notices";
+            /** Provider */
+            provider: string;
             /** Region Id */
             region_id?: string | null;
             /**
@@ -2846,6 +2512,11 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /** InstallAcceptBody */
+        InstallAcceptBody: {
+            /** Eula Id */
+            eula_id: string;
+        };
         /** InstallBody */
         InstallBody: {
             /**
@@ -2878,13 +2549,6 @@ export interface components {
             /** System Name */
             system_name: string;
         };
-        /** LatLon */
-        LatLon: {
-            /** Lat */
-            lat: number;
-            /** Lon */
-            lon: number;
-        };
         /**
          * LatestRelease
          * @description The newest release GitHub has that this server would offer.
@@ -2899,13 +2563,25 @@ export interface components {
             /** Version */
             version: string;
         };
-        /** MivnavBuildRequest */
-        MivnavBuildRequest: {
-            /**
-             * Chart Set Id
-             * @description Which installed o-charts set to build the artifact for. May be omitted only when exactly one set is installed; with several, naming one is required — building the wrong one costs minutes of Pi CPU and leaves the one you wanted still unbuilt.
-             */
-            chart_set_id?: string | null;
+        /** LicenceOut */
+        LicenceOut: {
+            /** Accepted At */
+            accepted_at: number | null;
+            /** Accepted Via */
+            accepted_via: string;
+            /** Edition */
+            edition: string;
+            /** Eula Id */
+            eula_id: string | null;
+            /** Name */
+            name: string;
+            /** Set Id */
+            set_id: string;
+        };
+        /** LicencesOut */
+        LicencesOut: {
+            /** Sets */
+            sets: components["schemas"]["LicenceOut"][];
         };
         /** MobAckBody */
         MobAckBody: {
@@ -2932,41 +2608,6 @@ export interface components {
             lng: number;
             /** Radiusm */
             radiusM: number | null;
-        };
-        /** PlanRequest */
-        PlanRequest: {
-            /**
-             * Debug
-             * @default false
-             */
-            debug: boolean;
-            /** Draft M */
-            draft_m?: number | null;
-            from: components["schemas"]["LatLon"];
-            to: components["schemas"]["LatLon"];
-        };
-        /** PlanResponse */
-        PlanResponse: {
-            /** Approximate Legs */
-            approximate_legs?: boolean[];
-            /** Check Manually Legs */
-            check_manually_legs?: boolean[];
-            /** Debug Legs */
-            debug_legs?: {
-                [key: string]: unknown;
-            }[] | null;
-            /** Debug Macro Waypoints */
-            debug_macro_waypoints?: number[][] | null;
-            /** Distance Nm */
-            distance_nm: number;
-            /** Timings */
-            timings?: {
-                [key: string]: unknown;
-            }[] | null;
-            /** Warnings */
-            warnings: string[];
-            /** Waypoints */
-            waypoints: components["schemas"]["LatLon"][];
         };
         /** RadiusBody */
         RadiusBody: {
@@ -3078,26 +2719,6 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
-        };
-        /** VerifyRequest */
-        VerifyRequest: {
-            /** Draft M */
-            draft_m?: number | null;
-            /** Waypoints */
-            waypoints: components["schemas"]["LatLon"][];
-        };
-        /** VerifyResponse */
-        VerifyResponse: {
-            /** Check Manually Legs */
-            check_manually_legs: boolean[];
-            /** Flagged Legs */
-            flagged_legs: boolean[];
-            /** Reasons */
-            reasons: string[];
-            /** Safe */
-            safe: boolean;
-            /** Warnings */
-            warnings: string[];
         };
     };
     responses: never;
@@ -4236,26 +3857,6 @@ export interface operations {
             };
         };
     };
-    weather_models_datasets_weather_models_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
     put_dataset_datasets__dataset_id__put: {
         parameters: {
             query?: never;
@@ -4462,7 +4063,9 @@ export interface operations {
     };
     debug_cells_debug_cells_get: {
         parameters: {
-            query?: never;
+            query?: {
+                free?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -4476,6 +4079,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -5271,6 +4883,83 @@ export interface operations {
             };
         };
     };
+    install_accept_ocharts_install_accept_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InstallAcceptBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    install_decline_ocharts_install_decline_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    licences_ocharts_licences_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LicencesOut"];
+                };
+            };
+        };
+    };
     delete_set_ocharts_sets__set_id__delete: {
         parameters: {
             query?: never;
@@ -5639,6 +5328,65 @@ export interface operations {
             };
         };
     };
+    list_plugins_plugins_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    set_plugin_enabled_plugins__plugin_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plugin_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Body_set_plugin_enabled_plugins__plugin_id__put"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     catalog_poi_catalog_get: {
         parameters: {
             query?: never;
@@ -5932,228 +5680,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_mivnav_artifacts_routing_mivnav_artifacts_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-        };
-    };
-    mivnav_build_status_routing_mivnav_build_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-        };
-    };
-    build_mivnav_artifact_routing_mivnav_build_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["MivnavBuildRequest"] | null;
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    cancel_mivnav_build_routing_mivnav_build_cancel_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-        };
-    };
-    plan_route_routing_plan_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PlanRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PlanResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    start_routeiq_access_request_routing_routeiq_access_request_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-        };
-    };
-    poll_routeiq_access_request_routing_routeiq_access_request__request_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                request_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    verify_route_routing_verify_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["VerifyRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["VerifyResponse"];
                 };
             };
             /** @description Validation Error */
@@ -6907,348 +6433,6 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
-                };
-            };
-        };
-    };
-    baked_weather_baked_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    data_spatial_weather_data_spatial__path__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                path: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    data_spatial_head_weather_data_spatial__path__head: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                path: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    forecast_weather_forecast_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    point_weather_point_get: {
-        parameters: {
-            query: {
-                path: string;
-                variable: string;
-                lat: number;
-                lon: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    weather_sources_weather_sources_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    source_field_tile_weather_sources__source_id__field__variable___z___x___y__png_get: {
-        parameters: {
-            query: {
-                time: string;
-            };
-            header?: never;
-            path: {
-                source_id: string;
-                variable: string;
-                z: number;
-                x: number;
-                y: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    source_point_weather_sources__source_id__point_get: {
-        parameters: {
-            query: {
-                variable: string;
-                time: string;
-                lat: number;
-                lon: number;
-            };
-            header?: never;
-            path: {
-                source_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    source_wash_tile_weather_sources__source_id__wash__variable___z___x___y__png_get: {
-        parameters: {
-            query: {
-                /** @description ISO-8601 valid time, e.g. 2026-07-29T15:00Z */
-                time: string;
-                dark?: boolean;
-            };
-            header?: never;
-            path: {
-                source_id: string;
-                variable: string;
-                z: number;
-                x: number;
-                y: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    wash_tile_weather_tiles_wash__z___x___y__png_get: {
-        parameters: {
-            query: {
-                /** @description concrete .om path, e.g. dwd_icon/2026/.../T1500.om */
-                path: string;
-                variable: string;
-                dark?: boolean;
-            };
-            header?: never;
-            path: {
-                z: number;
-                x: number;
-                y: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    wind_tile_weather_tiles_wind__z___x___y__png_get: {
-        parameters: {
-            query: {
-                path: string;
-                variable: string;
-            };
-            header?: never;
-            path: {
-                z: number;
-                x: number;
-                y: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

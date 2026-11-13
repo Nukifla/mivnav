@@ -6,6 +6,7 @@ import KeyRound from "lucide-solid/icons/key-round";
 import Library from "lucide-solid/icons/library";
 import MapPin from "lucide-solid/icons/map-pin";
 import Package from "lucide-solid/icons/package";
+import Puzzle from "lucide-solid/icons/puzzle";
 import Route from "lucide-solid/icons/route";
 import SatelliteDish from "lucide-solid/icons/satellite-dish";
 import SlidersHorizontal from "lucide-solid/icons/sliders-horizontal";
@@ -15,11 +16,14 @@ import { Slider, Toggle } from "../ui/Controls";
 import { Button } from "../ui/Button";
 import ChartLibrarySection from "./ChartLibrary";
 import OchartsScreensSection, { OCHARTS_SCREENS_SCOPE } from "./OchartsScreens";
+import ChartLicencesSection, { CHART_LICENCES_SCOPE } from "./ChartLicences";
+import ScrollText from "lucide-solid/icons/scroll-text";
 import MonitorSmartphone from "lucide-solid/icons/monitor-smartphone";
 import DatasetListSection from "./DatasetList";
 import RegionListSection from "./regions";
 import StorageSection from "./Storage";
 import SoftwareSection from "./Software";
+import PluginsSection from "./Plugins";
 import { DiskTileCacheMeter } from "./diskTileCache";
 import { HistoryProviderField } from "./historyProvider";
 import {
@@ -36,7 +40,6 @@ import { bumpChartEpoch } from "../chartProtocol";
 import { createSignalKAccess } from "../signalkAccess";
 import type { SignalKStatus } from "../signalk";
 import { NAV_SECTION } from "./boat";
-import { ROUTING_SECTIONS } from "./routing";
 import { COLLISION_SECTION } from "./collision";
 import { GNSS_SECTION } from "./gnss";
 import BellRing from "lucide-solid/icons/bell-ring";
@@ -634,11 +637,13 @@ export const BOAT_CATEGORIES: readonly SettingsCategory[] = [
     blurb: "When the boat's alarms fire — on every screen and on SignalK." }),
   // Route following + the auto-router, as separate sections (see routing.tsx).
   defineSettingsCategory({ id: "routes", title: "Routes", icon: Route, group: "server", order: 60,
-    blurb: "Following a route, and how the auto-router plans one (with Beta autorouting on, in Advanced)." }),
+    blurb: "Following a route, and how the auto-router plans one (with the Autorouting plugin)." }),
   // Chart detail rides here too, above the locked set-once fields: a rarely
   // touched boat-wide tuning knob, not something for the main rail.
   defineSettingsCategory({ id: "advanced", title: "Advanced", icon: SlidersHorizontal, group: "server", order: 80,
     blurb: "Chart detail, beta features, paths, caches and tuning — mostly set once when the boat's computer is set up." }),
+  defineSettingsCategory({ id: "plugins", title: "Plugins", icon: Puzzle, group: "server", order: 85,
+    blurb: "Add-ons installed on the boat's server, and switching them on or off." }),
   defineSettingsCategory({ id: "software", title: "Software", icon: Package, group: "server", order: 90,
     blurb: "Which mivnav the boat's server runs, and updating it." }),
 ];
@@ -675,6 +680,15 @@ export const BOAT_SECTIONS: readonly SettingsSection<SettingsCtx>[] = [
     category: "charts",
     order: 30,
     render: () => <OchartsScreensSection />,
+  }),
+  defineSettingsSection<SettingsCtx>({
+    id: CHART_LICENCES_SCOPE,
+    title: "Chart licences",
+    icon: ScrollText,
+    group: "server",
+    category: "charts",
+    order: 40,
+    render: () => <ChartLicencesSection />,
   }),
   defineSettingsSection<SettingsCtx>({
     id: "datasets",
@@ -726,7 +740,6 @@ export const BOAT_SECTIONS: readonly SettingsSection<SettingsCtx>[] = [
   COLLISION_SECTION,
   GNSS_SECTION,
   NAV_SECTION,
-  ...ROUTING_SECTIONS,
   defineSettingsSection<SettingsCtx>({
     id: "chart-detail",
     title: "Chart detail",
@@ -744,6 +757,15 @@ export const BOAT_SECTIONS: readonly SettingsSection<SettingsCtx>[] = [
     category: "advanced",
     order: 10,
     render: (p) => <AdvancedSection cfg={p.ctx.cfg} />,
+  }),
+  defineSettingsSection<SettingsCtx>({
+    id: "plugins",
+    title: "Plugins",
+    icon: Puzzle,
+    group: "server",
+    category: "plugins",
+    order: 10,
+    render: () => <PluginsSection />,
   }),
   defineSettingsSection<SettingsCtx>({
     id: "software",

@@ -8,8 +8,18 @@
 // here stores it. What lives here: polling the status, the once-per-launch
 // prompt (and its "don't show again"), and dropping cached o-charts tiles
 // when this screen loses its slot.
+//
+// Also the o-charts licence's "no o-charts without a live connection" rule
+// (docs/ocharts-licence-compliance-plan.md, W2): once this screen has lost
+// the server for longer than DISCONNECT_GRACE_MS it draws `/tiles/free`, as
+// an unregistered screen does. Licensed tiles are `no-store`, so MapLibre's
+// RAM cache is their only copy; switching the union changes the `chart-all`
+// source URL, and MapLibre's setStyle diff then removes that source and its
+// tiles. The Service Worker's tile cache is deliberately NOT cleared here: it
+// holds no licensed tiles (core/tileCache.ts refuses `no-store`, and never
+// sees `/tiles/all`), only the free tiles this screen can still draw offline.
 
-import { createSignal, type Accessor } from "solid-js";
+import { createSignal, untrack, type Accessor } from "solid-js";
 import type { components } from "../api.generated";
 import type { ChartSet } from "./catalog";
 import { clearChartTileCache } from "./chartProtocol";
@@ -23,6 +33,39 @@ const API = "/api/ocharts";
  * a screen removed by another keeps drawing them, at most (while online). */
 export const POLL_MS = 60_000;
 
+/** How often the status is asked while the server looks lost, so that a
+ * reconnect brings the o-charts back within seconds, not a minute. */
+export const FAST_POLL_MS = 3_000;
+
+/** How long the server may be lost before this screen stops showing o-charts
+ * (decided 2026-11-13): long enough that a Wi-Fi blip does not blank the chart. */
+export const DISCONNECT_GRACE_MS = 20_000;
+
+/** A status poll that has not answered by now counts as failed — a hung
+ * request must not stall the polling (and the grace clock) behind it. */
+const POLL_TIMEOUT_MS = 10_000;
+
+/** The controller's clock tick: evaluates the grace period and drives the polls. */
+const TICK_MS = 1_000;
+
+/** Answers that mean "the backend is not there" even though something (the
+ * dev proxy, the Pi's reverse proxy) did answer. Anything else is contact. */
+const BACKEND_DOWN = new Set([502, 503, 504]);
+
+/** Is the server reachable, as far as the o-charts rule is concerned? False
+ * once the backend websocket (`linkDownSince`, core/signalk.ts) has been down,
+ * or the status poll has been failing (`pollFailedSince`), for longer than
+ * the grace period. Pure. */
+export function serverReachableAt(
+  now: number,
+  linkDownSince: number | null,
+  pollFailedSince: number | null,
+  graceMs: number = DISCONNECT_GRACE_MS,
+): boolean {
+  const lost = (since: number | null) => since !== null && now - since > graceMs;
+  return !lost(linkDownSince) && !lost(pollFailedSince);
+}
+
 /** localStorage key for "Don't show again" on the registration prompt. */
 export const HIDE_PROMPT_KEY = "mivnav.ochartsDevicePrompt.hidden";
 
@@ -30,9 +73,11 @@ export const HIDE_PROMPT_KEY = "mivnav.ochartsDevicePrompt.hidden";
 export type OchartsUnion = "all" | "free";
 
 /** `/tiles/free` while a licensed set is installed and this screen may not
- * show it; `/tiles/all` otherwise — including before the first answer, so a
+ * show it, or while the server is unreachable (see `serverReachableAt`);
+ * `/tiles/all` otherwise — including before the first answer, so a
  * registered screen never flashes its charts away on boot. */
-export function unionFor(status: DeviceStatus | undefined): OchartsUnion {
+export function unionFor(status: DeviceStatus | undefined, reachable = true): OchartsUnion {
+  if (!reachable) return "free";
   return status !== undefined && status.gate && !status.allowed ? "free" : "all";
 }
 
@@ -131,6 +176,9 @@ export interface OchartsDevice {
   /** The last answer; undefined until the first arrives. */
   status: Accessor<DeviceStatus | undefined>;
   union: Accessor<OchartsUnion>;
+  /** False once the server has been lost for longer than the grace period;
+   * the union is then `free` (see `serverReachableAt`). */
+  serverReachable: Accessor<boolean>;
   /** The registration screen is up. */
   promptOpen: Accessor<boolean>;
   /** Show it (Settings' "Register this device"). */
@@ -147,20 +195,40 @@ export interface OchartsDevice {
   accept: (ids: string[]) => Promise<void>;
   remove: (id: string) => Promise<void>;
   rename: (id: string, name: string) => Promise<void>;
-  /** Start polling (once); returns the stop function. */
-  start: () => () => void;
+  /** Start polling (once); returns the stop function. `linkDownSince` is the
+   * backend websocket's `SignalKState.linkDownSince`, the faster of the two
+   * signs that the server is gone. */
+  start: (linkDownSince?: Accessor<number | null>) => () => void;
 }
 
 export interface OchartsDeviceDeps {
   fetch?: typeof fetch;
   /** Drops cached o-charts tiles when this screen loses its slot. */
   clearTiles?: () => void;
+  /** Clock and tick timer — seams a test drives. */
+  now?: () => number;
+  setInterval?: (fn: () => void, ms: number) => unknown;
+  clearInterval?: (handle: unknown) => void;
 }
 
 export function createOchartsDevice(deps: OchartsDeviceDeps = {}): OchartsDevice {
   const doFetch = deps.fetch ?? ((input, init) => fetch(input, init));
   const clearTiles = deps.clearTiles ?? clearChartTileCache;
+  const clock = deps.now ?? (() => Date.now());
+  const setTimer = deps.setInterval ?? ((fn: () => void, ms: number) => setInterval(fn, ms));
+  const clearTimer = deps.clearInterval ?? ((h: unknown) => clearInterval(h as ReturnType<typeof setInterval>));
   const [status, setStatus] = createSignal<DeviceStatus | undefined>(undefined);
+  const [serverReachable, setServerReachable] = createSignal(true);
+  let linkDownSince: Accessor<number | null> = () => null;
+  let pollFailedSince: number | null = null;
+  let lastPollAt = -Infinity;
+  let polling = false;
+
+  // Lost the server past the grace period: stop drawing o-charts (the union
+  // flips to `free`, see the header). Back on contact.
+  const evaluate = () => {
+    setServerReachable(serverReachableAt(clock(), untrack(linkDownSince), pollFailedSince));
+  };
   const [promptOpen, setPromptOpen] = createSignal(false);
   const [promptHidden, setHiddenSignal] = createSignal(readHidden());
   let shownThisLaunch = false;
@@ -180,11 +248,31 @@ export function createOchartsDevice(deps: OchartsDeviceDeps = {}): OchartsDevice
   };
 
   const refresh = async () => {
+    lastPollAt = clock();
+    polling = true;
     try {
-      apply(await json<DeviceStatus>(doFetch, `${API}/devices/me`));
+      const signal = typeof AbortSignal.timeout === "function" ? AbortSignal.timeout(POLL_TIMEOUT_MS) : undefined;
+      const res = await doFetch(`${API}/devices/me`, { signal });
+      if (BACKEND_DOWN.has(res.status)) throw new Error(`HTTP ${res.status}`);
+      pollFailedSince = null;
+      const body = (await res.json().catch(() => null)) as DeviceStatus | null;
+      if (res.ok && body) apply(body);
     } catch {
-      // Server unreachable: keep the last answer, the next poll retries.
+      // Server unreachable: keep the last answer, the next poll retries —
+      // and past the grace period, stop showing o-charts (`evaluate`).
+      pollFailedSince ??= clock();
+    } finally {
+      polling = false;
     }
+    evaluate();
+  };
+
+  // Every second: is the server still there, and is a poll due? Every 60 s
+  // normally, every few seconds while the server looks lost.
+  const tick = () => {
+    const degraded = untrack(linkDownSince) !== null || pollFailedSince !== null || !untrack(serverReachable);
+    if (!polling && clock() - lastPollAt >= (degraded ? FAST_POLL_MS : POLL_MS)) void refresh();
+    evaluate();
   };
 
   const send = (url: string, method: string, body?: unknown) =>
@@ -196,7 +284,8 @@ export function createOchartsDevice(deps: OchartsDeviceDeps = {}): OchartsDevice
   let started = false;
   return {
     status,
-    union: () => unionFor(status()),
+    union: () => unionFor(status(), serverReachable()),
+    serverReachable,
     promptOpen,
     openPrompt: () => {
       shownThisLaunch = true;
@@ -229,19 +318,21 @@ export function createOchartsDevice(deps: OchartsDeviceDeps = {}): OchartsDevice
       await send(`${API}/devices/${encodeURIComponent(id)}`, "PATCH", { name });
       await refresh();
     },
-    start: () => {
+    start: (link) => {
       if (started) return () => {};
       started = true;
+      if (link) linkDownSince = link;
       void refresh();
-      const timer = setInterval(() => void refresh(), POLL_MS);
+      const timer = setTimer(tick, TICK_MS);
       const onVisible = () => {
         if (document.visibilityState === "visible") void refresh();
       };
-      document.addEventListener("visibilitychange", onVisible);
+      const doc = typeof document === "undefined" ? undefined : document;
+      doc?.addEventListener("visibilitychange", onVisible);
       return () => {
         started = false;
-        clearInterval(timer);
-        document.removeEventListener("visibilitychange", onVisible);
+        clearTimer(timer);
+        doc?.removeEventListener("visibilitychange", onVisible);
       };
     },
   };
