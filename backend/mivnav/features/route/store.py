@@ -343,6 +343,19 @@ class RouteStore:
             self._active = active
             return self._active
 
+    def replace_active(self, expected: ActiveLeg | None, new: ActiveLeg) -> bool:
+        """Set ``new`` only if the active leg is still ``expected`` — one
+        atomic check-and-set, so a human GO landing in between always wins.
+        False (and no change) if it moved on or ``new`` does not resolve."""
+        with self._lock:
+            if self._active != expected:
+                return False
+            route = self._routes.get(new.route_id)
+            if route is None or not any(w.id == new.waypoint_id for w in route.waypoints):
+                return False
+            self._active = new
+            return True
+
     def _settle_active(self) -> None:
         """Drop an active leg that no longer addresses a real waypoint
         (caller holds the lock) — invariant #8: never silently pick a

@@ -117,7 +117,9 @@ class NavWatcher:
             return  # nothing (new) reported to adopt
 
         current = self._runtime.routes.active()
-        match = _nearest_waypoint(self._runtime, next_point, nav.course_match_tolerance_m)
+        match = _nearest_waypoint(
+            self._runtime, next_point, nav.course_match_tolerance_m, current
+        )
         if match is None:
             # No matching waypoint — deliberately NOT clearing the active
             # leg: an unmatched course is not mivnav's to act on.
@@ -260,25 +262,31 @@ class NavWatcher:
             except ValueError:
                 return
             if idx + 1 < len(route.waypoints):
-                # Lightweight step: no store write, no position resolution.
-                # The store's active leg catches up via `_maybe_adopt_course`
-                # once SignalK echoes the new nextPoint.
+                # Lightweight step: no position resolution, just the PUT.
                 advanced = advance_active_route(self._runtime)
+                next_wp = route.waypoints[idx + 1]
                 if advanced.failed:
                     # #zsswlmpz: this is the ONLY report this call site has
                     # (an arrival has no HTTP caller) — must not say
                     # "advancing" about a PUT that never reached the box.
+                    # The store stays put too: SignalK still steers to it.
                     log.warning(
                         "a SignalK arrival at %s could NOT be advanced toward %s: %s",
                         from_leg.waypoint_id,
-                        route.waypoints[idx + 1].id,
+                        next_wp.id,
                         advanced.detail,
                     )
                 else:
+                    # Write the advanced leg now rather than waiting for the
+                    # echo, so Next/Previous never step from a stale index.
+                    # Compare-and-set: a human GO in between always wins.
+                    self._runtime.routes.replace_active(
+                        from_leg, ActiveLeg(route_id=route.id, waypoint_id=next_wp.id)
+                    )
                     log.info(
                         "reacted to a SignalK arrival: advancing %s toward %s",
                         from_leg.waypoint_id,
-                        route.waypoints[idx + 1].id,
+                        next_wp.id,
                     )
             else:
                 self._runtime.routes.set_active(None)
@@ -317,10 +325,46 @@ def _course_point(course: dict[str, Any] | None, which: str) -> Point | None:
     return None
 
 
-def _nearest_waypoint(runtime: Runtime, point: Point, tolerance_m: float) -> tuple[Route, int] | None:
-    """The closest waypoint (across ALL of mivnav's own routes, not just the
-    active one) to ``point``, within ``tolerance_m``, or ``None``. Runs on
-    the listener; ``routes.list()`` is in-memory-only, so no HTTP here."""
+def _nearest_waypoint(
+    runtime: Runtime,
+    point: Point,
+    tolerance_m: float,
+    active: ActiveLeg | None = None,
+) -> tuple[Route, int] | None:
+    """The waypoint SignalK's ``point`` most plausibly means, within
+    ``tolerance_m``, or ``None``. Runs on the listener; ``routes.list()`` /
+    ``routes.get()`` are in-memory-only, so no HTTP here.
+
+    The followed route is searched first and wins outright if anything on
+    it matches — a reversed copy or duplicate import with the same
+    coordinates must never steal the leg. Within it, equal distances go to
+    the index closest to the current one + 1 (the echo of the current leg,
+    or the next one), so a closed loop's last point (== its first) is not
+    read as index 0. Only with nothing followed, or no match on the
+    followed route, are all routes searched, newest first.
+
+    The course snapshot carries positions only (no activeRoute href /
+    pointIndex — see :class:`mivnav.signalk.model.Course`), hence matching.
+    """
+    if active is not None:
+        route = runtime.routes.get(active.route_id)
+        if route is not None:
+            ids = [w.id for w in route.waypoints]
+            expected = ids.index(active.waypoint_id) + 1 if active.waypoint_id in ids else 0
+            best_key: tuple[float, int, bool] | None = None
+            best_idx = -1
+            for idx, wp in enumerate(route.waypoints):
+                d = haversine_m(point, Point(wp.lat, wp.lon))
+                if d > tolerance_m:
+                    continue
+                # Ties on index distance go to the earlier one (the current
+                # leg's own echo beats skipping a point ahead).
+                key = (d, abs(idx - expected), idx > expected)
+                if best_key is None or key < best_key:
+                    best_key, best_idx = key, idx
+            if best_key is not None:
+                return route, best_idx
+
     best: tuple[Route, int, float] | None = None
     for route in runtime.routes.list():
         for idx, wp in enumerate(route.waypoints):

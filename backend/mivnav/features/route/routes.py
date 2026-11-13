@@ -96,8 +96,35 @@ def put_active(
         settled = runtime.routes.set_active(active)
     except RouteError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
-    publish_active_leg(runtime, settled)
-    return {"active": settled.model_dump(mode="json") if settled else None}
+    published = publish_active_leg(runtime, settled)
+    # `publish` is additive: the store write above stands either way, but a
+    # client must be able to tell the helm that SignalK (so the autopilot)
+    # was NOT told — outcome "failed".
+    return {
+        "active": settled.model_dump(mode="json") if settled else None,
+        "publish": {"outcome": published.outcome, "detail": published.detail},
+    }
+
+
+def _clear_if_dropped(runtime: Runtime, before: ActiveLeg | None, what: str) -> None:
+    """A save/delete that made the store drop the followed leg
+    (``_settle_active``) must clear SignalK's course too, or the autopilot
+    keeps steering a route mivnav says is not followed."""
+    if before is None or runtime.routes.active() is not None:
+        return
+    try:
+        cleared = publish_active_leg(runtime, None)
+    except Exception:  # noqa: BLE001 — a save/delete must never fail on its side effect
+        log.exception("clearing the SignalK course after %s failed", what)
+        return
+    if cleared.failed:
+        log.warning(
+            "%s stopped following %s/%s, but SignalK's course could not be cleared: %s",
+            what,
+            before.route_id,
+            before.waypoint_id,
+            cleared.detail,
+        )
 
 
 @router.get("/{route_id}")
@@ -126,6 +153,7 @@ def put_route(
     in the body are ignored. If the boat is following this route, the edit
     is re-published to SignalK — see docs/architecture/routes-api-design.md.
     """
+    before = runtime.routes.active()
     try:
         route = runtime.routes.save(route_id, body, if_match=_parse_if_match(if_match))
     except RouteConflict as e:
@@ -143,6 +171,8 @@ def put_route(
             publish_active_leg(runtime, active)
         except Exception:  # noqa: BLE001 — a save must never fail on its side effect
             log.exception("re-publishing the edited active route %s to SignalK failed", route.id)
+    else:
+        _clear_if_dropped(runtime, before, f"saving route {route.id!r}")
     response.headers["ETag"] = _etag(route)
     return route.model_dump(mode="json")
 
@@ -154,13 +184,15 @@ def delete_route(
     runtime: Runtime = Depends(get_runtime),
 ) -> Response:
     """Delete a route. If the boat was following it, it stops following
-    it — see RouteStore._settle_active."""
+    it — see RouteStore._settle_active — and SignalK's course is cleared."""
+    before = runtime.routes.active()
     try:
         deleted = runtime.routes.delete(route_id, if_match=_parse_if_match(if_match))
     except RouteConflict as e:
         raise HTTPException(status_code=409, detail=str(e)) from e
     except RouteStorageUnavailable as e:
         raise HTTPException(status_code=503, detail=str(e)) from e
+    _clear_if_dropped(runtime, before, f"deleting route {route_id!r}")
     if not deleted:
         raise HTTPException(status_code=404, detail=f"unknown route {route_id!r}")
     return Response(status_code=204)

@@ -223,11 +223,11 @@ def test_an_arrival_notification_triggers_the_lightweight_advance(harness: Calla
     service.push(snap(next=(0.0, 0.000), arrival_circle=True))
     wait_until(lambda: advance_spy.count >= 1)
 
-    # The lightweight step, not a re-publish — no full publish call, and the
-    # store's active waypoint has NOT moved (that is the read-side's job,
-    # once SignalK echoes the new nextPoint — see the next test).
+    # The lightweight step, not a re-publish — no full publish call. The
+    # store moves to the next waypoint right away (not only on the echo), so
+    # Next/Previous never step from a stale index.
+    wait_until(lambda: active_of(runtime) == ("r1", "w2"))
     assert publish_spy.calls == []
-    assert active_of(runtime) == ("r1", "w1")
 
 
 def test_an_advance_that_never_reached_signalk_is_logged_as_a_failure(
@@ -266,25 +266,48 @@ def test_perpendicular_passed_triggers_the_advance_too(harness: Callable) -> Non
     wait_until(lambda: advance_spy.count >= 1)
 
 
-def test_the_store_catches_up_via_the_read_side_after_an_advance(harness: Callable) -> None:
-    # No special-casing an "our own advance" echo differently from an
-    # external one (module docstring): the store's active waypoint moves
-    # only once SignalK's course delta reports the new nextPoint, through
-    # the SAME adoption mechanism #svotsyyy built for a second app.
+def test_the_echo_of_an_advance_is_a_no_op_on_the_store(harness: Callable) -> None:
+    # The arrival writes the advanced leg itself; SignalK's echo of the new
+    # nextPoint then matches what is already stored, so adoption does nothing.
     runtime, service, watcher, publish_spy, advance_spy = harness()
     runtime.routes.set_active(ActiveLeg(route_id="r1", waypoint_id="w1"))
     watcher.start()
     wait_until(lambda: service.subscribes >= 1)
 
     service.push(snap(next=(0.0, 0.000), arrival_circle=True))
-    wait_until(lambda: advance_spy.count >= 1)
-    assert active_of(runtime) == ("r1", "w1")  # not yet — no echo seen
+    wait_until(lambda: active_of(runtime) == ("r1", "w2"))  # before any echo
 
-    # SignalK echoes the new leg (w1 -> w2) and the arrival clears (the
-    # distance to the new, further-away nextPoint takes it out of range).
     service.push(snap(next=(0.0, 0.010), prev=(0.0, 0.000), arrival_circle=False))
-    wait_until(lambda: active_of(runtime) == ("r1", "w2"))
+    time.sleep(0.05)
+    assert active_of(runtime) == ("r1", "w2")
     assert publish_spy.calls == []  # still never a republish
+
+
+def test_a_failed_advance_leaves_the_store_on_the_old_leg(harness: Callable) -> None:
+    # SignalK still steers to w1 if the PUT never landed — so must mivnav.
+    runtime, service, watcher, publish_spy, advance_spy = harness()
+    advance_spy.result = PublishResult("failed", "no answer")
+    runtime.routes.set_active(ActiveLeg(route_id="r1", waypoint_id="w1"))
+    watcher.start()
+    wait_until(lambda: service.subscribes >= 1)
+
+    service.push(snap(next=(0.0, 0.000), arrival_circle=True))
+    wait_until(lambda: advance_spy.count >= 1)
+    time.sleep(0.05)
+    assert active_of(runtime) == ("r1", "w1")
+
+
+def test_an_arrival_never_clobbers_a_go_that_landed_meanwhile(harness: Callable) -> None:
+    from mivnav.features.route.store import RouteStore
+
+    runtime, *_ = harness()
+    runtime.routes.set_active(ActiveLeg(route_id="r1", waypoint_id="w3"))
+    store: RouteStore = runtime.routes
+    moved = store.replace_active(
+        ActiveLeg(route_id="r1", waypoint_id="w1"), ActiveLeg(route_id="r1", waypoint_id="w2")
+    )
+    assert moved is False
+    assert active_of(runtime) == ("r1", "w3")
 
 
 def test_stops_following_and_clears_at_the_last_waypoint(harness: Callable) -> None:
@@ -403,14 +426,16 @@ def test_resubscribe_forgets_the_last_observed_arrival(harness: Callable) -> Non
     watcher.start()
     wait_until(lambda: service.subscribes >= 1)
 
-    arrived = snap(next=(0.0, 0.000), arrival_circle=True)
-    service.push(arrived)
+    service.push(snap(next=(0.0, 0.000), arrival_circle=True))
     wait_until(lambda: advance_spy.count == 1)
+    wait_until(lambda: active_of(runtime) == ("r1", "w2"))  # the arrival moved the store
 
     service.push(None)  # the connection is rebuilt
     wait_until(lambda: service.subscribes >= 2)
 
-    service.push(arrived)  # the identical (still-active) report, re-delivered
+    # The still-active arrival, first seen on the fresh subscription (now
+    # reported against the leg the boat advanced to, as SignalK would).
+    service.push(snap(next=(0.0, 0.010), prev=(0.0, 0.000), arrival_circle=True))
     wait_until(lambda: advance_spy.count == 2)
 
 
@@ -621,3 +646,100 @@ def test_get_runtime_fallback_is_the_isolated_runtime_not_a_fresh_one(
         "get_runtime() must not have built (and written into) a Runtime "
         "rooted at the decoy default path"
     )
+
+
+# -- which waypoint a course report means ------------------------------------
+
+
+def _reversed_copy() -> dict[str, Any]:
+    return {
+        "name": "Passage (reversed)",
+        "waypoints": [
+            {"id": f"x{i}", "lat": w["lat"], "lon": w["lon"]}
+            for i, w in enumerate(reversed(ROUTE["waypoints"]))
+        ],
+    }
+
+
+def test_a_reversed_copy_saved_later_does_not_steal_the_followed_leg(harness: Callable) -> None:
+    runtime, service, watcher, publish_spy, advance_spy = harness()
+    runtime.routes.set_active(ActiveLeg(route_id="r1", waypoint_id="w1"))
+    runtime.routes.save("r2", _reversed_copy())  # newer, same coordinates
+    watcher.start()
+    wait_until(lambda: service.subscribes >= 1)
+
+    service.push(snap(next=(0.0, 0.010), prev=(0.0, 0.000)))  # w1 -> w2
+    wait_until(lambda: active_of(runtime) == ("r1", "w2"))
+    time.sleep(0.05)
+    assert active_of(runtime) == ("r1", "w2")
+
+
+def test_with_nothing_followed_any_route_may_match(harness: Callable) -> None:
+    runtime, *_ = harness()
+    runtime.routes.save("r2", _reversed_copy())
+    match = watcher_module._nearest_waypoint(runtime, watcher_module.Point(0.0, 0.010), 10.0)
+    assert match is not None and match[0].id in {"r1", "r2"}
+
+
+def test_a_match_on_another_route_is_used_when_the_followed_one_has_none(
+    harness: Callable,
+) -> None:
+    runtime, *_ = harness()
+    runtime.routes.save(
+        "r2", {"name": "Elsewhere", "waypoints": [{"id": "e1", "lat": 1.0, "lon": 1.0}]}
+    )
+    match = watcher_module._nearest_waypoint(
+        runtime,
+        watcher_module.Point(1.0, 1.0),
+        10.0,
+        ActiveLeg(route_id="r1", waypoint_id="w1"),
+    )
+    assert match is not None and (match[0].id, match[1]) == ("r2", 0)
+
+
+LOOP = {
+    "name": "Loop",
+    "waypoints": [
+        {"id": "l0", "lat": 0.0, "lon": 0.000},
+        {"id": "l1", "lat": 0.0, "lon": 0.010},
+        {"id": "l2", "lat": 0.010, "lon": 0.010},
+        {"id": "l3", "lat": 0.0, "lon": 0.000},  # back to the start
+    ],
+}
+
+
+def test_a_closed_loop_adopts_its_last_point_not_its_first(harness: Callable) -> None:
+    runtime, *_ = harness()
+    runtime.routes.save("loop", LOOP)
+    nearest = watcher_module._nearest_waypoint
+    start = watcher_module.Point(0.0, 0.0)
+
+    on_last_leg = ActiveLeg(route_id="loop", waypoint_id="l2")  # echo of the advance to l3
+    match = nearest(runtime, start, 10.0, on_last_leg)
+    assert match is not None and (match[0].id, match[1]) == ("loop", 3)
+
+    at_last = ActiveLeg(route_id="loop", waypoint_id="l3")  # the echo of l3 itself
+    match = nearest(runtime, start, 10.0, at_last)
+    assert match is not None and match[1] == 3
+
+    at_start = ActiveLeg(route_id="loop", waypoint_id="l0")  # GO at the start
+    match = nearest(runtime, start, 10.0, at_start)
+    assert match is not None and match[1] == 0
+
+
+def test_a_closed_loop_completes_at_its_last_point(harness: Callable) -> None:
+    runtime, service, watcher, publish_spy, advance_spy = harness()
+    runtime.routes.save("loop", LOOP)
+    runtime.routes.set_active(ActiveLeg(route_id="loop", waypoint_id="l2"))
+    watcher.start()
+    wait_until(lambda: service.subscribes >= 1)
+
+    service.push(snap(next=(0.010, 0.010), arrival_circle=True))  # at l2
+    wait_until(lambda: active_of(runtime) == ("loop", "l3"))
+    service.push(snap(next=(0.0, 0.0), prev=(0.010, 0.010)))  # echo: l2 -> l3
+    time.sleep(0.05)
+    assert active_of(runtime) == ("loop", "l3")  # not l0
+
+    service.push(snap(next=(0.0, 0.0), prev=(0.010, 0.010), arrival_circle=True))
+    wait_until(lambda: runtime.routes.active() is None)  # route complete
+    assert publish_spy.calls == [None]

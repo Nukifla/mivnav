@@ -199,6 +199,53 @@ def test_deleting_the_followed_route_stops_the_boat_following_it(client: TestCli
     assert client.get("/routes").json()["active"] is None
 
 
+def test_deleting_the_followed_route_clears_the_signalk_course(
+    client: TestClient, box: FakeCourse
+) -> None:
+    # Otherwise the autopilot keeps steering a route mivnav says it is not
+    # following.
+    client.put("/routes/r1", json=HOME)
+    client.put("/routes/active", json={"route_id": "r1", "waypoint_id": "w2"})
+    assert box.active_route is not None
+    assert client.delete("/routes/r1").status_code == 204
+    assert box.active_route is None
+
+
+def test_deleting_another_route_leaves_the_signalk_course_alone(
+    client: TestClient, box: FakeCourse
+) -> None:
+    client.put("/routes/r1", json=HOME)
+    client.put("/routes/r2", json=HOME)
+    client.put("/routes/active", json={"route_id": "r1", "waypoint_id": "w2"})
+    client.delete("/routes/r2")
+    assert box.active_route is not None
+    assert client.get("/routes").json()["active"] == {"route_id": "r1", "waypoint_id": "w2"}
+
+
+def test_saving_away_the_target_waypoint_clears_the_signalk_course(
+    client: TestClient, box: FakeCourse
+) -> None:
+    client.put("/routes/r1", json=HOME)
+    client.put("/routes/active", json={"route_id": "r1", "waypoint_id": "w3"})
+    edited = {**HOME, "waypoints": HOME["waypoints"][:2]}  # w3 removed
+    assert client.put("/routes/r1", json=edited).status_code == 200
+    assert client.get("/routes").json()["active"] is None
+    assert box.active_route is None
+
+
+def test_go_reports_the_signalk_publish_outcome(client: TestClient, box: FakeCourse) -> None:
+    client.put("/routes/r1", json=HOME)
+    go = client.put("/routes/active", json={"route_id": "r1", "waypoint_id": "w2"})
+    assert go.json()["publish"]["outcome"] == "published"
+
+    box.fail_with = (500, {"message": "boom"})
+    stop = client.put("/routes/active", json=None)
+    assert stop.status_code == 200  # mivnav stopped following either way
+    assert stop.json()["active"] is None
+    assert stop.json()["publish"]["outcome"] == "failed"
+    assert stop.json()["publish"]["detail"]
+
+
 def test_the_active_url_is_not_shadowed_by_a_route_named_active(client: TestClient) -> None:
     # /routes/active is the leg, so the id is reserved — see RouteStore
     assert client.put("/routes/active", json=HOME).status_code == 422
