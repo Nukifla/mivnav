@@ -1,12 +1,10 @@
 // The manual route editor on the chart: the draft's line and numbered point
-// handles, the selected leg, the leg "+" handles, the selected point's offset
-// grab handle — one GeoJSON source — and the MapLibre host that turns pointer
+// handles and the selected leg — one GeoJSON source — and the MapLibre host that turns pointer
 // events into ./gesture.ts decisions and those into model calls.
 //
 // Drawn in the route display's colours (`routeOverlayColors`, the same magenta
 // as features/route/layers), so a draft reads as the route it will become.
 
-import { createSignal } from "solid-js";
 import type { FeatureCollection } from "geojson";
 import type { GeoJSONSource, Map as MLMap, MapMouseEvent, MapTouchEvent } from "maplibre-gl";
 import { unwrappedLine, type GeoPoint } from "../../core/chrome/geo";
@@ -19,9 +17,7 @@ import { addLayer } from "../../core/layers/addLayer";
 import {
   createGestureMachine,
   footOnSegment,
-  GRAB_OFFSET,
   hitTest,
-  plusHandles,
   resolveTap,
   type Effect,
   type Px,
@@ -35,27 +31,21 @@ const ARROW_LAYER = "route-draw-arrows";
 const BAND_LAYER = "route-draw-band";
 const SNAP_LAYER = "route-draw-snap";
 const LEG_LAYER = "route-draw-leg";
-const PLUS_LAYER = "route-draw-plus";
-const PLUS_LABEL_LAYER = "route-draw-plus-label";
 const AT_LAYER = "route-draw-at";
 const POINT_LAYER = "route-draw-points";
 const NUMBER_LAYER = "route-draw-numbers";
-const GRAB_LAYER = "route-draw-grab";
 
 /** Bottom to top — the re-hoist order: the line under everything, the
- * handles over it, the grab handle on top (it is what a finger aims for). */
+ * handles over it. */
 export const ROUTE_DRAW_LAYER_IDS = [
   LINE_LAYER,
   ARROW_LAYER,
   BAND_LAYER,
   SNAP_LAYER,
   LEG_LAYER,
-  PLUS_LAYER,
-  PLUS_LABEL_LAYER,
   AT_LAYER,
   POINT_LAYER,
   NUMBER_LAYER,
-  GRAB_LAYER,
 ] as const;
 
 const KIND = {
@@ -63,10 +53,8 @@ const KIND = {
   band: "band",
   snap: "snap",
   leg: "leg",
-  plus: "plus",
   at: "at",
   point: "point",
-  grab: "grab",
 } as const;
 const isKind = (k: string) => ["==", ["get", "kind"], k] as ["==", ["get", "kind"], string];
 
@@ -78,13 +66,13 @@ interface Sizes {
   point: number;
   stroke: number;
   number: number;
+  /** The selected leg's insert-spot ring. */
   plus: number;
-  grab: number;
   /** Direction-arrow `icon-size` (a factor of the baked image). */
   arrow: number;
 }
-const DESK: Sizes = { line: 2, leg: 5, point: 9, stroke: 2, number: 10, plus: 7, grab: 6, arrow: 0.7 };
-const HELM: Sizes = { line: 2.5, leg: 6, point: 11, stroke: 2, number: 11.5, plus: 8.5, grab: 7.5, arrow: 0.9 };
+const DESK: Sizes = { line: 2, leg: 5, point: 9, stroke: 2, number: 10, plus: 7, arrow: 0.7 };
+const HELM: Sizes = { line: 2.5, leg: 6, point: 11, stroke: 2, number: 11.5, plus: 8.5, arrow: 0.9 };
 const sizes = (d: Density): Sizes => {
   const t = (k: keyof Sizes) => lerpDensity(DESK[k], HELM[k], d);
   return {
@@ -94,7 +82,6 @@ const sizes = (d: Density): Sizes => {
     stroke: t("stroke"),
     number: t("number"),
     plus: t("plus"),
-    grab: t("grab"),
     arrow: t("arrow"),
   };
 };
@@ -123,56 +110,6 @@ function ensureArrowImage(map: MLMap, color: string): string {
   ctx.closePath();
   ctx.fillStyle = color;
   ctx.fill();
-  map.addImage(id, ctx.getImageData(0, 0, el.width, el.height), { pixelRatio: ARROW_RATIO });
-  return id;
-}
-
-// The grab handle: a small dot on a thin leader from the selected point, so
-// it reads as "a handle OF that point", not a second, bigger point. Baked as
-// ONE image anchored at its top-right corner = the point itself: pixel-fixed,
-// so drawn and hit-tested (GRAB_OFFSET) always agree, at any zoom. Its hit
-// radius (GRAB_RADIUS_PX) stays generous; only the drawing is small.
-const grabIcon = (color: string, halo: string, r: number, pointR: number): string =>
-  `route-draw-grab-${color}-${halo}-${r.toFixed(1)}-${pointR.toFixed(1)}`;
-function ensureGrabImage(map: MLMap, color: string, halo: string, r: number, pointR: number): string {
-  const id = grabIcon(color, halo, r, pointR);
-  if (typeof map.hasImage !== "function" || map.hasImage(id) || typeof document === "undefined") return id;
-  const pad = r + 2;
-  const w = -GRAB_OFFSET.x + pad;
-  const h = GRAB_OFFSET.y + pad;
-  const el = document.createElement("canvas");
-  el.width = Math.ceil(w * ARROW_RATIO);
-  el.height = Math.ceil(h * ARROW_RATIO);
-  const ctx = el.getContext("2d");
-  if (!ctx) return id;
-  ctx.scale(ARROW_RATIO, ARROW_RATIO);
-  // The point sits at (w, 0); the dot at (w + GRAB_OFFSET.x, GRAB_OFFSET.y).
-  const px = w;
-  const py = 0;
-  const dx = w + GRAB_OFFSET.x;
-  const dy = GRAB_OFFSET.y;
-  const len = Math.hypot(dx - px, dy - py);
-  const ux = (dx - px) / len;
-  const uy = (dy - py) / len;
-  // Leader: from just outside the point's ring to the dot's edge.
-  const a = pointR + 3;
-  ctx.beginPath();
-  ctx.moveTo(px + ux * a, py + uy * a);
-  ctx.lineTo(dx - ux * r, dy - uy * r);
-  ctx.lineCap = "round";
-  ctx.strokeStyle = halo;
-  ctx.lineWidth = 3.5;
-  ctx.stroke();
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(dx, dy, r, 0, Math.PI * 2);
-  ctx.fillStyle = color;
-  ctx.fill();
-  ctx.lineWidth = 2;
-  ctx.strokeStyle = halo;
-  ctx.stroke();
   map.addImage(id, ctx.getImageData(0, 0, el.width, el.height), { pixelRatio: ARROW_RATIO });
   return id;
 }
@@ -231,14 +168,6 @@ export function ensureRouteDrawLayers(map: MLMap, paint: RouteDrawPaint): void {
     layout: { "line-cap": "round" },
     paint: { "line-opacity": 0.45 },
   });
-  layer({ id: PLUS_LAYER, type: "circle", source: SOURCE, filter: isKind(KIND.plus) });
-  layer({
-    id: PLUS_LABEL_LAYER,
-    type: "symbol",
-    source: SOURCE,
-    filter: isKind(KIND.plus),
-    layout: { "text-field": "+", "text-font": TEXT_FONT, "text-size": 14, ...always },
-  });
   layer({ id: AT_LAYER, type: "circle", source: SOURCE, filter: isKind(KIND.at) });
   layer({ id: POINT_LAYER, type: "circle", source: SOURCE, filter: isKind(KIND.point) });
   layer({
@@ -247,21 +176,6 @@ export function ensureRouteDrawLayers(map: MLMap, paint: RouteDrawPaint): void {
     source: SOURCE,
     filter: isKind(KIND.point),
     layout: { "text-field": ["get", "n"], "text-font": TEXT_FONT, "text-size": 11, ...always },
-  });
-  // Drawn at the point's own coordinate, shifted on screen by the same offset
-  // ./gesture.ts hit-tests — one constant, so drawn and hit always agree.
-  layer({
-    id: GRAB_LAYER,
-    type: "symbol",
-    source: SOURCE,
-    filter: isKind(KIND.grab),
-    layout: {
-      "icon-anchor": "top-right",
-      "icon-rotation-alignment": "viewport",
-      "icon-pitch-alignment": "viewport",
-      "icon-allow-overlap": true,
-      "icon-ignore-placement": true,
-    },
   });
   applyRouteDrawPaint(map, paint);
 }
@@ -290,12 +204,6 @@ export function applyRouteDrawPaint(map: MLMap, { palette, density }: RouteDrawP
   set(SNAP_LAYER, "circle-stroke-color", c.route);
   set(LEG_LAYER, "line-color", c.route);
   set(LEG_LAYER, "line-width", s.leg);
-  set(PLUS_LAYER, "circle-radius", s.plus);
-  set(PLUS_LAYER, "circle-color", c.halo);
-  set(PLUS_LAYER, "circle-opacity", 0.9);
-  set(PLUS_LAYER, "circle-stroke-width", 1.5);
-  set(PLUS_LAYER, "circle-stroke-color", c.route);
-  set(PLUS_LABEL_LAYER, "text-color", c.route);
   set(AT_LAYER, "circle-radius", s.plus);
   set(AT_LAYER, "circle-color", "rgba(0,0,0,0)");
   set(AT_LAYER, "circle-stroke-width", s.stroke);
@@ -306,28 +214,19 @@ export function applyRouteDrawPaint(map: MLMap, { palette, density }: RouteDrawP
   set(POINT_LAYER, "circle-stroke-color", sel(c.halo, c.route));
   set(NUMBER_LAYER, "text-color", sel(c.halo, c.route));
   setLayout(NUMBER_LAYER, "text-size", s.number);
-  if (map.getLayer(GRAB_LAYER)) {
-    setLayout(GRAB_LAYER, "icon-image", ensureGrabImage(map, c.route, c.halo, s.grab, s.point));
-  }
 }
 
-type Projector = Pick<MLMap, "project" | "unproject">;
-const canProject = (map: unknown): map is Projector =>
-  typeof (map as Projector).project === "function" && typeof (map as Projector).unproject === "function";
-
 /**
- * Push the draft into the (ensured) source. Every model accessor (and the
- * zoom tick) is read BEFORE the source guard, so this effect's subscriptions
+ * Push the draft into the (ensured) source. Every model accessor is read BEFORE the source guard, so this effect's subscriptions
  * survive a run where the source is momentarily absent — the measure
  * overlay's documented race (features/measure/overlay.test.ts).
  */
-export function updateRouteDrawData(map: MLMap, model: RouteDrawModel, zoomTick: () => number): void {
+export function updateRouteDrawData(map: MLMap, model: RouteDrawModel): void {
   const draft = model.draft();
   const selection = model.selection();
   const dragging = model.draggingId();
   const band = model.aimLeg();
   const snap = model.snapTarget();
-  zoomTick();
 
   const source = map.getSource(SOURCE) as GeoJSONSource | undefined;
   if (!source) return;
@@ -378,20 +277,6 @@ export function updateRouteDrawData(map: MLMap, model: RouteDrawModel, zoomTick:
     });
   }
 
-  // "+" handles: exactly the ones ./gesture.ts would hit-test at this zoom.
-  // Not while dragging — the dragged point's neighbours' handles would chase it.
-  if (!dragging && pts.length >= 2 && canProject(map)) {
-    const screen = pts.map((w) => map.project([w.lon, w.lat]));
-    for (const h of plusHandles(screen)) {
-      const at = map.unproject([h.at.x, h.at.y]);
-      features.push({
-        type: "Feature",
-        properties: { kind: KIND.plus, leg: h.leg },
-        geometry: { type: "Point", coordinates: [at.lng, at.lat] },
-      });
-    }
-  }
-
   const selectedId = selection?.kind === "point" ? selection.id : null;
   pts.forEach((w, i) => {
     features.push({
@@ -401,15 +286,6 @@ export function updateRouteDrawData(map: MLMap, model: RouteDrawModel, zoomTick:
     });
   });
 
-  const grabbed = pts.find((w) => w.id === selectedId);
-  if (grabbed) {
-    features.push({
-      type: "Feature",
-      properties: { kind: KIND.grab, id: grabbed.id },
-      geometry: { type: "Point", coordinates: [grabbed.lon, grabbed.lat] },
-    });
-  }
-
   source.setData({ type: "FeatureCollection", features });
 }
 
@@ -418,24 +294,16 @@ export function updateRouteDrawData(map: MLMap, model: RouteDrawModel, zoomTick:
  * the gesture host once per map (the marks/route-provider pattern).
  */
 export function createRouteDrawOverlay(model: RouteDrawModel, onMap: (map: MLMap) => void): Overlay {
-  // Bumped on every `zoomend` so the "+" handles re-evaluate their on-screen
-  // length. Panning never changes it, so `move` needn't.
-  const [zoomTick, setZoomTick] = createSignal(0);
-  let watched: MLMap | undefined;
   return {
     id: "routeDraw",
     layerIds: ROUTE_DRAW_LAYER_IDS,
     z: Z.routeDraw,
     ensure(map, ctx) {
       onMap(map);
-      if (watched !== map && typeof map.on === "function") {
-        watched = map;
-        map.on("zoomend", () => setZoomTick((n) => n + 1));
-      }
       ensureRouteDrawLayers(map, { palette: ctx.settings().palette, density: ctx.density() });
     },
     update(map) {
-      updateRouteDrawData(map, model, zoomTick);
+      updateRouteDrawData(map, model);
     },
     paint(map, ctx) {
       applyRouteDrawPaint(map, { palette: ctx.settings().palette, density: ctx.density() });
@@ -514,19 +382,17 @@ export function attachRouteDrawGestures(
           // re-derived from the CURRENT projection at the finger-up point (the
           // chart moved with the finger, so that is where it meant).
           let spot = e.at;
-          if (action.op === "selectLeg") {
+          if (action.op === "insertOnLeg") {
             const p = screenPoints();
             const a = p[action.leg];
             const b = p[action.leg + 1];
-            if (a && b) {
-              spot = e.hit.kind === "plus" ? { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } : footOnSegment(e.at, a, b).foot;
-            }
+            if (a && b) spot = footOnSegment(e.at, a, b).foot;
           }
           model.tap(action, geo(spot));
           break;
         }
         case "dragStart":
-          if (e.hit.kind === "plus") model.beginInsert(e.hit.leg, geo(e.hit.anchor));
+          if (e.hit.kind === "leg") model.beginInsert(e.hit.leg, geo(e.hit.anchor));
           else model.beginMove(e.hit.id);
           setCursor("grabbing");
           break;

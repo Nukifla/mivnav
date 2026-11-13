@@ -117,7 +117,7 @@ export interface RouteDrawModel {
   select(sel: Selection): void;
   /** Start dragging an existing (selected) point. */
   beginMove(id: string): void;
-  /** Start dragging a NEW point out of leg `leg`'s "+" handle, at `at`. */
+  /** Start dragging a NEW point out of leg `leg`, from the pressed spot `at`. */
   beginInsert(leg: number, at: GeoPoint): void;
   dragTo(at: GeoPoint): void;
   /** Close the drag as ONE undo step. */
@@ -177,10 +177,8 @@ export interface RouteDrawDeps {
   /** Injectable crosshair-mode setting (tests); default a per-device one. */
   crosshairSetting?: [Accessor<boolean>, Setter<boolean>];
   /** The editor closed on a SAVED route (Done, Overwrite, Save as copy) —
-   * App keeps it drawn on the chart, so a finished route never vanishes. */
+   * App starts following it (else keeps it drawn), so Done starts the route. */
   onClosedSaved?: (route: Route) => void;
-  /** An action for the "Route saved" notice (App: Follow). */
-  savedAction?: (route: Route) => Notice["action"];
 }
 
 const defaultVibrate = (ms: number) => {
@@ -404,7 +402,6 @@ export function createRouteDraw(deps: RouteDrawDeps): { feature: AppFeature; mod
           id: "route-draw-saved",
           title: "Route saved",
           detail: saved.name || undefined,
-          action: deps.savedAction?.(saved),
         });
       }
       return saved;
@@ -608,8 +605,8 @@ export function createRouteDraw(deps: RouteDrawDeps): { feature: AppFeature; mod
           return addPoint(() => 0, at);
         case "selectPoint":
           return setSelection({ kind: "point", id: action.id });
-        case "selectLeg":
-          return setSelection({ kind: "leg", leg: action.leg, at });
+        case "insertOnLeg":
+          return addPoint(() => action.leg + 1, at);
         case "deselect":
           return setSelection(null);
       }

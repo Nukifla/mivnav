@@ -324,13 +324,16 @@ const App: Component = () => {
     // signals declared further down is safe.
     center: () => mapCenter(),
     marks: () => marks.marks(),
-    // A finished route stays on the chart (tap it for Follow/Legs/Edit) —
-    // without this only the FOLLOWED route is drawn and Done looks like a loss.
+    // Done = save AND start the route (user, 2026-11-13), from the next
+    // waypoint ahead of the boat (`followStartIndex`). Another route being
+    // followed → Follow asks "Switch to …?" first. If it doesn't start, the
+    // route still stays on the chart rather than vanishing.
     onClosedSaved: (r) => {
-      if (routes.model.activeRouteId() !== r.id) routes.model.showRoute(r);
+      void (async () => {
+        const res = await routes.model.follow(r);
+        if (res !== "started" && res !== "already") routes.model.showRoute(r);
+      })();
     },
-    savedAction: (r) =>
-      routes.model.activeRouteId() === r.id ? undefined : { label: "Follow", run: () => void followSaved(r) },
   });
   // The leg table: the editor's draft, or a saved route from its card/list.
   const legTable = createLegTable({ client: routesClient, routeDraw: routeDraw.model, self: signalk.self });

@@ -9,10 +9,11 @@
 //     `TAP_SLOP_PX`. Anything more is a chart pan — the editor never steals a
 //     pan, so the chart moves freely while editing.
 //   - Nothing is time-based: there is no hold.
-//   - Only three things can be dragged: the SELECTED point (by itself or by
-//     its offset grab handle, which sits clear of the finger) and a leg's
-//     midpoint "+" handle (drag out a new point). An unselected point pans
-//     like open water, so a brushing finger can never move one.
+//   - Only two things can be dragged: the SELECTED point, and a leg (anywhere
+//     on it — drags a NEW point out of the line at that spot). An unselected
+//     point pans like open water, so a brushing finger can never move one.
+//   - A tap anywhere on a leg inserts a point there (user, 2026-11-13: no
+//     midpoint "+" handle, no offset grab handle).
 //   - A second finger cancels a drag (the draft snaps back) and belongs to
 //     MapLibre's pinch.
 
@@ -29,34 +30,24 @@ export interface ScreenPoint extends Px {
 
 /** Below this much movement a press is a tap; past it, a pan or a drag. */
 export const TAP_SLOP_PX = 12;
-/** Where the selected point's grab handle sits, relative to the point —
- * down-left, so a right-handed finger on it leaves the point itself visible. */
-export const GRAB_OFFSET: Px = { x: -40, y: 40 };
-/** The grab handle's hit radius. Drawn smaller; a handle is a target. */
-export const GRAB_RADIUS_PX = 22;
-/** A leg shorter than this on screen gets no "+" handle — it would crowd its
- * own endpoints. */
-export const PLUS_MIN_LEG_PX = 60;
 /** MapLibre's one-finger zoom (TapDragZoomHandler) is a tap followed, within
  * this window, by a second press that drags. Mirrors MapLibre's own constants. */
 export const TAP_ZOOM_MS = 500;
 export const TAP_ZOOM_PX = 30;
 
 /** What is under a press, most specific first. `anchor` is the screen position
- * of the thing a drag would move (the POINT, even when the grab handle was
- * pressed), so a drag keeps the finger-to-point offset it started with. */
+ * of the thing a drag would move (the point; for a leg, the spot on it under
+ * the press), so a drag keeps the finger-to-point offset it started with. */
 export type Hit =
-  | { kind: "grab"; id: string; anchor: Px }
   | { kind: "point"; id: string; selected: boolean; anchor: Px }
-  | { kind: "plus"; leg: number; anchor: Px }
-  | { kind: "leg"; leg: number; foot: Px }
+  | { kind: "leg"; leg: number; anchor: Px }
   | { kind: "water" };
 
 /** Hit-test tolerances. `radius` is the pointer's tap radius
  * (`core/chrome/modes.ts` `tapRadius`), grown here per target. */
 export interface HitOpts {
   radius: number;
-  /** The selected point's id, if a point is selected — it alone has a grab handle. */
+  /** The selected point's id, if a point is selected — it alone drags. */
   selectedId: string | null;
 }
 
@@ -67,22 +58,6 @@ const dist = (a: Px, b: Px): number => Math.hypot(a.x - b.x, a.y - b.y);
  * mark (./snap.ts) uses the same reach, so "close enough to grab" and "close
  * enough to snap" are one distance. */
 export const pointHitRadius = (radius: number): number => radius + 8;
-
-/** The grab handle's screen position for a point. */
-export const grabAt = (p: Px): Px => ({ x: p.x + GRAB_OFFSET.x, y: p.y + GRAB_OFFSET.y });
-
-/** Midpoints of the legs long enough on screen to carry a "+" handle. Leg `i`
- * runs `points[i]` → `points[i + 1]`. The overlay draws exactly these. */
-export function plusHandles(points: readonly Px[]): { leg: number; at: Px }[] {
-  const out: { leg: number; at: Px }[] = [];
-  for (let i = 0; i < points.length - 1; i++) {
-    const a = points[i]!;
-    const b = points[i + 1]!;
-    if (dist(a, b) < PLUS_MIN_LEG_PX) continue;
-    out.push({ leg: i, at: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } });
-  }
-  return out;
-}
 
 /** Foot of the perpendicular from `p` onto segment `a`→`b`, clamped, and how far off `p` is. */
 export function footOnSegment(p: Px, a: Px, b: Px): { foot: Px; t: number; d: number } {
@@ -95,23 +70,14 @@ export function footOnSegment(p: Px, a: Px, b: Px): { foot: Px; t: number; d: nu
 }
 
 /**
- * What a press at `at` lands on. Precedence: the selected point's grab handle,
- * then the nearest point, then a "+" handle, then the nearest leg, else open
- * water. Points are grown past the bare tap radius because a point is drawn
+ * What a press at `at` lands on. Precedence: the nearest point, then the
+ * nearest leg, else open water. Points are grown past the bare tap radius because a point is drawn
  * as a ~13px handle; legs only a little, so a tap NEAR a line still means
  * "here", not "that leg".
  */
 export function hitTest(points: readonly ScreenPoint[], at: Px, opts: HitOpts): Hit {
   const pointR = pointHitRadius(opts.radius);
-  const plusR = opts.radius + 6;
-  const legR = opts.radius + 2;
-
-  if (opts.selectedId) {
-    const sel = points.find((p) => p.id === opts.selectedId);
-    if (sel && dist(grabAt(sel), at) <= GRAB_RADIUS_PX) {
-      return { kind: "grab", id: sel.id, anchor: { x: sel.x, y: sel.y } };
-    }
-  }
+  const legR = opts.radius + 4;
 
   let best: ScreenPoint | null = null;
   let bestD = Infinity;
@@ -128,25 +94,20 @@ export function hitTest(points: readonly ScreenPoint[], at: Px, opts: HitOpts): 
     return { kind: "point", id: best.id, selected: best.id === opts.selectedId, anchor: { x: best.x, y: best.y } };
   }
 
-  for (const h of plusHandles(points)) {
-    if (dist(h.at, at) <= plusR) return { kind: "plus", leg: h.leg, anchor: h.at };
-  }
-
   let leg: { leg: number; foot: Px; d: number } | null = null;
   for (let i = 0; i < points.length - 1; i++) {
     const f = footOnSegment(at, points[i]!, points[i + 1]!);
     if (f.d <= legR && (!leg || f.d < leg.d)) leg = { leg: i, foot: f.foot, d: f.d };
   }
-  if (leg) return { kind: "leg", leg: leg.leg, foot: leg.foot };
+  if (leg) return { kind: "leg", leg: leg.leg, anchor: leg.foot };
 
   return { kind: "water" };
 }
 
 /** Can a press on this hit become a drag? Everything else pans. */
-export const isDraggable = (h: Hit): boolean =>
-  h.kind === "grab" || h.kind === "plus" || (h.kind === "point" && h.selected);
+export const isDraggable = (h: Hit): boolean => h.kind === "leg" || (h.kind === "point" && h.selected);
 
-export type DragHit = Extract<Hit, { kind: "grab" | "point" | "plus" }>;
+export type DragHit = Extract<Hit, { kind: "point" | "leg" }>;
 
 /** What the host must do. `capture` = take the press from MapLibre's pan
  * (disable dragPan); `release` = give it back. `dragMove.to` is where the
@@ -279,28 +240,25 @@ export type TapAction =
    * a tap there only lets go of the selection. */
   | { op: "deselect" }
   | { op: "selectPoint"; id: string }
-  /** `at` is the spot on the leg "Insert here" would insert at. */
-  | { op: "selectLeg"; leg: number; at: Px };
+  /** A new point on leg `leg` at `at` (the tapped spot on the line). */
+  | { op: "insertOnLeg"; leg: number; at: Px };
 
 /**
  * A tap, resolved. Open water appends after the last point — or, when the
  * FIRST point is selected (and there is more than one, so first ≠ last),
  * prepends before it: selecting the start is how you extend a route
- * backwards. A tap on a "+" handle selects its leg at the midpoint. With the
- * crosshair on, open water places nothing — no accidental points.
+ * backwards. A tap on a leg inserts a point there. With the crosshair on,
+ * open water places nothing — no accidental points.
  */
 export function resolveTap(
   hit: Hit,
   draft: { firstId: string | null; count: number; selectedId: string | null; crosshair?: boolean },
 ): TapAction {
   switch (hit.kind) {
-    case "grab":
     case "point":
       return { op: "selectPoint", id: hit.id };
     case "leg":
-      return { op: "selectLeg", leg: hit.leg, at: hit.foot };
-    case "plus":
-      return { op: "selectLeg", leg: hit.leg, at: hit.anchor };
+      return { op: "insertOnLeg", leg: hit.leg, at: hit.anchor };
     case "water":
       if (draft.crosshair) return { op: "deselect" };
       return addsAtStart(draft) ? { op: "prepend" } : { op: "append" };

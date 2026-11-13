@@ -36,9 +36,7 @@ import {
 import {
   addsAtStart,
   createGestureMachine,
-  GRAB_OFFSET,
   hitTest,
-  plusHandles,
   resolveTap,
   TAP_SLOP_PX,
   type Effect,
@@ -177,28 +175,21 @@ const PTS: ScreenPoint[] = [
 const opts = (selectedId: string | null = null) => ({ radius: 8, selectedId });
 
 describe("gesture — hit test", () => {
-  test("point, then plus handle, then leg, then water", () => {
+  test("point, then leg (anywhere along it), then water", () => {
     expect(hitTest(PTS, { x: 305, y: 304 }, opts())).toMatchObject({ kind: "point", id: "b", selected: false });
-    expect(hitTest(PTS, { x: 200, y: 302 }, opts())).toMatchObject({ kind: "plus", leg: 0 });
-    expect(hitTest(PTS, { x: 400, y: 300 }, opts())).toMatchObject({ kind: "plus", leg: 1 });
+    expect(hitTest(PTS, { x: 200, y: 302 }, opts())).toEqual({ kind: "leg", leg: 0, anchor: { x: 200, y: 300 } });
+    expect(hitTest(PTS, { x: 400, y: 300 }, opts())).toMatchObject({ kind: "leg", leg: 1 });
     const leg = hitTest(PTS, { x: 150, y: 306 }, opts());
-    expect(leg).toMatchObject({ kind: "leg", leg: 0 });
-    expect((leg as Extract<Hit, { kind: "leg" }>).foot).toEqual({ x: 150, y: 300 });
+    expect(leg).toEqual({ kind: "leg", leg: 0, anchor: { x: 150, y: 300 } });
     expect(hitTest(PTS, { x: 150, y: 340 }, opts())).toEqual({ kind: "water" });
   });
 
-  test("the selected point's grab handle sits down-left and wins over everything", () => {
-    const grab = { x: 300 + GRAB_OFFSET.x, y: 300 + GRAB_OFFSET.y };
-    expect(GRAB_OFFSET.x).toBeLessThan(0);
-    expect(GRAB_OFFSET.y).toBeGreaterThan(0);
-    expect(hitTest(PTS, grab, opts("b"))).toEqual({ kind: "grab", id: "b", anchor: { x: 300, y: 300 } });
-    // No selection, no handle: the same spot is just water.
-    expect(hitTest(PTS, grab, opts())).toEqual({ kind: "water" });
+  test("a selected point has no separate handle — the spot off it is water", () => {
+    expect(hitTest(PTS, { x: 260, y: 340 }, opts("b"))).toEqual({ kind: "water" });
   });
 
-  test("short legs get no + handle", () => {
-    expect(plusHandles([{ x: 0, y: 0 }, { x: 40, y: 0 }, { x: 200, y: 0 }]).map((h) => h.leg)).toEqual([1]);
-    expect(hitTest([{ id: "a", x: 0, y: 0 }, { id: "b", x: 40, y: 0 }], { x: 20, y: 2 }, opts())).toMatchObject({
+  test("short legs still take taps along them", () => {
+    expect(hitTest([{ id: "a", x: 0, y: 0 }, { id: "b", x: 60, y: 0 }], { x: 30, y: 2 }, opts())).toMatchObject({
       kind: "leg",
     });
   });
@@ -257,17 +248,17 @@ describe("gesture — the machine", () => {
     expect(types(g.up({ x: 302, y: 300 }, press()))).toEqual(["release", "tap"]);
   });
 
-  test("the grab handle moves the POINT, keeping the offset", () => {
+  test("a selected point drags, keeping the finger-to-point offset", () => {
     const g = createGestureMachine();
-    const hit: Hit = { kind: "grab", id: "b", anchor: { x: 300, y: 300 } };
-    g.down({ x: 260, y: 340 }, hit, press());
-    const out = g.move({ x: 280, y: 360 });
+    const hit: Hit = { kind: "point", id: "b", selected: true, anchor: { x: 300, y: 300 } };
+    g.down({ x: 305, y: 305 }, hit, press());
+    const out = g.move({ x: 325, y: 325 });
     expect(out.at(-1)).toEqual({ type: "dragMove", to: { x: 320, y: 320 } });
   });
 
-  test("a + handle drags out a new point", () => {
+  test("a press anywhere on a leg drags out a new point", () => {
     const g = createGestureMachine();
-    const hit: Hit = { kind: "plus", leg: 0, anchor: { x: 200, y: 300 } };
+    const hit: Hit = { kind: "leg", leg: 0, anchor: { x: 150, y: 300 } };
     expect(types(g.down({ x: 200, y: 300 }, hit, press()))).toEqual(["capture"]);
     expect(types(g.move({ x: 200, y: 330 }))).toEqual(["dragStart", "dragMove"]);
   });
@@ -306,7 +297,7 @@ describe("gesture — the machine", () => {
     const g = createGestureMachine();
     g.down({ x: 300, y: 300 }, { kind: "water" }, press(false, 0));
     g.up({ x: 300, y: 300 }, press(false, 10));
-    const hit: Hit = { kind: "grab", id: "b", anchor: { x: 300, y: 300 } };
+    const hit: Hit = { kind: "point", id: "b", selected: true, anchor: { x: 300, y: 300 } };
     expect(types(g.down({ x: 300, y: 300 }, hit, press(false, 20)))).toEqual(["capture"]);
   });
 });
@@ -320,21 +311,15 @@ describe("gesture — what a tap does", () => {
     // One point: first IS last, so it extends forward.
     expect(resolveTap({ kind: "water" }, draft("a", 1))).toEqual({ op: "append" });
   });
-  test("point/grab select; leg/plus select the leg at the spot", () => {
+  test("a point tap selects; a leg tap inserts a point at the spot", () => {
     expect(resolveTap({ kind: "point", id: "b", selected: false, anchor: { x: 0, y: 0 } }, draft(null))).toEqual({
       op: "selectPoint",
       id: "b",
     });
-    expect(resolveTap({ kind: "grab", id: "b", anchor: { x: 0, y: 0 } }, draft("b"))).toEqual({ op: "selectPoint", id: "b" });
-    expect(resolveTap({ kind: "leg", leg: 1, foot: { x: 4, y: 5 } }, draft(null))).toEqual({
-      op: "selectLeg",
+    expect(resolveTap({ kind: "leg", leg: 1, anchor: { x: 4, y: 5 } }, draft(null))).toEqual({
+      op: "insertOnLeg",
       leg: 1,
       at: { x: 4, y: 5 },
-    });
-    expect(resolveTap({ kind: "plus", leg: 0, anchor: { x: 7, y: 8 } }, draft(null))).toEqual({
-      op: "selectLeg",
-      leg: 0,
-      at: { x: 7, y: 8 },
     });
   });
 });
@@ -346,12 +331,12 @@ describe("gesture — crosshair mode taps", () => {
     expect(resolveTap({ kind: "water" }, draft("a", true))).toEqual({ op: "deselect" });
     expect(resolveTap({ kind: "water" }, draft(null, false))).toEqual({ op: "append" });
   });
-  test("points and legs still select with the crosshair on", () => {
+  test("points select and legs insert with the crosshair on", () => {
     expect(resolveTap({ kind: "point", id: "b", selected: false, anchor: { x: 0, y: 0 } }, draft(null, true))).toEqual({
       op: "selectPoint",
       id: "b",
     });
-    expect(resolveTap({ kind: "leg", leg: 1, foot: { x: 1, y: 2 } }, draft(null, true)).op).toBe("selectLeg");
+    expect(resolveTap({ kind: "leg", leg: 1, anchor: { x: 1, y: 2 } }, draft(null, true)).op).toBe("insertOnLeg");
   });
   test("addsAtStart: only with point 1 selected on a route of 2+", () => {
     expect(addsAtStart({ firstId: "a", count: 2, selectedId: "a" })).toBe(true);
@@ -551,15 +536,14 @@ describe("routeDraw model", () => {
     h.dispose();
   });
 
-  test("insert at a selected leg's spot; delete; rename — all undoable", () => {
+  test("a leg tap inserts a point there; delete; rename — all undoable", () => {
     const h = harness();
     h.model.newRoute();
     h.model.tap({ op: "append" }, at(10, 56));
     h.model.tap({ op: "append" }, at(12, 56));
-    h.model.tap({ op: "selectLeg", leg: 0, at: { x: 0, y: 0 } }, at(11, 56));
-    expect(h.model.selection()).toMatchObject({ kind: "leg", leg: 0 });
-    h.model.insertAtSelectedLeg();
+    h.model.tap({ op: "insertOnLeg", leg: 0, at: { x: 0, y: 0 } }, at(11, 56));
     expect(h.model.draft()!.waypoints[1]).toMatchObject({ lon: 11, lat: 56 });
+    expect(h.model.selection()).toEqual({ kind: "point", id: h.model.draft()!.waypoints[1]!.id });
     const mid = h.model.draft()!.waypoints[1]!.id;
     h.model.renamePoint(mid, "Mid");
     expect(h.model.draft()!.waypoints[1]!.name).toBe("Mid");
@@ -1112,9 +1096,8 @@ describe("routeDraw host", () => {
     attachRouteDrawGestures(f.map, h.model, () => 8);
     h.model.edit(saved);
     h.model.select({ kind: "point", id: "a" });
-    // Via the offset grab handle.
-    f.fire("touchstart", 1000 + GRAB_OFFSET.x, 5600 + GRAB_OFFSET.y);
-    f.fire("touchmove", 1030 + GRAB_OFFSET.x, 5600 + GRAB_OFFSET.y);
+    f.fire("touchstart", 1000, 5600);
+    f.fire("touchmove", 1030, 5600);
     expect(h.model.draft()!.waypoints[0]!.lon).toBeCloseTo(10.3);
     f.fire("touchstart", 1030, 5600, 2);
     expect(h.model.draft()!.waypoints[0]).toMatchObject({ lon: 10, lat: 56 });
@@ -1122,6 +1105,20 @@ describe("routeDraw host", () => {
     expect(f.calls).toEqual(["dragPan.disable", "dragPan.enable"]);
     f.fire("touchend", 1030, 5600);
     expect(h.model.draft()!.waypoints.length).toBe(2);
+    h.dispose();
+  });
+
+  test("a tap anywhere on a line inserts a point there (not just the middle)", () => {
+    const saved = route([["a", 56, 10], ["b", 56, 12]]);
+    const h = harness([saved]);
+    const f = fakeMap();
+    attachRouteDrawGestures(f.map, h.model, () => 8);
+    h.model.edit(saved);
+    f.touchTap(1040, 5603); // 20% along the leg, 3px off the line
+    const wps = h.model.draft()!.waypoints;
+    expect(wps.length).toBe(3);
+    expect(wps[1]).toMatchObject({ lon: 10.4, lat: 56 });
+    expect(h.model.selection()).toEqual({ kind: "point", id: wps[1]!.id });
     h.dispose();
   });
 
@@ -1160,7 +1157,7 @@ describe("routeDraw host", () => {
     h.model.edit(saved);
     h.model.setCrosshair(true);
     h.setCenter(at(11.02, 57.02));
-    updateRouteDrawData(f.map, h.model, () => 0);
+    updateRouteDrawData(f.map, h.model);
     const feats = (f.data() as { features: { properties: Record<string, unknown>; geometry: { coordinates: unknown } }[] })
       .features;
     const band = feats.find((x) => x.properties.kind === "band")!;
@@ -1172,20 +1169,18 @@ describe("routeDraw host", () => {
     h.dispose();
   });
 
-  test("the overlay draws numbered points, the grab handle and + handles on long legs", () => {
+  test("the overlay draws numbered points and no extra handles", () => {
     const saved = route([["a", 56, 10], ["b", 56, 12], ["c", 56, 12.3]]);
     const h = harness([saved]);
     const f = fakeMap();
     h.model.edit(saved);
     h.model.select({ kind: "point", id: "b" });
-    updateRouteDrawData(f.map, h.model, () => 0);
+    updateRouteDrawData(f.map, h.model);
     const feats = (f.data() as { features: { properties: Record<string, unknown> }[] }).features;
     const kinds = feats.map((x) => x.properties.kind);
     expect(kinds.filter((k) => k === "point").length).toBe(3);
     expect(feats.filter((x) => x.properties.kind === "point").map((x) => x.properties.n)).toEqual(["1", "2", "3"]);
-    expect(kinds.filter((k) => k === "grab").length).toBe(1);
-    // 200px leg gets a +, the 30px one doesn't.
-    expect(feats.filter((x) => x.properties.kind === "plus").map((x) => x.properties.leg)).toEqual([0]);
+    expect(kinds.filter((k) => k !== "point" && k !== "line")).toEqual([]);
     h.dispose();
   });
 });
