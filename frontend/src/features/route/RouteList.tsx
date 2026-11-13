@@ -375,7 +375,7 @@ const RouteList: Component<RouteListProps> = (props) => {
                             void props.routes.removeRoute(r);
                           }}
                         >
-                          Delete?
+                          {following() ? "Delete & stop following?" : "Delete?"}
                         </button>
                       </div>
                     </Show>

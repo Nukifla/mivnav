@@ -692,6 +692,14 @@ describe("route management (the list)", () => {
       expect(notices.at(-1)).toMatchObject({ id: "route-import", title: "Imported 1 route" });
       expect(notices.at(-1)!.detail).toContain("1 skipped");
       expect(notices.at(-1)!.detail).toContain("“Bad”");
+      // The same file again: nothing new, and it says why.
+      const again = await built.model.importGpx(
+        `<gpx><rte><name>One</name><rtept lat="1" lon="2"/><rtept lat="3" lon="4"/></rte></gpx>`,
+        "t.gpx",
+      );
+      expect(again).toEqual([]);
+      expect(client.saved).toHaveLength(1);
+      expect(notices.at(-1)!.detail).toContain("already imported");
       await built.model.importGpx("<nope", "t.gpx");
       expect(notices.at(-1)).toMatchObject({ title: "GPX import failed", detail: "This file is not valid XML." });
       dispose();

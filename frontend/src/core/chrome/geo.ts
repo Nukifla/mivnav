@@ -29,3 +29,22 @@ export function bearingDeg(from: GeoPoint, to: GeoPoint): number {
   const deg = Math.atan2(east, north) / DEG_TO_RAD;
   return (deg + 360) % 360;
 }
+
+/** A polyline's `[lon, lat]` pairs with each longitude unwrapped against the
+ * previous one, so a leg over the antimeridian (179° → -179°) draws the
+ * short way — 2°, not 358° round the globe. MapLibre accepts |lon| > 180 in
+ * line geometry and draws it on the neighbouring world copy. */
+export function unwrappedLine(pts: readonly { lon: number; lat: number }[]): [number, number][] {
+  const out: [number, number][] = [];
+  let prev: number | null = null;
+  for (const p of pts) {
+    let lon = p.lon;
+    if (prev !== null) {
+      while (lon - prev > 180) lon -= 360;
+      while (lon - prev < -180) lon += 360;
+    }
+    out.push([lon, p.lat]);
+    prev = lon;
+  }
+  return out;
+}

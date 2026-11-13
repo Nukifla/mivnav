@@ -812,7 +812,18 @@ export function createRoutes(deps: {
     const failed: string[] = [];
     // One at a time: the store serialises writes anyway, and a refusal (the
     // 200-route cap, say) then names the route it hit.
+    // The same file imported twice would make look-alike twins — confusing in
+    // the list, and the route Signal K's course echo could match. Skip a
+    // route identical (name + points) to one already saved.
+    const same = (a: Route, b: Route) =>
+      a.name === b.name &&
+      a.waypoints.length === b.waypoints.length &&
+      a.waypoints.every((w, i) => w.lat === b.waypoints[i]!.lat && w.lon === b.waypoints[i]!.lon);
     for (const r of parsed.routes) {
+      if (client.routes().some((x) => same(x, r))) {
+        failed.push(`“${r.name}”: already imported`);
+        continue;
+      }
       try {
         saved.push(await client.save(r));
       } catch (e) {

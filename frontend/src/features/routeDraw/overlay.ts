@@ -9,7 +9,7 @@
 import { createSignal } from "solid-js";
 import type { FeatureCollection } from "geojson";
 import type { GeoJSONSource, Map as MLMap, MapMouseEvent, MapTouchEvent } from "maplibre-gl";
-import type { GeoPoint } from "../../core/chrome/geo";
+import { unwrappedLine, type GeoPoint } from "../../core/chrome/geo";
 import { lerpDensity, type Density } from "../../core/chrome/registry";
 import { isMultiTouch } from "../../core/map/userGesture";
 import { routeOverlayColors, type Palette } from "../../core/style/colors";
@@ -337,7 +337,7 @@ export function updateRouteDrawData(map: MLMap, model: RouteDrawModel, zoomTick:
   }
 
   const pts = draft.waypoints;
-  const coords = pts.map((w) => [w.lon, w.lat]);
+  const coords = unwrappedLine(pts);
   const features: FeatureCollection["features"] = [];
 
   if (pts.length >= 2) {

@@ -11,7 +11,7 @@ import type { FeatureCollection } from "geojson";
 import type { GeoJSONSource, Map as MLMap, MapMouseEvent, MapTouchEvent } from "maplibre-gl";
 import { ROUTE_LINE_LAYER, ROUTE_WAYPOINTS_LAYER } from "./layers";
 import type { RouteOverlay } from "./index";
-import type { GeoPoint } from "../../core/chrome/geo";
+import { unwrappedLine, type GeoPoint } from "../../core/chrome/geo";
 import { lerpDensity, type Density } from "../../core/chrome/registry";
 import { groupApproximateRuns } from "./runs";
 import { isMultiTouch } from "../../core/map/userGesture";
@@ -467,7 +467,7 @@ export function updateRouteData(map: MLMap, model: RouteOverlay | undefined): vo
 
   if (route) {
     const pts = route.waypoints;
-    const coords = pts.map((w) => [w.lon, w.lat]);
+    const coords = unwrappedLine(pts);
 
     // Read straight off each WAYPOINT's own persisted `approximate` flag
     // (#owqqcdqe, 2026-08-10 — `routeFromPlan`, `core/routes.ts`), not
