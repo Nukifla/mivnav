@@ -15,7 +15,8 @@ import { useBackDismiss } from "../../core/chrome/backStack";
 import { isCompact } from "../../core/media";
 import type { Route } from "../../core/routes";
 import { routePlanner } from "../../core/routePlanner";
-import type { RoutesModel } from "./index";
+import { planRouteMetrics, type RoutesModel } from "./index";
+import { formatRange } from "../../core/format";
 import { downloadGpx } from "./download";
 
 // The surface that makes a saved-but-inactive route reachable: open one back
@@ -39,9 +40,16 @@ export interface RouteListProps {
   showLegs?: (route: Route) => void;
 }
 
-/** A route's summary line: its name (or a placeholder) and its waypoint count. */
+/** A route's summary line: its name (or a placeholder), its waypoint count
+ * and total distance (`3 WP · 12.4 nm`, the info card's `summary` figures). */
 const routeName = (r: Route): string => r.name.trim() || "Untitled route";
-const wpCount = (r: Route): string => (r.waypoints.length === 1 ? "1 WP" : `${r.waypoints.length} WP`);
+export const routeGlance = (r: Route): string => {
+  const n = r.waypoints.length;
+  const wps = `${n} WP`;
+  if (n < 2) return wps;
+  const d = formatRange(planRouteMetrics(r.waypoints, r.plan_speed_kn).totalNm);
+  return `${wps} · ${d.value} ${d.unit}`;
+};
 
 const RouteList: Component<RouteListProps> = (props) => {
   useBackDismiss(() => props.open, () => props.onOpenChange(false));
@@ -194,7 +202,7 @@ const RouteList: Component<RouteListProps> = (props) => {
                 >
                   <div class="mb-2 flex items-baseline justify-between gap-2">
                     <span class="truncate font-semibold text-fg">{routeName(r)}</span>
-                    <span class="shrink-0 font-mono text-[11px] text-fg-3">{wpCount(r)}</span>
+                    <span class="shrink-0 font-mono text-[11px] text-fg-3">{routeGlance(r)}</span>
                   </div>
                   <Show when={following()}>
                     <div class="mb-2 inline-flex items-center gap-1 rounded-full bg-accent/15 px-2 py-0.5 font-mono text-[10px] font-bold tracking-[0.06em] text-accent">

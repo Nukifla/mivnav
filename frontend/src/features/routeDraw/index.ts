@@ -74,6 +74,9 @@ export interface RouteDrawModel {
   /** The last Done hit a 409: another screen saved this route first. The
    * draft is kept; the card offers Overwrite / Save as copy. */
   conflict: Accessor<boolean>;
+  /** The 409 was a DELETE on another screen (the route is gone): Overwrite
+   * recreates it, so the card labels it "Save again". */
+  conflictDeleted: Accessor<boolean>;
   /** A Cancel with unsaved changes armed a "Discard?" confirm. */
   confirmingDiscard: Accessor<boolean>;
   /** The id of the route being edited — the route display hides its saved
@@ -198,7 +201,10 @@ export function createRouteDraw(deps: RouteDrawDeps): { feature: AppFeature; mod
   const [baseline, setBaseline] = createSignal<Route | null>(null);
   const [selection, setSelection] = createSignal<Selection>(null);
   const [saving, setSaving] = createSignal(false);
-  const [conflict, setConflict] = createSignal(false);
+  // The last save's 409: "changed" (another screen saved it first) or
+  // "deleted" (another screen deleted it — Overwrite then recreates it).
+  const [conflictKind, setConflict] = createSignal<"changed" | "deleted" | null>(null);
+  const conflict = () => conflictKind() !== null;
   const [confirmingDiscard, setConfirmingDiscard] = createSignal(false);
   const [draggingId, setDraggingId] = createSignal<string | null>(null);
   // The pre-drag draft, so a drag is one undo step and a pinch restores it.
@@ -314,7 +320,7 @@ export function createRouteDraw(deps: RouteDrawDeps): { feature: AppFeature; mod
     setBaseline(copy);
     setSelection(null);
     setSaving(false);
-    setConflict(false);
+    setConflict(null);
     setConfirmingDiscard(false);
     setDraggingId(null);
     setDragSnap(null);
@@ -327,7 +333,7 @@ export function createRouteDraw(deps: RouteDrawDeps): { feature: AppFeature; mod
     setHistory(null);
     setBaseline(null);
     setSelection(null);
-    setConflict(false);
+    setConflict(null);
     setConfirmingDiscard(false);
     setDraggingId(null);
     setDragSnap(null);
@@ -388,7 +394,7 @@ export function createRouteDraw(deps: RouteDrawDeps): { feature: AppFeature; mod
     setSaving(true);
     try {
       const saved = await client.save(r);
-      setConflict(false);
+      setConflict(null);
       // Rebase the history on the saved rev, keeping undo steps meaningful
       // were the editor to stay open.
       setHistory((h) => (h ? { ...h, present: saved } : h));
@@ -404,12 +410,28 @@ export function createRouteDraw(deps: RouteDrawDeps): { feature: AppFeature; mod
       return saved;
     } catch (e) {
       if (e instanceof RouteSaveError && e.status === 409) {
-        setConflict(true);
-        notify({
-          id: "route-draw-conflict",
-          title: "Route changed on another screen",
-          detail: "Not saved — your edits are kept. Overwrite, or save as a copy.",
-        });
+        // Changed, or deleted? A delete elsewhere also 409s (the If-Match rev
+        // names a route that is gone) — re-read the store to tell which.
+        try {
+          await client.refresh();
+        } catch (re) {
+          console.error("routeDraw: refresh after 409 failed", re);
+        }
+        const gone = !client.routes().some((x) => x.id === r.id);
+        setConflict(gone ? "deleted" : "changed");
+        notify(
+          gone
+            ? {
+                id: "route-draw-conflict",
+                title: "Route deleted on another screen",
+                detail: "Not saved — your edits are kept. Save it again, or save as a copy.",
+              }
+            : {
+                id: "route-draw-conflict",
+                title: "Route changed on another screen",
+                detail: "Not saved — your edits are kept. Overwrite, or save as a copy.",
+              },
+        );
       } else {
         console.error("routeDraw: save failed", e);
         notify({ id: "route-draw-failed", title: "Couldn’t save the route", detail: "Your edits are kept — try Done again." });
@@ -540,6 +562,7 @@ export function createRouteDraw(deps: RouteDrawDeps): { feature: AppFeature; mod
     canRedo: canRedoNow,
     saving,
     conflict,
+    conflictDeleted: () => conflictKind() === "deleted",
     confirmingDiscard,
     editingRouteId: () => draft()?.id ?? null,
     draggingId,

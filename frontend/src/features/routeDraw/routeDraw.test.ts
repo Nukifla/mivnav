@@ -448,6 +448,7 @@ function harness(initial: Route[] = [], opts: { marks?: SnapMark[] } = {}) {
     const fake = fakeClient(initial);
     let n = 0;
     const notices: string[] = [];
+    const titles: string[] = [];
     const buzzes: number[] = [];
     const closedSaved: string[] = [];
     const [center, setCenter] = createSignal<{ lng: number; lat: number } | null>(null);
@@ -455,7 +456,10 @@ function harness(initial: Route[] = [], opts: { marks?: SnapMark[] } = {}) {
     const { feature, model } = createRouteDraw({
       client: fake.client,
       mintId: () => `id${++n}`,
-      notify: (x) => void notices.push(x.id),
+      notify: (x) => {
+        notices.push(x.id);
+        titles.push(x.title);
+      },
       tapRadius: () => 8,
       center,
       marks,
@@ -467,7 +471,7 @@ function harness(initial: Route[] = [], opts: { marks?: SnapMark[] } = {}) {
     const modes = createModeState(createRegistry([feature.core]));
     model.bindMode({ enter: () => modes.enter(ROUTE_DRAW_MODE_ID), leave: () => modes.leave() });
     const mode = feature.core.modes![0]!;
-    return { ...fake, model, modes, mode, notices, buzzes, closedSaved, setCenter, setMarks, dispose };
+    return { ...fake, model, modes, mode, notices, titles, buzzes, closedSaved, setCenter, setMarks, dispose };
   });
 }
 
@@ -682,6 +686,26 @@ describe("routeDraw model", () => {
     h.setRoutes([{ ...saved, rev: 7 }]);
     await h.model.overwrite();
     expect(h.saves.at(-1)!.rev).toBe(7);
+    expect(h.modes.active()).toBeNull();
+    h.dispose();
+  });
+
+  test("409 on a route deleted on another screen says so; Overwrite recreates it", async () => {
+    const saved = route([["a", 56, 10]]);
+    const h = harness([saved]);
+    h.model.edit(saved);
+    h.model.tap({ op: "append" }, at(11, 56));
+    h.setRoutes([]); // deleted elsewhere
+    h.failNext(409);
+    await h.model.done();
+    expect(h.model.conflict()).toBe(true);
+    expect(h.model.conflictDeleted()).toBe(true);
+    expect(h.notices.at(-1)).toBe("route-draw-conflict");
+    expect(h.titles.at(-1)).toBe("Route deleted on another screen");
+    expect(h.modes.active()).toBe(ROUTE_DRAW_MODE_ID);
+    await h.model.overwrite();
+    expect(h.saves.at(-1)!.rev).toBe(0);
+    expect(h.model.conflict()).toBe(false);
     expect(h.modes.active()).toBeNull();
     h.dispose();
   });

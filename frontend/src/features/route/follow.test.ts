@@ -96,6 +96,11 @@ describe("followStartIndex", () => {
     // At the start: leg 1, target b.
     expect(followStartIndex({ lng: 0, lat: 0 }, r.waypoints)).toBe(1);
   });
+  test("short of the start (in the marina): point 1 first, not point 2 across the corner", () => {
+    // Route a(0,0)→b(0,1) runs north; the boat is 0.05° south of a.
+    expect(followStartIndex({ lng: 0, lat: -0.05 }, r.waypoints)).toBe(0);
+    expect(followStartIndex({ lng: -0.03, lat: -0.04 }, r.waypoints)).toBe(0);
+  });
 });
 
 describe("skipTarget", () => {

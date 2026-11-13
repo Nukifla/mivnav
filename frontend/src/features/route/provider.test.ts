@@ -14,6 +14,7 @@ import type { InfoDetail, InfoHit, InfoQuery } from "../../core/info/types";
 import { DEFAULT_PLAN_SPEED_KN, type Route } from "../../core/routes";
 import { ROUTE_LINE_LAYER } from "./layers";
 import { createRouteProvider, ROUTE_PROVIDER_ID, type RouteFollowMetrics } from "./provider";
+import { routeGlance } from "./RouteList";
 
 const QUERY: InfoQuery = { point: { x: 100, y: 100 }, lngLat: { lng: 10.2, lat: 55.5 }, radius: 8 };
 
@@ -204,5 +205,18 @@ describe("detail", () => {
     action!.run();
     expect(exported).toEqual([r]);
     expect(sync(providerOver().detail(hitFor(r))).actions?.find((a) => a.label === "Export GPX")).toBeUndefined();
+  });
+});
+
+describe("route list row glance", () => {
+  const wp = (id: string, lat: number, lon: number) => ({ id, name: "", lat, lon });
+  const r = (wps: Route["waypoints"]): Route => ({ id: "r", name: "", waypoints: wps, plan_speed_kn: 5, rev: 1, updated: 0 });
+  test("point count and total distance", () => {
+    // 0°N → 1°N up the meridian: 60 nm.
+    expect(routeGlance(r([wp("a", 0, 0), wp("b", 1, 0)]))).toMatch(/^2 WP · 60(\.0+)? nm$/);
+  });
+  test("no distance without a leg", () => {
+    expect(routeGlance(r([wp("a", 0, 0)]))).toBe("1 WP");
+    expect(routeGlance(r([]))).toBe("0 WP");
   });
 });

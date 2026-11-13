@@ -24,10 +24,10 @@ import type {
   InfoQuery,
   InfoRow,
 } from "../../core/info/types";
-import { formatClock, formatRange } from "../../core/format";
+import { formatRange } from "../../core/format";
 import type { Route } from "../../core/routes";
 import { ROUTE_LINE_LAYER } from "./layers";
-import { planRouteMetrics } from "./index";
+import { formatEta, planRouteMetrics } from "./index";
 
 export const ROUTE_PROVIDER_ID = "routes";
 
@@ -218,7 +218,7 @@ export function createRouteProvider(deps: RouteProviderDeps): InfoProvider {
       // arrival at the last waypoint. Becalmed (Infinity) → no meaningful ETA.
       const m = deps.following() ? deps.metrics() : null;
       if (m && Number.isFinite(m.ttgDestSec)) {
-        summaryRows.push({ label: "ETA", value: formatClock(m.ttgDestSec) });
+        summaryRows.push({ label: "ETA", value: formatEta(m.ttgDestSec) });
       }
 
       // The compact waypoint list: each waypoint by name (or number) with its

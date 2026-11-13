@@ -276,10 +276,15 @@ const RouteDrawCard: Component<RouteDrawCardProps> = (props) => {
               <Match when={m.conflict()}>
                 <div class="flex flex-wrap items-center justify-end gap-1.5 pl-1.5">
                   <span class="flex-1 font-semibold whitespace-nowrap" title="Not saved — your edits are kept.">
-                    Changed on another screen
+                    {m.conflictDeleted() ? "Deleted on another screen" : "Changed on another screen"}
                   </span>
                   <Btn label="Save as copy" disabled={m.saving()} onClick={() => void m.saveCopy()} />
-                  <Btn label="Overwrite" class={danger} disabled={m.saving()} onClick={() => void m.overwrite()} />
+                  <Btn
+                    label={m.conflictDeleted() ? "Save again" : "Overwrite"}
+                    class={danger}
+                    disabled={m.saving()}
+                    onClick={() => void m.overwrite()}
+                  />
                 </div>
               </Match>
 

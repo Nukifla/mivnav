@@ -24,7 +24,8 @@ import {
 import type { Notice } from "../../core/chrome/notices";
 import type { SignalKState } from "../../core/signalk";
 import { bearingDeg, type GeoPoint, rangeNm } from "../../core/chrome/geo";
-import { formatClock, formatDuration, formatRange, padDeg } from "../../core/format";
+import { formatDuration, formatRange, padDeg } from "../../core/format";
+import { formatWhen } from "../legTable/table";
 import { isHelmish, type Instrument } from "../../core/chrome/registry";
 import { defineFeature, type AppFeature } from "../../core/chrome/feature";
 import { createRouteOverlay } from "./overlay";
@@ -39,6 +40,13 @@ export { ROUTE_LINE_LAYER, ROUTE_WAYPOINTS_LAYER } from "./layers";
 
 const DEG_TO_RAD = Math.PI / 180;
 const NM_PER_DEG = 60;
+
+/** Wall-clock ETA `seconds` from `nowMs`, with the day when it isn't today
+ * (`14:05`, `Sat 09:30`, `12 Nov 09:30`) — the leg table's `formatWhen`. */
+export function formatEta(seconds: number, nowMs: number = Date.now()): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return "– –:– –";
+  return formatWhen(nowMs + seconds * 1000, nowMs);
+}
 
 /** A waypoint's position as a `GeoPoint` — `lon`→`lng`, the wire→chrome flip. */
 export const wpPoint = (w: Waypoint): GeoPoint => ({ lng: w.lon, lat: w.lat });
@@ -200,14 +208,27 @@ export function nearestWaypointIndex(boat: GeoPoint, waypoints: readonly Waypoin
   return best;
 }
 
+/** How close to a waypoint counts as "at" it, for the frontend's own
+ * judgements (follow's start target, "Route complete"). SignalK owns the real
+ * arrival circle and does not tell us; 0.05 nm (~90 m) is the common plotter
+ * default (OpenCPN's), a boat length or two of GPS noise around a mark. */
+export const ARRIVAL_RADIUS_NM = 0.05;
+
 /** "Start route"'s target (#RT-GONAV): the ARRIVAL waypoint of the leg the
  * boat is nearest, not `nearestWaypointIndex` — beside the middle of leg 3→4
- * the nearest waypoint can be 3, BEHIND the boat, running the leg backwards. */
+ * the nearest waypoint can be 3, BEHIND the boat, running the leg backwards.
+ * The exception is the start: a boat short of point 1 (nearest leg is leg 0,
+ * projecting before its start, and farther than `ARRIVAL_RADIUS_NM` from it —
+ * in the marina, a route starting at the harbour entrance) targets point 1,
+ * not point 2, so it does not cut the corner. Sitting on point 1 → point 2. */
 export function nearestLegTargetIndex(boat: GeoPoint, waypoints: readonly Waypoint[]): number {
   if (waypoints.length === 0) return -1;
   if (waypoints.length < 2) return 0;
-  const ins = nearestInsertion(waypoints.map(wpPoint), boat);
-  return ins ? ins.index : 0;
+  const pts = waypoints.map(wpPoint);
+  const ins = nearestInsertion(pts, boat);
+  if (!ins) return 0;
+  if (ins.segment === 0 && ins.distNm > ARRIVAL_RADIUS_NM && projectOntoLeg(boat, pts[0], pts[1]).t <= 0) return 0;
+  return ins.index;
 }
 
 /** Boat→destination metrics for a route being followed. DTW is boat→next; DTG
@@ -318,7 +339,16 @@ export interface LegPos {
   index: number;
   /** Total waypoints on the route, so `index === count - 1` is the last leg. */
   count: number;
+  /** The boat's last known distance to the active waypoint, nm — the
+   * evidence a final-leg end was an ARRIVAL. Absent/null: no fix seen. */
+  dtwNm?: number | null;
 }
+
+/** How near the last waypoint the boat's last seen fix must be for a
+ * final-leg end to read as "Route complete". Wider than `ARRIVAL_RADIUS_NM`:
+ * SignalK's own arrival circle (which ends the leg) is set server-side and may
+ * be larger, and the fix we last saw lags the poll that saw the leg end. */
+export const COMPLETE_RADIUS_NM = 0.25;
 
 export type ArrivalEvent =
   /** The boat reached a waypoint: the active leg advanced one step forward,
@@ -329,13 +359,21 @@ export type ArrivalEvent =
   | null;
 
 /** Classify the change in the followed leg: only a +1 step on the SAME route
- * is an arrival; `atLast → null` is completion, since the server clears the
- * active leg ONLY at the last waypoint (nav.watcher `set_active(None)`). */
-export function arrivalEvent(prev: LegPos | null, next: LegPos | null): ArrivalEvent {
+ * is an arrival; `atLast → null` is completion only with evidence — the boat
+ * was last seen within `COMPLETE_RADIUS_NM` of the last waypoint, and this
+ * screen did not itself stop following / delete the route (`userEnded`). A
+ * Stop or delete on the final leg is not an arrival. */
+export function arrivalEvent(
+  prev: LegPos | null,
+  next: LegPos | null,
+  opts: { userEnded?: boolean } = {},
+): ArrivalEvent {
   // Following ended. A completion is an arrival AT the last waypoint; a Stop
   // from the middle is not, and neither is a bare GO that never began.
   if (prev && !next) {
-    return prev.index === prev.count - 1 ? { kind: "complete" } : null;
+    const atLast = prev.index === prev.count - 1;
+    const near = prev.dtwNm != null && prev.dtwNm <= COMPLETE_RADIUS_NM;
+    return atLast && near && !opts.userEnded ? { kind: "complete" } : null;
   }
   // No transition into a followed leg, or the initial GO (null → first leg).
   if (!prev || !next) return null;
@@ -603,6 +641,11 @@ export function createRoutes(deps: {
     return { from: boat, to };
   });
 
+  /** Set while THIS screen is ending following (Stop, or deleting the
+   * followed route): the leg's end that follows is not a "Route complete". */
+  let userEnded = false;
+  const errText = (e: unknown): string | undefined => (e instanceof Error ? e.message : undefined);
+
   // Arrival notices: turns each polled leg MOVE into a notice via the pure
   // `arrivalEvent`. Names resolve AT THE MOMENT OF TRANSITION — the reached
   // waypoint is the PREVIOUS snapshot's.
@@ -624,10 +667,22 @@ export function createRoutes(deps: {
       };
     });
     const label = (name: string, index: number) => name || `WP ${index + 1}`;
+    // The boat's last seen distance to the target, kept per leg so the moment
+    // the leg ends (and `metrics()` goes null) still knows how close it was.
+    let lastDtw: { routeId: string; index: number; nm: number } | null = null;
+    createEffect(() => {
+      const m = metrics();
+      const l = leg();
+      if (m && l) lastDtw = { routeId: l.route.id, index: l.index, nm: m.dtwNm };
+    });
     let prev: LegSnapshot | null = null;
     createEffect(() => {
       const cur = snapshot();
-      const ev = arrivalEvent(prev, cur);
+      const d = lastDtw;
+      const prevPos =
+        prev && { ...prev, dtwNm: d && d.routeId === prev.routeId && d.index === prev.index ? d.nm : null };
+      const ev = arrivalEvent(prevPos, cur, { userEnded: !cur && userEnded });
+      if (!cur) userEnded = false;
       const before = prev;
       prev = cur;
       if (!ev) return;
@@ -648,10 +703,13 @@ export function createRoutes(deps: {
   }
 
   const stop = async () => {
+    userEnded = true;
     try {
       await client.setActive(null);
     } catch (e) {
+      userEnded = false;
       console.error("route: stop failed", e);
+      deps.notify?.({ id: "route-stop-failed", title: "Couldn’t stop following", detail: errText(e) });
     }
   };
 
@@ -707,10 +765,19 @@ export function createRoutes(deps: {
   });
 
   const removeRoute = async (route: Route) => {
+    // Deleting the followed route ends following — the user's doing, not an arrival.
+    const wasActive = active()?.route_id === route.id;
+    if (wasActive) userEnded = true;
     try {
       await client.remove(route.id, route.rev);
     } catch (e) {
+      if (wasActive) userEnded = false;
       console.error("route: delete failed", e);
+      deps.notify?.({
+        id: "route-delete-failed",
+        title: `Couldn’t delete ${followName(route)}`,
+        detail: errText(e),
+      });
     }
   };
 
@@ -890,7 +957,9 @@ export function createRoutes(deps: {
       topInstrument("route.eta", "ETA", "Arrival time at destination", () => {
         const m = metrics();
         if (!m) return { value: "– –:– –", state: "null" };
-        return { value: formatClock(m.ttgDestSec) };
+        // `14:05` today, `Sat 09:30` on another day: a 30 h passage must not
+        // read as arriving today.
+        return { value: formatEta(m.ttgDestSec) };
       }),
       topInstrument(
         "route.xte",

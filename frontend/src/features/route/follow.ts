@@ -25,6 +25,8 @@ const wpLabel = (r: Route, i: number): string => r.waypoints[i]?.name.trim() || 
  * - With a fix: the arrival waypoint of the leg the boat is nearest
  *   (`nearestLegTargetIndex`, the autorouting editor's "Start route" rule) — beside
  *   the middle of leg 3→4 that is 4, never 3 behind the boat.
+ *   Short of the start (still in the marina, the route beginning at the
+ *   harbour entrance) it is point 1 itself, not point 2 across the corner.
  * - With NO fix: index 1 — the first LEG (point 1 → point 2), not point 1
  *   itself. A route's first point is conventionally where it departs from;
  *   targeting it would make the opening "leg" a bearing-only steer to the

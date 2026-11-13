@@ -17,8 +17,10 @@ import { type GeoPoint, rangeNm } from "../../core/chrome/geo";
 import { formatDuration } from "../../core/format";
 import { DESK, type ReadCtx } from "../../core/chrome/registry";
 import {
+  ARRIVAL_RADIUS_NM,
   arrivalEvent,
   createRoutes,
+  formatEta,
   crossTrack,
   mintUuid,
   directRoute,
@@ -79,9 +81,21 @@ describe("arrivalEvent", () => {
     expect(arrivalEvent(null, at(0, 4))).toBeNull();
   });
 
-  test("following ending from the LAST waypoint completes the route", () => {
-    // Was steering the final leg (index 2 of 3), now not following → complete.
-    expect(arrivalEvent(at(2, 3), null)).toEqual({ kind: "complete" });
+  test("following ending from the LAST waypoint, the boat at it, completes the route", () => {
+    // Was steering the final leg (index 2 of 3), last seen 0.1 nm off it → complete.
+    expect(arrivalEvent({ ...at(2, 3), dtwNm: 0.1 }, null)).toEqual({ kind: "complete" });
+  });
+
+  test("a final-leg end FAR from the last waypoint is not a completion", () => {
+    // A Stop (or delete) on another screen mid-way down the final leg.
+    expect(arrivalEvent({ ...at(2, 3), dtwNm: 4 }, null)).toBeNull();
+    // No fix seen: no evidence of an arrival.
+    expect(arrivalEvent(at(2, 3), null)).toBeNull();
+    expect(arrivalEvent({ ...at(2, 3), dtwNm: null }, null)).toBeNull();
+  });
+
+  test("this screen's own Stop/delete on the final leg is never a completion", () => {
+    expect(arrivalEvent({ ...at(2, 3), dtwNm: 0.01 }, null, { userEnded: true })).toBeNull();
   });
 
   test("a manual Stop from the MIDDLE is not a completion", () => {
@@ -167,6 +181,21 @@ describe("nearestLegTargetIndex (the closest-next join point, #RT-GONAV)", () =>
     expect(nearestLegTargetIndex(P(1, -0.05), wps)).toBe(1);
     // Beside the middle of leg 1 (0,2)→(2,2): the arrival is wp2 (index 2).
     expect(nearestLegTargetIndex(P(2.05, 1), wps)).toBe(2);
+  });
+
+  test("short of the start (in the marina) targets point 1, not point 2 across the corner", () => {
+    // 0.1° west of wp0, before leg 0 begins: steer to the start first.
+    expect(nearestLegTargetIndex(P(-0.1, 0), wps)).toBe(0);
+    // Off to the south-west of the start, still before it.
+    expect(nearestLegTargetIndex(P(-0.05, -0.05), wps)).toBe(0);
+  });
+
+  test("on (or just by) point 1 the first LEG is the target, not the start itself", () => {
+    expect(nearestLegTargetIndex(P(0, 0), wps)).toBe(1);
+    // ~30 m short of wp0: inside the arrival radius → point 2.
+    expect(nearestLegTargetIndex(P(-ARRIVAL_RADIUS_NM / 60 / 2, 0), wps)).toBe(1);
+    // Just past the start, beside leg 0: point 2.
+    expect(nearestLegTargetIndex(P(0.01, -0.05), wps)).toBe(1);
   });
 
   test("no fix edge cases: empty → -1, a lone waypoint (no leg) → 0", () => {
@@ -676,6 +705,90 @@ describe("route management (the list)", () => {
       expect(h.client.removed).toEqual([{ id: "R", rev: 7 }]);
       dispose();
     });
+  });
+
+  test("a failed delete / stop is said, not swallowed", async () => {
+    await createRoot(async (dispose) => {
+      const h = harness();
+      h.client.remove = async () => {
+        throw new Error("DELETE route → 500");
+      };
+      h.client.setActive = async () => {
+        throw new Error("PUT active → 502");
+      };
+      await h.model.removeRoute(route("R", 7));
+      expect(h.notices.at(-1)).toMatchObject({ id: "route-delete-failed", title: "Couldn’t delete R" });
+      await h.model.stopFollowing();
+      expect(h.notices.at(-1)).toMatchObject({ id: "route-stop-failed", title: "Couldn’t stop following" });
+      dispose();
+    });
+  });
+});
+
+describe("Route complete — only on an arrival, never a Stop/delete", () => {
+  // Following the final leg into wp1 at (1°N, 0); the boat's fix is settable.
+  async function finalLeg(boat: { lng: number; lat: number }) {
+    const [self, setSelf] = createSignal<{ lng: number; lat: number; sogMs?: number }>({ ...boat, sogMs: 3 });
+    const client = fakeClient();
+    const arrivals: string[] = [];
+    const built = createRoutes({
+      signalk: { self, course: () => null } as unknown as SignalKState,
+      client,
+      onArrival: (n) => arrivals.push(n.title),
+    });
+    const r: Route = { id: "R", name: "P", waypoints: [W("0", 0, 0), W("1", 1, 0)], plan_speed_kn: 5, rev: 0, updated: 0 };
+    await client.save(r);
+    await client.setActive({ route_id: "R", waypoint_id: "1" });
+    return { built, client, arrivals, setSelf, route: client.routes()[0]! };
+  }
+
+  test("Stop following on the final leg, even at the mark, says nothing", async () => {
+    await createRoot(async (dispose) => {
+      const h = await finalLeg({ lng: 0, lat: 0.999 });
+      await h.built.model.stopFollowing();
+      expect(h.arrivals).toEqual([]);
+      dispose();
+    });
+  });
+
+  test("deleting the followed route on the final leg says nothing", async () => {
+    await createRoot(async (dispose) => {
+      const h = await finalLeg({ lng: 0, lat: 0.999 });
+      await h.built.model.removeRoute(h.route);
+      expect(h.arrivals).toEqual([]);
+      dispose();
+    });
+  });
+
+  test("the leg ending elsewhere (the watcher) with the boat at the mark is complete", async () => {
+    await createRoot(async (dispose) => {
+      const h = await finalLeg({ lng: 0, lat: 0.999 });
+      await h.client.setActive(null); // as the server clearing it, not this screen's Stop
+      expect(h.arrivals).toEqual(["Route complete"]);
+      dispose();
+    });
+  });
+
+  test("the leg ending elsewhere far from the mark is not complete", async () => {
+    await createRoot(async (dispose) => {
+      const h = await finalLeg({ lng: 0, lat: 0.5 });
+      await h.client.setActive(null);
+      expect(h.arrivals).toEqual([]);
+      dispose();
+    });
+  });
+});
+
+describe("formatEta (band.top / info card ETA)", () => {
+  const now = new Date(2026, 10, 13, 10, 0).getTime(); // Fri 13 Nov 10:00 local
+  test("today reads as a bare clock", () => {
+    expect(formatEta(2 * 3600, now)).toBe("12:00");
+  });
+  test("a 30 h passage names the day, not today's clock", () => {
+    expect(formatEta(30 * 3600, now)).toBe("Sat 16:00");
+  });
+  test("no ETA when becalmed", () => {
+    expect(formatEta(Infinity, now)).toBe("– –:– –");
   });
 });
 
