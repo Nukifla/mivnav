@@ -152,6 +152,10 @@ export class RouteSaveError extends Error {
 const BASE = "/api/routes";
 
 interface Options {
+  /** `PUT /routes/active` saved the leg but couldn't set/clear the Signal K
+   * course (`publish.outcome === "failed"`) — the autopilot may still steer
+   * the old course. */
+  onPublishFailed?: (detail: string) => void;
   /** Re-read the store this often, to reflect edits from other screens aboard.
    * A route store is a handful of small documents; a slow poll is nothing and it
    * is the whole of "boat-wide". 0 disables it (tests). */
@@ -230,8 +234,9 @@ export function createRoutesClient(opts: Options = {}): RoutesClient {
       body: JSON.stringify(leg),
     });
     if (!res.ok) throw new Error(`PUT active → ${res.status}: ${await res.text()}`);
-    const body = (await res.json()) as { active: ActiveLeg | null };
+    const body = (await res.json()) as { active: ActiveLeg | null; publish?: { outcome?: string; detail?: string } };
     setActiveState(withSteerMode(body.active ?? null));
+    if (body.publish?.outcome === "failed") opts.onPublishFailed?.(body.publish.detail ?? "");
   };
 
   void refresh();

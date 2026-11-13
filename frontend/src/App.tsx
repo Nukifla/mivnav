@@ -307,7 +307,10 @@ const App: Component = () => {
   const regionDraw = createRegionDraw();
   // Routes are BOAT data on the server; the client is the live view, the
   // feature takes it so GO/insert/append logic is testable without a network.
-  const routesClient = createRoutesClient();
+  const routesClient = createRoutesClient({
+    onPublishFailed: (detail) =>
+      notices.push({ id: "route-publish-failed", title: "Autopilot course not updated", detail: detail || undefined }),
+  });
   // Transient arrival notices (waypoint reached / route complete) — a quiet
   // NOTICE, not the alarm band's collision red. See chrome/notices.ts.
   const notices = createNotices();
