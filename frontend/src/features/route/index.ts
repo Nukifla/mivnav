@@ -475,6 +475,12 @@ export interface RoutesModel extends RouteOverlay {
   importGpx(text: string, fileName?: string): Promise<Route[]>;
   /** Stop following (without deleting). */
   stopFollowing(): Promise<void>;
+  /** Draw a saved route on the chart without following it (null hides it) —
+   * the route just finished in the editor, or one picked from the list.
+   * `fit` frames it. The followed route, while there is one, wins. */
+  showRoute(route: Route | null, opts?: { fit?: boolean }): void;
+  /** The route `showRoute` put up, or null. */
+  viewedRouteId: Accessor<string | null>;
   /** Draw `session`'s draft instead of the followed route while it has one
    * (the autorouting plugin's editor). One at a time; returns the detach. */
   attachEditor(session: RouteEditSession): () => void;
@@ -758,12 +764,48 @@ export function createRoutes(deps: {
     return saved;
   };
 
+  // A saved route drawn without being followed (`showRoute`). By id, so a
+  // rename/edit shows the latest copy and a delete simply drops it.
+  const [viewedId, setViewedId] = createSignal<string | null>(null);
+  const viewedRoute = createMemo<Route | null>(() => {
+    const id = viewedId();
+    return id ? (client.routes().find((r) => r.id === id) ?? null) : null;
+  });
+  // Starting a follow replaces the viewed route — stopping later must not
+  // resurrect a stale one.
+  createEffect(() => {
+    if (active()) setViewedId(null);
+  });
+
   const shownRoute = createMemo<Route | null>(() => {
     const d = draft();
     if (d) return d;
+    const hidden = deps.hiddenRouteId?.();
     const a = activeRoute();
-    return a && a.id === deps.hiddenRouteId?.() ? null : a;
+    if (a) return a.id === hidden ? null : a;
+    const v = viewedRoute();
+    return v && v.id !== hidden ? v : null;
   });
+
+  const [routeMap, setRouteMap] = createSignal<MLMap>();
+  const showRoute = (route: Route | null, opts?: { fit?: boolean }) => {
+    setViewedId(route?.id ?? null);
+    if (!route || !opts?.fit || route.waypoints.length === 0) return;
+    const map = routeMap();
+    if (!map || typeof map.fitBounds !== "function") return;
+    const lats = route.waypoints.map((w) => w.lat);
+    // Longitudes unwrapped against the first point, so a route over the
+    // antimeridian frames the short way round.
+    const lon0 = route.waypoints[0]!.lon;
+    const lons = route.waypoints.map((w) => lon0 + wrapLonDeltaDeg(w.lon - lon0));
+    map.fitBounds(
+      [
+        [Math.min(...lons), Math.min(...lats)],
+        [Math.max(...lons), Math.max(...lats)],
+      ],
+      { padding: 80, maxZoom: 14, duration: 600 },
+    );
+  };
 
   // The band.top instruments (the followed strip): present only while
   // following. Home band is `top` only — a next-waypoint bearing has no
@@ -915,13 +957,14 @@ export function createRoutes(deps: {
     reverseRoute,
     importGpx: importGpxAction,
     stopFollowing: stop,
+    showRoute,
+    viewedRouteId: () => viewedRoute()?.id ?? null,
     attachEditor,
   };
 
   // The overlay closes over `model`, so it's attached now that model exists.
   // `ensure` also forwards the live map into `routeMap`, the shared signal the
   // info provider hit-tests the route line through.
-  const [routeMap, setRouteMap] = createSignal<MLMap>();
   feature.overlay = createRouteOverlay(model, setRouteMap);
 
   // The tap-for-info provider (#RT-INFO): surfaces the DRAWN route as a card,
@@ -942,6 +985,8 @@ export function createRoutes(deps: {
     editPoints: deps.editPoints,
     exportGpx: downloadGpx,
     showLegs: deps.showLegs,
+    viewedRouteId: () => viewedRoute()?.id ?? null,
+    hideRoute: () => setViewedId(null),
   });
 
   return { feature, model };

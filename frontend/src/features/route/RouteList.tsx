@@ -63,11 +63,17 @@ const RouteList: Component<RouteListProps> = (props) => {
     props.onOpenChange(false);
   };
 
-  /** Does tapping a row open it — in the planner's editor, else the manual one? */
-  const rowOpens = () => !!routePlanner() || !!props.editPoints;
+  // Tapping a row SHOWS the route on the chart, framed — looking at a route
+  // is the common case, and must not drop you into an editor. Edit is a button.
   const canNew = () => !!routePlanner() || !!props.newManual;
 
   const open = (r: Route) => {
+    if (r.waypoints.length === 0) return;
+    props.routes.showRoute(r, { fit: true });
+    props.onOpenChange(false);
+  };
+
+  const edit = (r: Route) => {
     const planner = routePlanner();
     if (planner) planner.editRoute(r);
     else if (props.editPoints) props.editPoints(r);
@@ -165,7 +171,8 @@ const RouteList: Component<RouteListProps> = (props) => {
               const following = () => props.routes.activeRouteId() === r.id;
               const armed = () => confirmDelete() === r.id;
               const switching = () => confirmSwitch() === r.id;
-              // Whole row opens the route (fat-finger target); nested Reverse/
+              const rowOpens = () => r.waypoints.length > 0;
+              // Whole row shows the route (fat-finger target); nested Reverse/
               // Delete controls `stopPropagation` to avoid also opening.
               const openFromKey = (e: KeyboardEvent) => {
                 if (e.key === "Enter" || e.key === " ") {
@@ -177,7 +184,7 @@ const RouteList: Component<RouteListProps> = (props) => {
                 <li
                   role={rowOpens() ? "button" : undefined}
                   tabindex={rowOpens() ? 0 : undefined}
-                  aria-label={rowOpens() ? `Open ${routeName(r)}` : undefined}
+                  aria-label={rowOpens() ? `Show ${routeName(r)} on the chart` : undefined}
                   onClick={() => open(r)}
                   onKeyDown={openFromKey}
                   class="rounded-lg border border-line bg-chrome-2 p-2.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
@@ -280,7 +287,21 @@ const RouteList: Component<RouteListProps> = (props) => {
                       <Download size={13} aria-hidden="true" />
                       GPX
                     </button>
-                    {/* Beside the planner's editor (the row opens it): hand-edit the points. */}
+                    <Show when={routePlanner() || props.editPoints}>
+                      <button
+                        type="button"
+                        class={btn}
+                        title="Open the route in the editor"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          edit(r);
+                        }}
+                      >
+                        <Pencil size={13} aria-hidden="true" />
+                        Edit
+                      </button>
+                    </Show>
+                    {/* Beside the planner's editor: hand-edit the points. */}
                     <Show when={routePlanner() && props.editPoints}>
                       <button
                         type="button"

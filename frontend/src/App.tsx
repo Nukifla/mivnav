@@ -321,6 +321,13 @@ const App: Component = () => {
     // signals declared further down is safe.
     center: () => mapCenter(),
     marks: () => marks.marks(),
+    // A finished route stays on the chart (tap it for Follow/Legs/Edit) —
+    // without this only the FOLLOWED route is drawn and Done looks like a loss.
+    onClosedSaved: (r) => {
+      if (routes.model.activeRouteId() !== r.id) routes.model.showRoute(r);
+    },
+    savedAction: (r) =>
+      routes.model.activeRouteId() === r.id ? undefined : { label: "Follow", run: () => void followSaved(r) },
   });
   // The leg table: the editor's draft, or a saved route from its card/list.
   const legTable = createLegTable({ client: routesClient, routeDraw: routeDraw.model, self: signalk.self });
@@ -990,9 +997,10 @@ const App: Component = () => {
           pointerCoarse={() => chrome().pointerCoarse}
           palette={() => settings().palette}
           onLegs={legTable.model.openDraft}
-          onFollow={() => {
-            const d = routeDraw.model.draft();
-            if (d) void followSaved(d);
+          onFollow={async () => {
+            // Save first (a no-op when clean): the boat follows the SAVED copy.
+            const saved = await routeDraw.model.save();
+            if (saved) void followSaved(saved);
           }}
           isFollowed={() => routes.model.activeRouteId() === routeDraw.model.draft()?.id}
           isSaved={draftSaved}

@@ -1068,3 +1068,56 @@ describe("the route planner registry", () => {
     });
   });
 });
+
+describe("showRoute — a saved route drawn without following it", () => {
+  const mk = (id: string): Route => ({
+    id,
+    name: id,
+    waypoints: [W(`${id}1`, 0, 0), W(`${id}2`, 1, 0)],
+    plan_speed_kn: 5,
+    rev: 0,
+    updated: 0,
+  });
+
+  test("shows it, tracks edits by id, drops it on delete", async () => {
+    await createRoot(async (dispose) => {
+      const h = harness();
+      const a = await h.client.save(mk("A"));
+      expect(h.model.route()).toBeNull();
+      h.model.showRoute(a);
+      expect(h.model.route()?.id).toBe("A");
+      expect(h.model.viewedRouteId()).toBe("A");
+      await h.client.save({ ...a, name: "renamed" });
+      expect(h.model.route()?.name).toBe("renamed");
+      await h.model.removeRoute(h.client.routes()[0]!);
+      expect(h.model.route()).toBeNull();
+      expect(h.model.viewedRouteId()).toBeNull();
+      dispose();
+    });
+  });
+
+  test("the followed route wins, and starting a follow clears the viewed one", async () => {
+    await createRoot(async (dispose) => {
+      const h = harness();
+      const a = await h.client.save(mk("A"));
+      const b = await h.client.save(mk("B"));
+      h.model.showRoute(a);
+      await h.client.setActive({ route_id: b.id, waypoint_id: "B2" });
+      expect(h.model.route()?.id).toBe("B");
+      expect(h.model.viewedRouteId()).toBeNull();
+      await h.client.setActive(null);
+      expect(h.model.route()).toBeNull();
+      dispose();
+    });
+  });
+
+  test("showRoute(null) hides it", async () => {
+    await createRoot(async (dispose) => {
+      const h = harness();
+      h.model.showRoute(await h.client.save(mk("A")));
+      h.model.showRoute(null);
+      expect(h.model.route()).toBeNull();
+      dispose();
+    });
+  });
+});

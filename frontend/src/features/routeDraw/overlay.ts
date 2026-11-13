@@ -83,8 +83,8 @@ interface Sizes {
   /** Direction-arrow `icon-size` (a factor of the baked image). */
   arrow: number;
 }
-const DESK: Sizes = { line: 2, leg: 5, point: 9, stroke: 2, number: 10, plus: 7, grab: 12, arrow: 0.7 };
-const HELM: Sizes = { line: 2.5, leg: 6, point: 11, stroke: 2, number: 11.5, plus: 8.5, grab: 15, arrow: 0.9 };
+const DESK: Sizes = { line: 2, leg: 5, point: 9, stroke: 2, number: 10, plus: 7, grab: 6, arrow: 0.7 };
+const HELM: Sizes = { line: 2.5, leg: 6, point: 11, stroke: 2, number: 11.5, plus: 8.5, grab: 7.5, arrow: 0.9 };
 const sizes = (d: Density): Sizes => {
   const t = (k: keyof Sizes) => lerpDensity(DESK[k], HELM[k], d);
   return {
@@ -123,6 +123,56 @@ function ensureArrowImage(map: MLMap, color: string): string {
   ctx.closePath();
   ctx.fillStyle = color;
   ctx.fill();
+  map.addImage(id, ctx.getImageData(0, 0, el.width, el.height), { pixelRatio: ARROW_RATIO });
+  return id;
+}
+
+// The grab handle: a small dot on a thin leader from the selected point, so
+// it reads as "a handle OF that point", not a second, bigger point. Baked as
+// ONE image anchored at its top-right corner = the point itself: pixel-fixed,
+// so drawn and hit-tested (GRAB_OFFSET) always agree, at any zoom. Its hit
+// radius (GRAB_RADIUS_PX) stays generous; only the drawing is small.
+const grabIcon = (color: string, halo: string, r: number, pointR: number): string =>
+  `route-draw-grab-${color}-${halo}-${r.toFixed(1)}-${pointR.toFixed(1)}`;
+function ensureGrabImage(map: MLMap, color: string, halo: string, r: number, pointR: number): string {
+  const id = grabIcon(color, halo, r, pointR);
+  if (typeof map.hasImage !== "function" || map.hasImage(id) || typeof document === "undefined") return id;
+  const pad = r + 2;
+  const w = -GRAB_OFFSET.x + pad;
+  const h = GRAB_OFFSET.y + pad;
+  const el = document.createElement("canvas");
+  el.width = Math.ceil(w * ARROW_RATIO);
+  el.height = Math.ceil(h * ARROW_RATIO);
+  const ctx = el.getContext("2d");
+  if (!ctx) return id;
+  ctx.scale(ARROW_RATIO, ARROW_RATIO);
+  // The point sits at (w, 0); the dot at (w + GRAB_OFFSET.x, GRAB_OFFSET.y).
+  const px = w;
+  const py = 0;
+  const dx = w + GRAB_OFFSET.x;
+  const dy = GRAB_OFFSET.y;
+  const len = Math.hypot(dx - px, dy - py);
+  const ux = (dx - px) / len;
+  const uy = (dy - py) / len;
+  // Leader: from just outside the point's ring to the dot's edge.
+  const a = pointR + 3;
+  ctx.beginPath();
+  ctx.moveTo(px + ux * a, py + uy * a);
+  ctx.lineTo(dx - ux * r, dy - uy * r);
+  ctx.lineCap = "round";
+  ctx.strokeStyle = halo;
+  ctx.lineWidth = 3.5;
+  ctx.stroke();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(dx, dy, r, 0, Math.PI * 2);
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = halo;
+  ctx.stroke();
   map.addImage(id, ctx.getImageData(0, 0, el.width, el.height), { pixelRatio: ARROW_RATIO });
   return id;
 }
@@ -202,10 +252,16 @@ export function ensureRouteDrawLayers(map: MLMap, paint: RouteDrawPaint): void {
   // ./gesture.ts hit-tests — one constant, so drawn and hit always agree.
   layer({
     id: GRAB_LAYER,
-    type: "circle",
+    type: "symbol",
     source: SOURCE,
     filter: isKind(KIND.grab),
-    paint: { "circle-translate": [GRAB_OFFSET.x, GRAB_OFFSET.y], "circle-translate-anchor": "viewport" },
+    layout: {
+      "icon-anchor": "top-right",
+      "icon-rotation-alignment": "viewport",
+      "icon-pitch-alignment": "viewport",
+      "icon-allow-overlap": true,
+      "icon-ignore-placement": true,
+    },
   });
   applyRouteDrawPaint(map, paint);
 }
@@ -250,11 +306,9 @@ export function applyRouteDrawPaint(map: MLMap, { palette, density }: RouteDrawP
   set(POINT_LAYER, "circle-stroke-color", sel(c.halo, c.route));
   set(NUMBER_LAYER, "text-color", sel(c.halo, c.route));
   setLayout(NUMBER_LAYER, "text-size", s.number);
-  set(GRAB_LAYER, "circle-radius", s.grab);
-  set(GRAB_LAYER, "circle-color", c.route);
-  set(GRAB_LAYER, "circle-opacity", 0.25);
-  set(GRAB_LAYER, "circle-stroke-width", s.stroke);
-  set(GRAB_LAYER, "circle-stroke-color", c.route);
+  if (map.getLayer(GRAB_LAYER)) {
+    setLayout(GRAB_LAYER, "icon-image", ensureGrabImage(map, c.route, c.halo, s.grab, s.point));
+  }
 }
 
 type Projector = Pick<MLMap, "project" | "unproject">;

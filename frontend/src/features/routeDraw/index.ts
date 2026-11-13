@@ -94,7 +94,7 @@ export interface RouteDrawModel {
   aimLeg: Accessor<AimLeg | null>;
   /** The mark a point would snap to right now — under a drag, or the aim. */
   snapTarget: Accessor<SnapMark | null>;
-  /** "Go" is possible: a point selected on a saved, unmodified route. */
+  /** "Go" is possible: a point is selected (an unsaved draft is saved first). */
   canGo: Accessor<boolean>;
 
   /** Open the editor on a blank route. */
@@ -134,6 +134,10 @@ export interface RouteDrawModel {
   redo(): void;
   /** Save (one PUT with If-Match) and close. Clean → just close. */
   done(): Promise<void>;
+  /** Save WITHOUT closing — Follow/Go from the card save first. Resolves to
+   * the saved route (the draft itself when already clean and saved), or null
+   * when nothing could be saved (empty, a 409, a network failure). */
+  save(): Promise<Route | null>;
   /** Close, asking first if dirty — the same path as the pill's X / Esc. */
   cancel(): void;
   /** Confirm the armed discard. */
@@ -144,7 +148,7 @@ export interface RouteDrawModel {
   overwrite(): Promise<void>;
   /** After a 409: save the draft as a new route instead. */
   saveCopy(): Promise<void>;
-  /** Start following the saved route at the selected point, and close. */
+  /** Save if needed, start following at the selected point, and close. */
   go(): Promise<void>;
   /** App binds the mode state machine once both exist. */
   bindMode(m: { enter: () => void; leave: () => boolean }): void;
@@ -169,6 +173,11 @@ export interface RouteDrawDeps {
   vibrate?: (ms: number) => void;
   /** Injectable crosshair-mode setting (tests); default a per-device one. */
   crosshairSetting?: [Accessor<boolean>, Setter<boolean>];
+  /** The editor closed on a SAVED route (Done, Overwrite, Save as copy) —
+   * App keeps it drawn on the chart, so a finished route never vanishes. */
+  onClosedSaved?: (route: Route) => void;
+  /** An action for the "Route saved" notice (App: Follow). */
+  savedAction?: (route: Route) => Notice["action"];
 }
 
 const defaultVibrate = (ms: number) => {
@@ -260,7 +269,7 @@ export function createRouteDraw(deps: RouteDrawDeps): { feature: AppFeature; mod
   const canGo = () => {
     const d = draft();
     const s = selection();
-    return !!d && d.rev > 0 && !dirty() && !saving() && s?.kind === "point";
+    return !!d && !saving() && !draggingId() && s?.kind === "point";
   };
 
   /** After the draft jumps from `prev` to `r` (undo/redo/cancelled drag):
@@ -364,9 +373,18 @@ export function createRouteDraw(deps: RouteDrawDeps): { feature: AppFeature; mod
 
   const exit = () => leaveMode?.();
 
+  /** Close after a save (or a clean Done on a saved route): hand the saved
+   * route to App so it stays on the chart. */
+  const closeSaved = (r: Route | null) => {
+    discardOk = true;
+    exit();
+    if (r && r.rev > 0 && r.waypoints.length > 0) deps.onClosedSaved?.(r);
+  };
+
   /** One PUT. On success the saved route becomes the clean baseline (and the
-   * draft takes its new rev), then the editor closes. */
-  const persist = async (r: Route): Promise<boolean> => {
+   * draft takes its new rev). `quiet`: no "Route saved" notice (a Follow/Go
+   * that saves first says what it did itself). */
+  const persist = async (r: Route, quiet = false): Promise<Route | null> => {
     setSaving(true);
     try {
       const saved = await client.save(r);
@@ -375,8 +393,15 @@ export function createRouteDraw(deps: RouteDrawDeps): { feature: AppFeature; mod
       // were the editor to stay open.
       setHistory((h) => (h ? { ...h, present: saved } : h));
       setBaseline(copyRoute(saved));
-      notify({ id: "route-draw-saved", title: "Route saved", detail: saved.name || undefined });
-      return true;
+      if (!quiet) {
+        notify({
+          id: "route-draw-saved",
+          title: "Route saved",
+          detail: saved.name || undefined,
+          action: deps.savedAction?.(saved),
+        });
+      }
+      return saved;
     } catch (e) {
       if (e instanceof RouteSaveError && e.status === 409) {
         setConflict(true);
@@ -389,7 +414,7 @@ export function createRouteDraw(deps: RouteDrawDeps): { feature: AppFeature; mod
         console.error("routeDraw: save failed", e);
         notify({ id: "route-draw-failed", title: "Couldn’t save the route", detail: "Your edits are kept — try Done again." });
       }
-      return false;
+      return null;
     } finally {
       setSaving(false);
     }
@@ -399,12 +424,17 @@ export function createRouteDraw(deps: RouteDrawDeps): { feature: AppFeature; mod
     const d = draft();
     if (!d || saving()) return;
     // Nothing to save: unchanged, or a blank route never placed.
-    if (!dirty() || (d.rev === 0 && d.waypoints.length === 0)) {
-      discardOk = true;
-      exit();
-      return;
-    }
-    if (await persist(d)) exit();
+    if (!dirty() || (d.rev === 0 && d.waypoints.length === 0)) return closeSaved(d);
+    const saved = await persist(d);
+    if (saved) closeSaved(saved);
+  };
+
+  const save = async (): Promise<Route | null> => {
+    const d = draft();
+    if (!d || saving() || d.waypoints.length === 0) return null;
+    if (conflict()) return null; // the card's Overwrite / Save as copy decides
+    if (d.rev > 0 && !dirty()) return d;
+    return persist(d, true);
   };
 
   const overwrite = async () => {
@@ -413,22 +443,27 @@ export function createRouteDraw(deps: RouteDrawDeps): { feature: AppFeature; mod
     await client.refresh();
     const server = client.routes().find((r) => r.id === d.id);
     // Deleted meanwhile → recreate it (rev 0 = no If-Match).
-    if (await persist({ ...d, rev: server?.rev ?? 0 })) exit();
+    const saved = await persist({ ...d, rev: server?.rev ?? 0 });
+    if (saved) closeSaved(saved);
   };
 
   const saveCopy = async () => {
     const d = draft();
     if (!d || saving()) return;
     const name = d.name ? `${d.name} (copy)`.slice(0, 64) : "";
-    if (await persist({ ...d, id: mintId(), name, rev: 0, updated: 0 })) exit();
+    const saved = await persist({ ...d, id: mintId(), name, rev: 0, updated: 0 });
+    if (saved) closeSaved(saved);
   };
 
   const go = async () => {
     const d = draft();
     const s = selection();
     if (!d || s?.kind !== "point" || !canGo()) return;
+    const saved = await save();
+    if (!saved) return;
     try {
-      await client.setActive({ route_id: d.id, waypoint_id: s.id });
+      await client.setActive({ route_id: saved.id, waypoint_id: s.id });
+      discardOk = true;
       exit();
     } catch (e) {
       console.error("routeDraw: GO failed", e);
@@ -668,6 +703,7 @@ export function createRouteDraw(deps: RouteDrawDeps): { feature: AppFeature; mod
     },
 
     done,
+    save,
     cancel: () => void exit(),
     discard() {
       // A switch was waiting on this: open the other route instead of closing.

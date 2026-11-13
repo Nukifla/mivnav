@@ -211,9 +211,9 @@ const RouteDrawCard: Component<RouteDrawCardProps> = (props) => {
     </div>
   );
 
-  // Follow: only a saved, unmodified route — what the boat would follow is
-  // the SAVED copy, so an unsaved edit must be saved (Done) first.
-  const canFollow = () => !!props.isSaved?.() && !m.dirty() && !m.saving();
+  // Follow: the boat follows the SAVED copy, so App saves the draft first
+  // (one tap, no "Done, then Follow" dance). Not while a 409 is unresolved.
+  const canFollow = () => !m.saving() && !m.conflict() && !m.draggingId();
   const followBtn = () => (
     <Show when={props.onFollow && count() >= 2 && !props.isFollowed?.()}>
       <IconBtn
@@ -221,7 +221,13 @@ const RouteDrawCard: Component<RouteDrawCardProps> = (props) => {
         icon={Navigation}
         class={canFollow() ? "text-accent!" : ""}
         disabled={!canFollow()}
-        title={canFollow() ? "Follow from the nearest leg ahead of the boat" : "Save first (Done), then Follow"}
+        title={
+          canFollow()
+            ? m.dirty() || !props.isSaved?.()
+              ? "Save and follow from the nearest leg ahead of the boat"
+              : "Follow from the nearest leg ahead of the boat"
+            : "Resolve the save conflict first"
+        }
         onClick={() => props.onFollow?.()}
       />
     </Show>
@@ -349,8 +355,8 @@ const RouteDrawCard: Component<RouteDrawCardProps> = (props) => {
                                 disabled={!m.canGo()}
                                 title={
                                   m.canGo()
-                                    ? "Start following this route from this point"
-                                    : "Save the route first (Done), then Go"
+                                    ? "Save and start following this route from this point"
+                                    : "Not while saving"
                                 }
                                 onClick={() => void m.go()}
                               />

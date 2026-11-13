@@ -11,6 +11,7 @@ import Navigation from "lucide-solid/icons/navigation";
 import SkipForward from "lucide-solid/icons/skip-forward";
 import SkipBack from "lucide-solid/icons/skip-back";
 import Flag from "lucide-solid/icons/flag";
+import EyeOff from "lucide-solid/icons/eye-off";
 import type { RoutePlanner } from "../../core/routePlanner";
 import type { QueryableMap } from "../../core/info/queryGuard";
 import { scopedQuery } from "../../core/info/queryGuard";
@@ -77,6 +78,10 @@ export interface RouteProviderDeps {
   exportGpx?: (route: Route) => void;
   /** Open the leg table on the route (features/legTable). Absent hides it. */
   showLegs?: (route: Route) => void;
+  /** The route drawn without being followed (`RoutesModel.showRoute`), and
+   * how to take it off the chart — the card's "Hide". */
+  viewedRouteId?: Accessor<string | null>;
+  hideRoute?: () => void;
 }
 
 /** "3 waypoints · 12.4 nm" — the one-line glance shown as the hit subtitle. */
@@ -266,6 +271,9 @@ export function createRouteProvider(deps: RouteProviderDeps): InfoProvider {
             : []),
           ...(deps.exportGpx
             ? [{ label: "Export GPX", icon: Download, run: () => deps.exportGpx!(route) }]
+            : []),
+          ...(deps.hideRoute && deps.viewedRouteId?.() === route.id && deps.activeRouteId() !== route.id
+            ? [{ label: "Hide", icon: EyeOff, run: () => deps.hideRoute!() }]
             : []),
         ],
       };

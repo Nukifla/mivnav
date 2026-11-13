@@ -449,6 +449,7 @@ function harness(initial: Route[] = [], opts: { marks?: SnapMark[] } = {}) {
     let n = 0;
     const notices: string[] = [];
     const buzzes: number[] = [];
+    const closedSaved: string[] = [];
     const [center, setCenter] = createSignal<{ lng: number; lat: number } | null>(null);
     const [marks, setMarks] = createSignal<SnapMark[]>(opts.marks ?? []);
     const { feature, model } = createRouteDraw({
@@ -461,11 +462,12 @@ function harness(initial: Route[] = [], opts: { marks?: SnapMark[] } = {}) {
       vibrate: (ms) => void buzzes.push(ms),
       // Never the real per-device store: tests must not see each other's toggle.
       crosshairSetting: createSignal(false),
+      onClosedSaved: (r) => void closedSaved.push(r.id),
     });
     const modes = createModeState(createRegistry([feature.core]));
     model.bindMode({ enter: () => modes.enter(ROUTE_DRAW_MODE_ID), leave: () => modes.leave() });
     const mode = feature.core.modes![0]!;
-    return { ...fake, model, modes, mode, notices, buzzes, setCenter, setMarks, dispose };
+    return { ...fake, model, modes, mode, notices, buzzes, closedSaved, setCenter, setMarks, dispose };
   });
 }
 
@@ -711,24 +713,71 @@ describe("routeDraw model", () => {
     h.dispose();
   });
 
-  test("Go only on a saved, clean route with a point selected — then follows and leaves", async () => {
+  test("Go needs a selected point; a dirty or new draft is saved first, then followed", async () => {
     const saved = route([["a", 56, 10], ["b", 56, 12]]);
     const h = harness([saved]);
     h.model.edit(saved);
     expect(h.model.canGo()).toBe(false);
     h.model.tap({ op: "selectPoint", id: "b" }, at(12, 56));
     expect(h.model.canGo()).toBe(true);
-    h.model.renamePoint("a", "x");
-    expect(h.model.canGo()).toBe(false);
-    h.model.undo();
-    expect(h.model.canGo()).toBe(true);
+    // Clean: no save, straight to following.
     await h.model.go();
+    expect(h.saves.length).toBe(0);
     expect(h.client.active()).toEqual({ route_id: "r1", waypoint_id: "b" });
     expect(h.modes.active()).toBeNull();
 
+    // Dirty: one quiet save (no "Route saved" notice), then follow.
+    h.model.edit(h.client.routes()[0]!);
+    h.model.tap({ op: "selectPoint", id: "a" }, at(10, 56));
+    h.model.renamePoint("a", "x");
+    expect(h.model.canGo()).toBe(true);
+    await h.model.go();
+    expect(h.saves.length).toBe(1);
+    expect(h.saves[0]!.waypoints[0]!.name).toBe("x");
+    expect(h.notices).not.toContain("route-draw-saved");
+    expect(h.client.active()).toEqual({ route_id: "r1", waypoint_id: "a" });
+    expect(h.modes.active()).toBeNull();
+
+    // A brand-new route: created, then followed.
     h.model.newRoute();
     h.model.tap({ op: "append" }, at(10, 56));
-    expect(h.model.canGo()).toBe(false);
+    expect(h.model.canGo()).toBe(true);
+    await h.model.go();
+    expect(h.saves.length).toBe(2);
+    expect(h.client.active()?.route_id).toBe(h.saves[1]!.id);
+    h.dispose();
+  });
+
+  test("Go that cannot save stays in the editor and follows nothing", async () => {
+    const h = harness();
+    h.model.newRoute();
+    h.model.tap({ op: "append" }, at(10, 56));
+    h.failNext(500);
+    await h.model.go();
+    expect(h.client.active()).toBeNull();
+    expect(h.modes.active()).toBe(ROUTE_DRAW_MODE_ID);
+    expect(h.model.dirty()).toBe(true);
+    h.dispose();
+  });
+
+  test("closing on a saved route hands it over to stay on the chart; Cancel and empty routes don't", async () => {
+    const h = harness();
+    h.model.newRoute();
+    await h.model.done(); // blank, never placed
+    expect(h.closedSaved).toEqual([]);
+    h.model.newRoute();
+    h.model.tap({ op: "append" }, at(10, 56));
+    h.model.tap({ op: "append" }, at(11, 56));
+    await h.model.done();
+    expect(h.closedSaved).toEqual([h.saves[0]!.id]);
+    // Reopened and closed clean: still handed over (it was showing before).
+    h.model.edit(h.client.routes()[0]!);
+    await h.model.done();
+    expect(h.closedSaved.length).toBe(2);
+    // Cancel: not.
+    h.model.edit(h.client.routes()[0]!);
+    h.model.cancel();
+    expect(h.closedSaved.length).toBe(2);
     h.dispose();
   });
 
