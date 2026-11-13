@@ -68,11 +68,16 @@ def list_routes(runtime: Runtime = Depends(get_runtime)) -> dict:
     SignalK is unreachable: it serves the in-memory mirror, stale: true.
     """
     stale = False
+    before = runtime.routes.active()
     try:
         runtime.routes.refresh()
     except RouteStorageUnavailable as e:
         stale = True
         log.warning("serving routes from memory: %s", e)
+    else:
+        # Another Signal K client deleted the followed route (or its target
+        # point): the refresh dropped the leg, so drop the course too.
+        _clear_if_dropped(runtime, before, "a refresh from Signal K")
     routes, active = runtime.routes.snapshot()
     return {
         "routes": [r.model_dump(mode="json") for r in routes],

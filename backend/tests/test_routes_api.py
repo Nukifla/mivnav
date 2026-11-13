@@ -233,6 +233,17 @@ def test_saving_away_the_target_waypoint_clears_the_signalk_course(
     assert box.active_route is None
 
 
+def test_a_route_deleted_by_another_signalk_client_clears_the_course(
+    client: TestClient, box: FakeCourse
+) -> None:
+    client.put("/routes/r1", json=HOME)
+    client.put("/routes/active", json={"route_id": "r1", "waypoint_id": "w2"})
+    assert box.active_route is not None
+    box.resources.pop("r1")  # deleted straight on Signal K, not through mivnav
+    assert client.get("/routes").json()["active"] is None
+    assert box.active_route is None
+
+
 def test_go_reports_the_signalk_publish_outcome(client: TestClient, box: FakeCourse) -> None:
     client.put("/routes/r1", json=HOME)
     go = client.put("/routes/active", json={"route_id": "r1", "waypoint_id": "w2"})
