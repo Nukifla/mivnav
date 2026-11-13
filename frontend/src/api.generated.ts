@@ -1774,7 +1774,7 @@ export interface paths {
         /**
          * Delete Route
          * @description Delete a route. If the boat was following it, it stops following
-         *     it — see RouteStore._settle_active.
+         *     it — see RouteStore._settle_active — and SignalK's course is cleared.
          */
         delete: operations["delete_route_routes__route_id__delete"];
         options?: never;
