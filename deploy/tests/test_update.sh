@@ -172,6 +172,15 @@ else
     check "checksum mismatch reported" grep -q "checksum mismatch" "$T/out"
     check "nothing installed" test ! -e "$ROOT/current"
 fi
+check "failed install leaves a log"   grep -q "checksum mismatch" "$HOME/mivnav-install.log"
+check "…with diagnostics appended"    grep -q "Diagnostics follow" "$HOME/mivnav-install.log"
+check "…and says to send it"          grep -q "Please send .*mivnav-install.log" "$T/out"
+
+section "install.sh --diagnose"
+if bash "$REPO/deploy/install.sh" --diagnose > "$T/out" 2>&1; then ok "diagnose exits 0"; else bad "diagnose exits 0"; cat "$T/out"; fi
+check "report written"                grep -q "# mivnav diagnostics" "$HOME/mivnav-diagnostics.txt"
+check "report has os-release"         grep -q 'cat /etc/os-release' "$HOME/mivnav-diagnostics.txt"
+check "diagnose installs nothing"     test ! -e "$ROOT/current"
 
 section "install.sh v1.0.0 (latest download path, --version)"
 if bash "$REPO/deploy/install.sh" --version v1.0.0 > "$T/out" 2>&1; then ok "install exits 0"; else bad "install exits 0"; cat "$T/out"; fi
@@ -185,6 +194,8 @@ check "update unit installed"   grep -qx "ExecStart=$ROOT/current/deploy/update.
 check "polkit rule for this user" grep -q "subject.user != \"$(id -un)\"" "$MIVNAV_POLKIT_DIR/50-mivnav.rules"
 check "system copy kept"        cmp -s "$ROOT/system/mivnav.service" "$MIVNAV_SYSTEMD_DIR/mivnav.service"
 check "config bootstrapped"     test -f "$HOME/.config/mivnav/config.json"
+check "install log written"     grep -q "is running" "$HOME/mivnav-install.log"
+check "no diagnostics on success" bash -c "! grep -q 'Diagnostics follow' '$HOME/mivnav-install.log'"
 check "systemctl enable+restart" bash -c "grep -qx 'enable mivnav.service' '$T/systemctl.log' && grep -qx 'restart mivnav.service' '$T/systemctl.log'"
 check "no partial left"         test ! -e "$ROOT/releases/1.0.0.partial"
 

@@ -12,10 +12,16 @@
 #     --bundle FILE        install a local mivnav-<v>-<arch>.tar.gz (testing);
 #                          its checksum is checked against --sums FILE if given
 #     --sums FILE          a SHA256SUMS file for --bundle
+#     --diagnose           install nothing; write a report on this machine and
+#                          the current install to ~/mivnav-diagnostics.txt
+#
+# Every run writes its output to ~/mivnav-install.log. If the install fails, a
+# diagnostics report (the same as --diagnose) is appended to it. Neither file
+# holds passwords: the o-charts login (credentials.json) is never read.
 #
 # What it does (each step idempotent — re-running it is also the repair path):
 #   1. downloads the release bundle for this arch + SHA256SUMS, verifies it
-#   2. installs the runtime deps: uv, pmtiles, polkitd (no Rust, no compiler,
+#   2. installs the runtime deps: uv, pmtiles, polkitd, libusb (no Rust, no compiler,
 #      no bun — the bundle carries the prebuilt chart engine and web UI)
 #   3. unpacks it to /opt/mivnav/releases/<version>, builds its venv, and
 #      points /opt/mivnav/current at it
@@ -35,7 +41,7 @@
 # Test hooks (deploy/tests/): MIVNAV_ROOT, MIVNAV_STATE_DIR, MIVNAV_GITHUB_*,
 # MIVNAV_HEALTH_URL as in deploy/lib.sh, plus MIVNAV_SYSTEMD_DIR,
 # MIVNAV_POLKIT_DIR, MIVNAV_SKIP_DEPS=1, MIVNAV_SKIP_ASSETS=1,
-# MIVNAV_ALLOW_ROOT=1.
+# MIVNAV_ALLOW_ROOT=1, MIVNAV_INSTALL_LOG (the log file).
 #
 # Everything up to the unpack is self-contained, because when piped from curl
 # there is no deploy/ directory yet; from then on it uses the bundle's own
@@ -53,7 +59,7 @@ main() {
     local dl="${MIVNAV_GITHUB_DOWNLOAD:-https://github.com}"
     local systemd_dir="${MIVNAV_SYSTEMD_DIR:-/etc/systemd/system}"
     local polkit_dir="${MIVNAV_POLKIT_DIR:-/etc/polkit-1/rules.d}"
-    local want=latest pre=0 bundle="" sums=""
+    local want=latest pre=0 bundle="" sums="" diagnose=0
 
     while [ $# -gt 0 ]; do
         case "$1" in
@@ -61,10 +67,31 @@ main() {
             --prerelease) pre=1; shift ;;
             --bundle)     bundle="${2:?--bundle needs a file}"; shift 2 ;;
             --sums)       sums="${2:?--sums needs a file}"; shift 2 ;;
+            --diagnose)   diagnose=1; shift ;;
             -h|--help)    sed -n '2,/^set -euo/p' "${BASH_SOURCE[0]:-/dev/null}" 2>/dev/null | sed -n 's/^# \{0,1\}//p'; return 0 ;;
             *) die "unknown option: $1 (see --help)" ;;
         esac
     done
+
+    if [ "$diagnose" = 1 ]; then
+        local report="$HOME/mivnav-diagnostics.txt"
+        log "Collecting diagnostics (takes a few seconds)"
+        diagnostics "$root" > "$report" 2>&1
+        log "Wrote $report — please send that file along with a description of what doesn't work."
+        return 0
+    fi
+
+    # Everything from here on also goes to the log, so a failed install
+    # leaves something to send. on_exit appends diagnostics if it fails.
+    INSTALL_LOG="${MIVNAV_INSTALL_LOG:-$HOME/mivnav-install.log}"
+    DIAG_ROOT="$root"
+    if : 2>/dev/null > "$INSTALL_LOG"; then
+        exec > >(tee -a "$INSTALL_LOG") 2>&1
+        log "mivnav installer $(date -Is 2>/dev/null || date), logging to $INSTALL_LOG"
+    else
+        warn "could not write $INSTALL_LOG; not logging this run"
+        INSTALL_LOG=""
+    fi
 
     if [ "$(id -u)" -eq 0 ] && [ "${MIVNAV_ALLOW_ROOT:-0}" != 1 ]; then
         die "run as the user the service should run as (e.g. pi), not root — it uses sudo itself"
@@ -85,7 +112,6 @@ main() {
     user="$(id -un)"; group="$(id -gn)"
 
     tmp="$(mktemp -d)"
-    trap 'rm -rf "$tmp"' EXIT
 
     # ── 1. fetch + verify ────────────────────────────────────────────────
     if [ -n "$bundle" ]; then
@@ -174,6 +200,7 @@ main() {
         local ip
         ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
         log "mivnav $version is running. Open http://${ip:-<this-pi>}:8230/ from any device on the boat network."
+        log "If something doesn't work, run this installer with '--diagnose' and send ~/mivnav-diagnostics.txt."
     else
         die "mivnav $version was installed but did not come up within ${MIVNAV_HEALTH_TIMEOUT}s — see: journalctl -u mivnav -e"
     fi
@@ -182,6 +209,65 @@ main() {
 log()  { printf '==> %s\n' "$*"; }
 warn() { printf 'WARNING: %s\n' "$*" >&2; }
 die()  { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
+
+tmp=""
+INSTALL_LOG=""
+DIAG_ROOT=/opt/mivnav
+on_exit() {
+    local rc="$1"
+    if [ -n "$tmp" ]; then rm -rf "$tmp"; fi
+    if [ "$rc" -ne 0 ] && [ -n "$INSTALL_LOG" ]; then
+        printf '\n==> Install failed (exit %s). Diagnostics follow.\n\n' "$rc" >> "$INSTALL_LOG"
+        diagnostics "$DIAG_ROOT" >> "$INSTALL_LOG" 2>&1 || true
+        printf '\nThe install did not finish. Please send %s\n' "$INSTALL_LOG" >&2
+        printf '(it has the full output plus details about this machine; no passwords).\n' >&2
+    fi
+}
+trap 'on_exit $?' EXIT
+
+# diagnostics <root>  — what we'd want to see when an install or the running
+# app misbehaves on a machine we don't have. Read-only, never fails, never
+# reads credentials.json. Self-contained: it has to work when the install is
+# half done, or never got as far as unpacking lib.sh.
+diagnostics() {
+    local root="$1" d=/var/cache/mivnav/oexserverd f
+    run() { printf '\n$ %s\n' "$*"; "$@" 2>&1 || printf '(exit %s)\n' "$?"; }
+    printf '# mivnav diagnostics, %s\n' "$(date -Is 2>/dev/null || date)"
+    printf '# installer: %s\n' "${BASH_SOURCE[0]:-stdin}"
+    run cat /etc/os-release
+    if [ -f /etc/rpi-issue ]; then run cat /etc/rpi-issue; fi
+    if [ -r /proc/device-tree/model ]; then run tr -d '\0' < /proc/device-tree/model; fi
+    run uname -a
+    run sh -c 'ldd --version | head -n1'
+    run sh -c 'free -h; df -h / /opt /var 2>/dev/null'
+    run id
+    run sh -c 'command -v python3 && python3 --version'
+    run sh -c '/usr/local/bin/uv --version; /usr/local/bin/pmtiles version'
+    run sh -c 'dpkg-query -W -f="\${Package} \${Version} \${Status}\n" polkitd libusb-0.1-4 systemd 2>&1'
+    run ls -la "$root" "$root/releases"
+    run readlink "$root/current"
+    if [ -f "$root/current/VERSION" ]; then run cat "$root/current/VERSION"; fi
+    if [ -x "$root/current/backend/.venv/bin/python" ]; then
+        run "$root/current/backend/.venv/bin/python" -c \
+            'import sys, platform; print(sys.version, platform.platform()); import chartcore; print("chartcore", chartcore.__file__); import mivnav.api.app; print("backend imports OK")'
+    fi
+    run ls -la "$d" /var/lib/mivnav/s57data
+    # "not found" here is the o-charts decoder missing a system library.
+    for f in "$d"/oexserverd "$d"/*.so*; do
+        if [ -f "$f" ]; then run env LD_LIBRARY_PATH="$d" ldd "$f"; fi
+    done
+    run cat "$HOME/.config/mivnav/config.json"
+    run systemctl --no-pager -l status mivnav.service
+    run curl -fsS --max-time 5 http://127.0.0.1:8230/api/healthz
+    # pi is usually in the adm group on Pi OS; otherwise try sudo, no prompt.
+    if journalctl -u mivnav.service -n1 --no-pager >/dev/null 2>&1; then
+        run journalctl -u mivnav.service -n 400 --no-pager
+    else
+        run sudo -n journalctl -u mivnav.service -n 400 --no-pager
+    fi
+    if [ -f /var/lib/mivnav/update/update.log ]; then run tail -n 100 /var/lib/mivnav/update/update.log; fi
+    return 0
+}
 
 # The pre-unpack copies of lib.sh's mivnav_resolve_tag / mivnav_verify_sha256:
 # piped from curl there is no lib.sh to source yet. Keep them in step.

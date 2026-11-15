@@ -50,9 +50,10 @@
 #
 # `--runtime`: what a RELEASE install (deploy/install.sh) needs — the bundle
 # ships a prebuilt chartcore wheel and web UI, so no Rust, no C compiler and
-# no bun: only uv, pmtiles, and polkitd (the updater's permission rule, see
-# deploy/50-mivnav.rules). Without the flag: the full build toolchain for a
-# source install (`just setup-pi-deps`, install-from-source.sh).
+# no bun: only uv, pmtiles, polkitd (the updater's permission rule, see
+# deploy/50-mivnav.rules) and libusb-0.1-4 (the o-charts decoder). Without
+# the flag: the full build toolchain for a source install (`just
+# setup-pi-deps`, install-from-source.sh).
 
 set -euo pipefail
 
@@ -78,10 +79,13 @@ fi
 # ── apt build deps (C/C++ toolchain for the pyo3 wheel — no cmake, no libgeos) ─
 # A release install needs none of that, only polkitd for the updater's rule
 # (present on OpenPlotter's desktop image, not necessarily on a Lite one).
+# Both modes need libusb-0.1-4: the o-charts dongle lib oexserverd loads
+# (libsglarm64-*.so) links libusb-0.1.so.4, and upstream ships it only for
+# x86_64. OpenPlotter happens to have it; a Lite / Trixie image may not.
 if [ "$MODE" = runtime ]; then
-    APT_PKGS=(polkitd)
+    APT_PKGS=(polkitd libusb-0.1-4)
 else
-    APT_PKGS=(build-essential pkg-config)
+    APT_PKGS=(build-essential pkg-config libusb-0.1-4)
 fi
 missing=()
 for pkg in "${APT_PKGS[@]}"; do
