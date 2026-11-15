@@ -212,6 +212,13 @@ same on-Pi steps as `deploy/install-from-source.sh`. See
 [deploy/README.md](deploy/README.md) for details, and for how to cut a
 release.
 
+## Support and feedback
+
+Questions, ideas, bug reports or just a chat about sailing: everything is
+welcome on [Discord](https://discord.gg/bEWPjWNenE). You can also
+[open an issue on GitHub](https://github.com/nukifla/mivnav/issues), or reach
+out any other way you like.
+
 ## Licence
 
 GPL-2.0-only, the whole repository; see [LICENSE](LICENSE). A large part of the chart rendering is
