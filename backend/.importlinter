@@ -83,6 +83,7 @@ ignore_imports =
     # store.py/routes.py/ingest.py), which is what keeps this edge from
     # becoming a real kernel dependency on feature behaviour.
     mivnav.config.model -> mivnav.features.poi.config
+    mivnav.config.model -> mivnav.features.poi.mivport.config
     mivnav.config.model -> mivnav.features.osm_world.config
     mivnav.config.model -> mivnav.features.satellite.config
     mivnav.config.model -> mivnav.features.ocharts.config

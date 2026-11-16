@@ -133,6 +133,10 @@ const BACKEND_ONLY: Record<string, string> = {
   // (ChartSettings), so the server-config document models no osm_world
   // slice. (A `Config.osm` entry sat here for the second, Overpass-baked
   // basemap until task unqqplrl removed that feature outright.)
+  // The mivport server a mivport POI dataset bakes from
+  // (mivnav.features.poi.mivport.config). Not modelled yet: set in
+  // config.json until the mivport account/settings panel lands.
+  "Config.mivport": "mivport server URL (+ optional web-client URL); edited in config.json for now",
   "Config.osm_world":
     "osm_world build-host/zoom/pmtiles-binary tuning; the client uses /osm_world/catalog + /osm_world/tiles + /datasets and the shared showOsmBase overlay toggle, not server config",
   // The shared search index's SQLite path — a data-LOCATION tuning, the exact

@@ -9,9 +9,14 @@ import { hasStored } from "./core/persist";
 import { prefetchDefaultProfile } from "./core/profiles";
 import { seedChartDetail } from "./core/serverConfig";
 import { prefetchOsmWorldCatalog } from "./features/osm_world/catalog";
+import { mivportPoiSource } from "./features/poi/mivport";
+import { registerPoiSource } from "./features/poi/sources";
 import { loadThemes } from "./core/style/themes/source";
 import { describeFetchError, faultHint, setSplashFault, setSplashStatus } from "./core/splash";
 import "./index.css";
+
+// Built-in POI sources besides OpenStreetMap, before any plugin's.
+registerPoiSource(mivportPoiSource());
 
 // Every plugin present under <repo>/plugins (none: an empty object) but the
 // ones switched off in Settings → Plugins, registered before anything reads

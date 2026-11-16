@@ -40,6 +40,7 @@ from mivnav.features.notices.config import NoticesConfig, default_notices_datase
 from mivnav.features.ocharts.config import OchartsConfig
 from mivnav.features.osm_world.config import OsmWorldConfig
 from mivnav.features.poi.config import PoiConfig
+from mivnav.features.poi.mivport.config import MivportConfig
 from mivnav.collision.config import CollisionConfig
 from mivnav.gnss.config import GnssConfig
 from mivnav.shallow.config import ShallowConfig
@@ -563,6 +564,8 @@ class Config(Frozen):
     # plugin's) is not folded in — not a dataset.
     data_root: Path = Field(default_factory=default_data_root)
     poi: PoiConfig = Field(default_factory=PoiConfig)
+    #: The mivport server a ``mivport`` POI dataset bakes from.
+    mivport: MivportConfig = Field(default_factory=MivportConfig)
     osm_world: OsmWorldConfig = Field(default_factory=OsmWorldConfig)
     satellite: SatelliteConfig = Field(default_factory=SatelliteConfig)
     search: SearchConfig = Field(default_factory=SearchConfig)

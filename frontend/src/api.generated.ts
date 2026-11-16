@@ -1621,6 +1621,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/poi/mivport/details/{set_id}/{ref}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Place Detail
+         * @description One mivport place as the bake stored it: attributes, OSM attributes,
+         *     reviews, photos (pointing at the boat's copies where downloaded) and the
+         *     data attribution. 404 when the set or the place is unknown. ``set_id``
+         *     resolves through the store's scan and ``ref`` is only a bound SQL
+         *     parameter, so neither reaches outside the store.
+         */
+        get: operations["place_detail_poi_mivport_details__set_id___ref__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/poi/mivport/photos/{set_id}/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Place Photo
+         * @description One downloaded photo (``<uuid>.view.jpg`` / ``<uuid>.thumb.jpg``).
+         */
+        get: operations["place_photo_poi_mivport_photos__set_id___name__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/poi/sets/{set_id}": {
         parameters: {
             query?: never;
@@ -4216,7 +4260,9 @@ export interface operations {
     put_mark_marks__mark_id__put: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
             path: {
                 mark_id: string;
             };
@@ -5403,6 +5449,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    place_detail_poi_mivport_details__set_id___ref__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                set_id: string;
+                ref: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    place_photo_poi_mivport_photos__set_id___name__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                set_id: string;
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

@@ -3,6 +3,7 @@
 of the ``poi`` provider exist.
 
 - ``"overpass"``: OpenStreetMap via an Overpass API, built in.
+- ``"mivport"``: the mivport place database (:mod:`.mivport`), built in.
 - anything else: a :class:`PoiSource` contributed by a plugin
   (:mod:`mivnav.plugins`).
 
@@ -48,7 +49,7 @@ DEFAULT_IMPLEMENTATION = OVERPASS
 
 @dataclass(frozen=True)
 class PoiSource:
-    """One plugin-provided POI implementation.
+    """One non-Overpass POI implementation: built in (mivport) or a plugin's.
 
     ``id`` is the dataset ``implementation`` value AND the ``src`` property
     every point it bakes must carry (OpenStreetMap points carry none) — the
@@ -76,11 +77,20 @@ class PoiSource:
     extra_files: Callable[[Path, str], list[Path]] = field(default=lambda d, s: [])
 
 
+def _builtin_sources() -> tuple[PoiSource, ...]:
+    # Function-local: the source module imports the bake machinery, which
+    # imports this registry.
+    from mivnav.features.poi.mivport.source import SOURCE as MIVPORT
+
+    return (MIVPORT,)
+
+
 def poi_sources(*, include_disabled: bool = False) -> dict[str, PoiSource]:
-    """Every enabled plugin's POI source by id (rebuilt per call — cheap).
-    ``include_disabled``: a switched-off plugin's too — for cleaning up its
-    files, never for offering it."""
-    out: dict[str, PoiSource] = {}
+    """Every built-in non-Overpass source, then every enabled plugin's POI
+    source, by id (rebuilt per call — cheap). ``include_disabled``: a
+    switched-off plugin's too — for cleaning up its files, never for
+    offering it."""
+    out: dict[str, PoiSource] = {s.id: s for s in _builtin_sources()}
     for plugin in plugins() if include_disabled else active_plugins():
         for source in plugin.poi_sources():
             if source.id == OVERPASS or source.id in out:

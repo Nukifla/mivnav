@@ -68,7 +68,11 @@ def _validate(params: dict, impl):
 
 
 def test_registry_lists_the_plugin_source():
-    assert implementation_labels() == {"overpass": "POI (OSM)", "fake": "POI (Fake)"}
+    assert implementation_labels() == {
+        "overpass": "POI (OSM)",
+        "mivport": "POI (mivport)",
+        "fake": "POI (Fake)",
+    }
     assert resolve_implementation("fake") == "fake"
     with pytest.raises(ValueError, match="unknown POI implementation"):
         resolve_implementation("nope")

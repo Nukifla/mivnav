@@ -158,7 +158,7 @@ def test_providers_catalog_carries_per_implementation_labels(dc):
     # OpenStreetMap). No plugins in the core suite: OSM alone.
     by_id = {p["id"]: p for p in dc.get("/datasets").json()["providers"]}
     poi = by_id["poi"]
-    assert poi["implementation_labels"] == {"overpass": "POI (OSM)"}
+    assert poi["implementation_labels"] == {"overpass": "POI (OSM)", "mivport": "POI (mivport)"}
     assert poi["default_implementation"] == "overpass"
     # every legal POI implementation has a label — a new source can't
     # silently fall back to the generic one
