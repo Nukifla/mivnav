@@ -62,6 +62,7 @@ dependencies = ["chartcore"]
 [tool.uv.sources]
 chartcore = { path = "../chartcore" }
 EOF
+cp "$REPO/backend/.python-version" "$SRC/backend/"
 echo 'app = None' > "$SRC/backend/main.py"
 : > "$SRC/backend/mivnav/__init__.py"
 : > "$SRC/backend/mivnav/api/__init__.py"
@@ -162,6 +163,7 @@ listing="$(tar -tzf "$DL/v1.0.0/mivnav-1.0.0-$ARCH.tar.gz")"
 check "top dir + VERSION"     grep -qx "mivnav-1.0.0/VERSION" <<<"$listing"
 check "wheel"                 grep -q "^mivnav-1.0.0/wheels/chartcore-.*abi3.*\.whl$" <<<"$listing"
 check "frontend dist"         grep -qx "mivnav-1.0.0/frontend/dist/index.html" <<<"$listing"
+check "python pin"            grep -qx "mivnav-1.0.0/backend/.python-version" <<<"$listing"
 check "update.sh + units"     bash -c 'grep -qx "mivnav-1.0.0/deploy/update.sh" && true' <<<"$listing"
 check "no __pycache__/.venv/data/tests" bash -c '! grep -Eq "__pycache__|\.venv|backend/data|backend/tests|deploy/tests|build-bundle"' <<<"$listing"
 
