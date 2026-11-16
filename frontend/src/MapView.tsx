@@ -309,6 +309,10 @@ const CENTRE_ZOOM = 14;
  * lock with no room to move reads as clinging, not following. */
 const FOLLOW_EDGE_MARGIN = 24; // px
 
+/** Upper bound on the map's render resolution; see the `pixelRatio` option. */
+const MAX_PIXEL_RATIO = 2;
+const cappedPixelRatio = () => Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO);
+
 /** Follow-boat pan geometry, pure so it's unit-testable without a live map:
  * given the boat's projected screen point and container size, whether it's
  * still in frame and its pixel offset from centre (`[0,0]` = centred). */
@@ -960,7 +964,22 @@ const MapView: Component<MapViewProps> = (props) => {
       // helm/desktop viewport from holding thousands.
       maxTileCacheZoomLevels: 30,
       maxTileCacheSize: 250,
+      // Phones report a device pixel ratio of ~3, so MapLibre drew 9 device
+      // pixels per CSS pixel through every chart layer on every frame, on a
+      // much weaker GPU than a laptop's — the likely reason panning was
+      // slower on a phone. 2 looks the same on a phone screen at under half
+      // the fill.
+      pixelRatio: cappedPixelRatio(),
     });
+    // A fixed pixelRatio no longer follows devicePixelRatio by itself, and
+    // that changes at runtime (browser zoom, moving to another monitor) —
+    // both fire `resize` on the window.
+    const syncPixelRatio = () => {
+      const want = cappedPixelRatio();
+      if (map.getPixelRatio() !== want) map.setPixelRatio(want);
+    };
+    window.addEventListener("resize", syncPixelRatio);
+    onCleanup(() => window.removeEventListener("resize", syncPixelRatio));
     // No compass control: the chart is permanently north-up. OSM/OpenSeaMap
     // attribution deliberately NOT shown on-map (private on-board deployment;
     // credit lives in Settings > Overlays instead).
