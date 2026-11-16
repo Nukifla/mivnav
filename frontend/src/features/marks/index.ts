@@ -33,7 +33,9 @@ import {
 import { createMarksOverlay } from "./overlay";
 import { createMarkProvider, markHit } from "./provider";
 
-const POLL_MS = 30_000;
+// Same as the route store's poll: a delete on one screen shows on the others
+// within seconds. GET /marks re-reads Signal K's waypoints, a small list.
+const POLL_MS = 5_000;
 export const MARK_MOVE_MODE_ID = "mark-move";
 
 export interface MarksDeps {
@@ -115,6 +117,15 @@ export function createMarks(deps: MarksDeps): Marks {
   void reload();
   const timer = every(() => void reload(), POLL_MS);
   onCleanup(() => stopEvery(timer));
+  // A screen woken from sleep shouldn't show (and offer to edit) old marks
+  // until the next tick.
+  if (typeof document !== "undefined") {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void reload();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    onCleanup(() => document.removeEventListener("visibilitychange", onVisible));
+  }
 
   const fail = (e: unknown) => {
     deps.notify?.(e instanceof Error ? e.message : "Couldn’t reach the boat’s server.");
@@ -122,11 +133,11 @@ export function createMarks(deps: MarksDeps): Marks {
 
   /** Show `m` now (optimistic), store it, then re-read. A refused save puts
    * the server's copy back and says why. */
-  const commit = async (m: Mark): Promise<boolean> => {
+  const commit = async (m: Mark, existing = true): Promise<boolean> => {
     latest++; // any poll in flight is now stale
     setMarks((all) => (all.some((x) => x.id === m.id) ? all.map((x) => (x.id === m.id ? m : x)) : [...all, m]));
     try {
-      await api.save(m.id, bodyOf(m));
+      await api.save(m.id, bodyOf(m), existing);
       await reload();
       return true;
     } catch (e) {
@@ -148,7 +159,7 @@ export function createMarks(deps: MarksDeps): Marks {
     };
     // Open the panel on it straight away, its Edit form already up.
     fresh = mark.id;
-    const shown = commit(mark);
+    const shown = commit(mark, false);
     deps.showHits?.([markHit(mark)]);
     return (await shown) ? marks().find((m) => m.id === mark.id) ?? mark : undefined;
   };

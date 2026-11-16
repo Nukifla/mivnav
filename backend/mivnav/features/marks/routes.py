@@ -20,7 +20,7 @@ from __future__ import annotations
 import logging
 from typing import Any, cast
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Response
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Response
 
 from mivnav.api.deps import Runtime, get_runtime
 from mivnav.config.model import Config
@@ -28,6 +28,7 @@ from mivnav.feature import DataProvider, Feature, FeatureCtx, Refresh
 from mivnav.features.marks.store import (
     ICONS,
     MarkError,
+    MarkGone,
     MarkStorageUnavailable,
     MarkStore,
 )
@@ -73,10 +74,18 @@ def list_marks(store: MarkStore = Depends(get_marks)) -> dict[str, Any]:
 
 @router.put("/{mark_id}")
 def put_mark(
-    mark_id: str, body: dict[str, Any] = Body(...), store: MarkStore = Depends(get_marks)
+    mark_id: str,
+    body: dict[str, Any] = Body(...),
+    if_match: str | None = Header(default=None, alias="If-Match"),
+    store: MarkStore = Depends(get_marks),
 ) -> dict[str, Any]:
+    # `If-Match: *` = only if it still exists: an edit from a screen that hasn't
+    # seen another screen's delete yet must not bring the mark back.
+    must_exist = if_match is not None and if_match.strip() == "*"
     try:
-        return store.save(mark_id, body).model_dump(mode="json")
+        return store.save(mark_id, body, must_exist=must_exist).model_dump(mode="json")
+    except MarkGone as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except MarkError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
     except MarkStorageUnavailable as e:

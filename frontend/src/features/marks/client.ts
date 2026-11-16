@@ -7,17 +7,19 @@ const BASE = "/api/marks";
 
 export interface MarksApi {
   list: () => Promise<MarkList>;
-  save: (id: string, body: MarkBody) => Promise<Mark>;
+  /** `existing`: an edit, refused (404) if the mark was deleted meanwhile —
+   * never re-created. */
+  save: (id: string, body: MarkBody, existing?: boolean) => Promise<Mark>;
   remove: (id: string) => Promise<void>;
 }
 
 export function createMarksApi(fetchJson: FetchJson = fetchJsonDefault): MarksApi {
   return {
     list: () => fetchJson<MarkList>(BASE),
-    save: (id, body) =>
+    save: (id, body, existing) =>
       fetchJson<Mark>(`${BASE}/${encodeURIComponent(id)}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(existing ? { "If-Match": "*" } : {}) },
         body: JSON.stringify(body),
       }),
     // 204 has no body: fetchJsonDefault's `.json()` failure is swallowed to null.

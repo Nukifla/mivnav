@@ -83,6 +83,34 @@ def test_move_edit_and_delete(client: TestClient, box: FakeCourse) -> None:
     assert client.delete("/marks/m1").status_code == 404
 
 
+def test_an_edit_does_not_resurrect_a_mark_deleted_elsewhere(
+    client: TestClient, box: FakeCourse
+) -> None:
+    client.put("/marks/m1", json=ROCK)
+    assert client.delete("/marks/m1").status_code == 204
+    # Another screen, still showing m1, moves it.
+    r = client.put("/marks/m1", json={**ROCK, "lat": 55.6}, headers={"If-Match": "*"})
+    assert r.status_code == 404
+    assert "m1" not in box.waypoints
+
+
+def test_an_edit_to_a_mark_only_signalk_knows_yet_is_saved(
+    client: TestClient, box: FakeCourse
+) -> None:
+    # Cold mirror (fresh restart, no GET yet): the edit checks SignalK itself.
+    box.waypoints["w1"] = {
+        "name": "W",
+        "feature": {
+            "type": "Feature",
+            "geometry": {"type": "Point", "coordinates": [12.0, 55.0]},
+            "properties": {},
+        },
+    }
+    r = client.put("/marks/w1", json={**ROCK, "lat": 55.6}, headers={"If-Match": "*"})
+    assert r.status_code == 200, r.text
+    assert box.waypoints["w1"]["feature"]["geometry"]["coordinates"][1] == 55.6
+
+
 def test_waypoints_from_other_apps_are_listed_and_keep_their_fields(
     client: TestClient, box: FakeCourse
 ) -> None:

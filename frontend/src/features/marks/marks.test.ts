@@ -147,7 +147,8 @@ function fakeApi(initial: Mark[] = []) {
   const saves: [string, MarkBody][] = [];
   const api: MarksApi = {
     list: async () => ({ marks: [...store.values()], icons: [], stale: false }),
-    save: async (id, body) => {
+    save: async (id, body, existing) => {
+      if (existing && !store.has(id)) throw new Error(`mark '${id}' was deleted`);
       saves.push([id, body]);
       const m = { ...body, id, updated: 1 };
       store.set(id, m);
@@ -242,6 +243,28 @@ describe("createMarks", () => {
     expect(t.mode()).toBeNull();
     await new Promise((r) => setTimeout(r, 0));
     expect(t.store.get("a")).toMatchObject({ lat: 57, lon: 12 });
+  });
+
+  test("editing a mark another screen deleted does not bring it back", async () => {
+    const notes: string[] = [];
+    const fake = fakeApi([mark("a")]);
+    const marks = createRoot(() =>
+      createMarks({
+        signalk: { self: () => null } as unknown as SignalKState,
+        settings: () => DEFAULT_SETTINGS,
+        api: fake.api,
+        notify: (s) => notes.push(s),
+        setInterval: () => 0,
+        clearInterval: () => {},
+      }),
+    );
+    await marks.reload();
+    const stale = marks.marks()[0];
+    fake.store.delete("a"); // deleted on another screen; this one hasn't polled yet
+    await marks.update(stale, { name: "Moved" });
+    expect(fake.store.has("a")).toBe(false);
+    expect(marks.marks()).toEqual([]);
+    expect(notes).toEqual(["mark 'a' was deleted"]);
   });
 
   test("a refused save says why and puts the server's copy back", async () => {

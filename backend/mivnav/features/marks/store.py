@@ -39,6 +39,11 @@ class MarkError(Exception):
     """An invalid mark id or body."""
 
 
+class MarkGone(Exception):
+    """An edit to a mark that no longer exists — deleted on another screen
+    while this one still showed it. Refused so the edit can't resurrect it."""
+
+
 class MarkStorageUnavailable(Exception):
     """SignalK could not be reached or refused the read/write."""
 
@@ -144,14 +149,20 @@ class MarkStore:
             self._raw = raw
             return self._sorted()
 
-    def save(self, mark_id: str, body: Any) -> Mark:
+    def save(self, mark_id: str, body: Any, must_exist: bool = False) -> Mark:
         """Create or replace a mark on SignalK; the mirror changes only once
-        the box has taken it."""
+        the box has taken it. ``must_exist`` (an edit, not a drop) raises
+        :class:`MarkGone` instead of re-creating a mark deleted meanwhile."""
         from mivnav.features.marks.wire import to_resource
 
         mark = parse_mark(mark_id, body)
         resources = self._require()
         with self._write_lock:
+            if must_exist and self.get(mark.id) is None:
+                # The mirror may just be cold (a restart): ask SignalK once.
+                self.refresh()
+                if self.get(mark.id) is None:
+                    raise MarkGone(f"mark {mark.id!r} was deleted, so this edit was not saved")
             with self._lock:
                 exists = mark.id in self._marks
                 if not exists and len(self._marks) >= MAX_MARKS:
