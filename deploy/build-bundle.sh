@@ -43,7 +43,7 @@ printf '%s\n' "$version" > "$top/VERSION"
 # backend: an explicit allow-list, so nothing local (.venv, data/, caches,
 # tests, tools) can leak in. Note mivnav/data/ IS source (a package) — only
 # the top-level backend/data/ is runtime data, and it isn't listed here.
-cp "$repo/backend/pyproject.toml" "$repo/backend/uv.lock" "$repo/backend/main.py" "$top/backend/"
+cp "$repo/backend/pyproject.toml" "$repo/backend/uv.lock" "$repo/backend/.python-version" "$repo/backend/main.py" "$top/backend/"
 tar -C "$repo/backend" --exclude='__pycache__' --exclude='*.pyc' -cf - mivnav | tar -C "$top/backend" -xf -
 
 cp -r "$dist" "$top/frontend/dist"
