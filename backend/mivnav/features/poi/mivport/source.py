@@ -311,18 +311,16 @@ def _photo(row: dict, base_url: str) -> dict | None:
 
 
 def _attach_photos(job: PoiBakeJob, base_url: str, manifest: dict, places: dict[str, Place]) -> int:
-    """Photo records for the region's places. The photo dump says WHICH
-    places have photos but not their URLs, so those places are asked for
-    their photos one by one (few: photos are ours only)."""
-    try:
-        with_photos = {
-            row["place_id"]
-            for row in _dump(job, base_url, manifest, "photos")
-            if isinstance(row.get("place_id"), str) and row["place_id"] in places
-        }
-    except MivportError as e:
-        job.log(f"warning: photo list not fetched: {e}")
-        return 0
+    """Photo records for the region's places, asked of mivport place by
+    place (the record carries the URLs and the credit).
+
+    Every place of OUR OWN in the region is asked, not just those the photo
+    dump lists: the dump is as old as the export, and an upload is not a
+    revision, so ``/v1/changes`` never reports one — a photo added since the
+    export would otherwise be missed until the next export. Photos only ever
+    hang on our own places (an upload to an OSM place links it first, and
+    that link IS in the change feed), so OSM-only places are skipped."""
+    with_photos = {ref for ref, (_, _, detail) in places.items() if detail.get("source") == "core"}
     count = failed = streak = 0
     for i, ref in enumerate(sorted(with_photos)):
         if i and REQUEST_INTERVAL_S > 0:

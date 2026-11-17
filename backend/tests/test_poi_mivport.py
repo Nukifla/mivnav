@@ -118,6 +118,8 @@ class FakeMivport:
                 "attribution": "© anna, CC BY-SA 4.0",
                 "license_url": "https://creativecommons.org/licenses/by-sa/4.0/",
             }]})
+        if path.startswith("/v1/places/") and path.endswith("/photos"):
+            return httpx.Response(200, json={"photos": []})
         if path.startswith("/v1/places/"):
             pid = path.removeprefix("/v1/places/")
             if pid not in self.places:
@@ -388,3 +390,16 @@ def test_extra_files_never_collide_with_another_sources(tmp_path):
     for sid, source in poi_sources().items():
         if sid != "mivport":
             assert not ours & set(source.extra_files(tmp_path, "s")), sid
+
+
+def test_a_photo_uploaded_after_the_export_is_still_found(tmp_path, fake, builds):
+    """The photo dump is as old as the export, and uploads are not in
+    /v1/changes: every place of ours is asked for its photos."""
+    fake.photos = []  # the dump doesn't know P1's photo yet
+    runner, root = _runner(tmp_path, fake)
+    assert _bake(runner)["state"] == "done"
+    details = mp_store.read_all(mp_store.details_path(root, "mp"))
+    assert [p["id"] for p in details[P1]["photos"]] == [PH]
+    assert (mp_store.photos_dir(root, "mp") / f"{PH}.view.jpg").is_file()
+    asked = {p for p in fake.requests if p.endswith("/photos")}
+    assert asked == {f"/v1/places/{P1}/photos", f"/v1/places/{P3}/photos"}  # ours only, not OSM
