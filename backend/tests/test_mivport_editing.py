@@ -585,9 +585,19 @@ def test_overlay_hide_list_and_detail_merge(runtime, dc, mp, fake):
     assert ph["id"] == photo["photo_id"] and ph["local"] == "pending" and ph["caption"] == "Pontoon"
     assert dc.get(ph["url"]).content == JPEG and dc.get(ph["thumb_url"]).content == THUMB
 
-    # A place only the boat knows.
+    # The same place tapped on the local layer (no set): the baked reviews
+    # and photos come from its base, and the baked photo keeps its uploader.
+    via_local = dc.get(f"/poi/mivport/details/local/{P1}").json()
+    assert [r["user"] for r in via_local["reviews"]] == [r["user"] for r in d["reviews"]]
+    assert [p["id"] for p in via_local["photos"]] == [p["id"] for p in d["photos"]]
+    assert d["photos"][0]["user"] == "anna"
+    assert "created_by" not in d  # a baked place: its creator is mivport's to know
+
+    # A place only the boat knows: it's the boat user's.
     pid = _create(dc, name="Fresh")["place_id"]
-    assert dc.get(f"/poi/mivport/details/local/{pid}").json()["name"] == "Fresh"
+    fresh = dc.get(f"/poi/mivport/details/local/{pid}").json()
+    assert fresh["name"] == "Fresh"
+    assert "created_by" in fresh
     assert dc.get(f"/poi/mivport/details/local/{uuid.uuid4()}").status_code == 404
 
 

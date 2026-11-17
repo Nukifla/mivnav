@@ -166,6 +166,20 @@ def _outbox_photo_url(item_id: str, part: str) -> str:
 # -- reading: details, photos, the overlay ------------------------------------
 
 
+
+
+def _set_holding(store: PoiStore, ref: str) -> tuple[str, Any, Any]:
+    """``(set id, its dir, (detail, meta))`` of a baked set storing ``ref``."""
+    for sid in sorted(store.sets()):
+        directory = store.set_dir(sid)
+        if directory is None:
+            continue
+        found = mp_store.read_detail(mp_store.details_path(directory, sid), ref)
+        if found is not None:
+            return sid, directory, found
+    return LOCAL_SET, None, None
+
+
 @router.get("/details/{set_id}/{ref}")
 def place_detail(
     set_id: str,
@@ -187,6 +201,10 @@ def place_detail(
         if directory is not None
         else None
     )
+    if found is None and set_id == LOCAL_SET:
+        # Tapped on the local layer, which doesn't say which bake the place
+        # came from: its stored reviews and photos are in whichever set has it.
+        set_id, directory, found = _set_holding(store, ref)
     outbox = rt.outbox()
     key = outbox.alias(ref)
     entry = outbox.place(key)
@@ -209,6 +227,10 @@ def place_detail(
                                 photo_url=_outbox_photo_url)
     if stored is None and place is None:
         raise HTTPException(status_code=404, detail=f"no stored detail for {set_id}/{ref}")
+    if entry is not None and entry.get("created_on_boat") and "created_by" not in detail:
+        # mivport's own creator isn't in the exports; a place made on this
+        # boat is the boat's user's, so they may delete it.
+        detail["created_by"] = rt.account.username()
     out = {**detail, "attribution": meta.get("attribution", "")}
     out["fetched_at"] = _float(meta.get("fetched_at", "0"))
     web = rt.web_url()

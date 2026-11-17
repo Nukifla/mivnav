@@ -304,7 +304,7 @@ def _photo(row: dict, base_url: str) -> dict | None:
         "thumb_url": absolute(thumb),
         "attribution": str(row.get("attribution") or f"© {row.get('user', '?')}"),
     }
-    for key in ("caption", "license_url", "taken_at", "created_at"):
+    for key in ("user", "caption", "license_url", "taken_at", "created_at"):
         if isinstance(row.get(key), str) and row[key].strip():
             out[key] = row[key]
     return out

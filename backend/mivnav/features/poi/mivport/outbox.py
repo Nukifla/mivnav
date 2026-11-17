@@ -382,7 +382,7 @@ class Outbox:
                 payload = {"edit_id": _new_id(), "op": "create", "place_id": ref,
                            "made_at": iso(now), "set": set_}
                 item_id = self._insert(db, "edit", ref, payload, _summary(payload, summary_name))
-                self._put_in(db, ref, {"base": None, "hides": [], "synced_at": None})
+                self._put_in(db, ref, {"base": None, "hides": [], "synced_at": None, "created_on_boat": True})
                 return ref, item_id
 
             assert place_id is not None
