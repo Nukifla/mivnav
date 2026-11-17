@@ -185,14 +185,26 @@ export function createPoiProvider(deps: PoiProviderDeps): InfoProvider {
       // No rows: what the place is lives in the subtitle (`poiSubtitle`) — a
       // Type/Detail/Source section only repeated it. A plugin source adds
       // its own notes (details) and links (its page for the place).
-      const extra = src ? poiSource(src)?.detail?.(props as Record<string, unknown>) : undefined;
+      const source = src ? poiSource(src) : undefined;
+      const extra = source?.detail?.(props as Record<string, unknown>);
+      const acts = source?.actions?.(props as Record<string, unknown>);
       return {
         title: name,
         subtitle: poiSubtitle(kind, str(props.kind_detail), src),
         sections: [],
         ...(extra?.notes?.length ? { notes: extra.notes } : {}),
         ...(extra?.links?.length ? { links: extra.links } : {}),
+        ...(acts?.actions?.length ? { actions: acts.actions } : {}),
+        ...(acts?.footerActions?.length ? { footerActions: acts.footerActions } : {}),
       };
+    },
+
+    // A source's actions may follow live state (a login, a loaded record):
+    // read them here so the panel re-resolves when it changes.
+    watch(hit: InfoHit) {
+      const props = (hit.payload ?? {}) as PoiProps;
+      const src = str(props.src);
+      if (src) poiSource(src)?.actions?.(props as Record<string, unknown>);
     },
   };
 }

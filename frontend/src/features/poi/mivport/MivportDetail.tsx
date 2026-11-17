@@ -34,18 +34,36 @@ import {
   type ShownPhoto,
   type WindGrades,
 } from "./detail";
+import { localBadge, type LocalBadge } from "./model";
+
+const BADGE_CLASS: Record<LocalBadge["tone"], string> = {
+  notice: "border-notice text-notice",
+  alarm: "border-alarm text-alarm",
+  ok: "border-ok text-ok",
+};
+
+/** "Changed · not uploaded" on a place (or a review, a photo) changed on
+ * the boat. */
+export const LocalBadgeChip: Component<{ badge: LocalBadge; short?: boolean }> = (props) => (
+  <span
+    class={`inline-block rounded border px-1.5 py-0.5 text-[10px] font-semibold leading-none ${BADGE_CLASS[props.badge.tone]}`}
+    title={props.badge.hint}
+  >
+    {props.short ? (props.badge.tone === "ok" ? "uploaded" : props.badge.tone === "alarm" ? "refused" : "not uploaded") : props.badge.label}
+  </span>
+);
 
 const LINK = "break-all text-accent underline decoration-dotted underline-offset-2 hover:brightness-110";
 
 /** Grade → fill: the urgency ladder (a brightness ramp too, so it holds for
  * the red/green-blind), "none" the full alarm and "poor" a paler one. */
-const GRADE_CLASS: Record<Grade, string> = {
+export const GRADE_CLASS: Record<Grade, string> = {
   good: "fill-ok",
   fair: "fill-notice",
   poor: "fill-alarm opacity-55",
   none: "fill-alarm",
 };
-const SWATCH_CLASS: Record<Grade, string> = {
+export const SWATCH_CLASS: Record<Grade, string> = {
   good: "bg-ok",
   fair: "bg-notice",
   poor: "bg-alarm opacity-55",
@@ -214,6 +232,7 @@ const Review: Component<{ review: MivportReview }> = (props) => {
           <span class="font-semibold text-fg">{props.review.user}</span>
         </Show>
         <Show when={meta()}>{(m) => <span>{m()}</span>}</Show>
+        <Show when={localBadge(props.review.local)}>{(b) => <LocalBadgeChip badge={b()} short />}</Show>
       </div>
       <Show when={props.review.body?.trim()}>
         <p class="whitespace-pre-wrap break-words text-xs leading-snug text-fg">{props.review.body!.trim()}</p>
@@ -234,8 +253,20 @@ export const MivportDetail: Component<{ detail: MivportPlaceDetail }> = (props) 
   const osmUrl = () => osmElementUrl(d().osm);
   const webUrl = () => mivportWebUrl(d());
   const [viewing, setViewing] = createSignal<number>();
+  const badge = () => localBadge(d().local, d().deleted === true);
   return (
     <div class="space-y-2 text-xs text-fg">
+      <Show when={badge()}>
+        {(b) => (
+          <div class="space-y-0.5">
+            <LocalBadgeChip badge={b()} />
+            <p class="text-[11px] text-fg-2">{b().hint}</p>
+          </div>
+        )}
+      </Show>
+      <Show when={d().deleted && !d().local}>
+        <p class="text-[11px] font-semibold text-alarm">Deleted in mivport</p>
+      </Show>
       <Show when={avg()}>
         {(s) => (
           <div class="flex items-baseline gap-1.5" aria-label={`Rated ${s().toFixed(1)} of 5`}>

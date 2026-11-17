@@ -47,6 +47,8 @@ export interface MarksDeps {
   mintId?: () => string;
   /** Say something to the skipper: a failed save has nowhere else to show. */
   notify?: (text: string) => void;
+  /** More of a mark's verbs from elsewhere ("Add to mivport"), after Move. */
+  extraActions?: (m: Mark) => InfoAction[];
   /** Injected by tests. */
   setInterval?: (fn: () => void, ms: number) => unknown;
   clearInterval?: (id: unknown) => void;
@@ -236,7 +238,7 @@ export function createMarks(deps: MarksDeps): Marks {
   });
 
   const actions = (m: Mark): InfoAction[] => {
-    const out: InfoAction[] = [{ label: "Move", run: () => startMove(m) }];
+    const out: InfoAction[] = [{ label: "Move", run: () => startMove(m) }, ...(deps.extraActions?.(m) ?? [])];
     const at = boat();
     if (at) {
       out.push({

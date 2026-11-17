@@ -32,6 +32,7 @@ const CLASS_FILE: Record<string, string> = {
   OchartsConfig: join(import.meta.dir, "../../../backend/mivnav/features/ocharts/config.py"),
   NavConfig: join(import.meta.dir, "../../../backend/mivnav/features/route/config.py"),
   TrackConfig: join(import.meta.dir, "../../../backend/mivnav/features/track/config.py"),
+  MivportConfig: join(import.meta.dir, "../../../backend/mivnav/features/poi/mivport/config.py"),
 };
 
 /**
@@ -111,6 +112,12 @@ const BACKEND_ONLY: Record<string, string> = {
   // (the autorouting plugin's RouteIQ access UI), never modelled as an editable field.
   "CredentialsConfig.routeiq":
     "write-only token from the RouteIQ access-request flow; presence shown via meta.routeiq_token_set",
+  // The boat-wide mivport login: the token is a secret (redacted on the
+  // wire), set and dropped only by /mivport/account/{login,register,device,
+  // logout}; the username and role reach the UI through GET /mivport/account
+  // (features/poi/mivport), never through the config document.
+  "CredentialsConfig.mivport":
+    "mivport token + username, managed by the /mivport/account routes; the UI reads the account there",
   // The POI PMTiles directory — a data-LOCATION tuning, a backend-only
   // tuning. The client only toggles the overlay (the device
   // setting `showPois`, ChartSettings); it does not manage where the boat's POI
@@ -133,10 +140,6 @@ const BACKEND_ONLY: Record<string, string> = {
   // (ChartSettings), so the server-config document models no osm_world
   // slice. (A `Config.osm` entry sat here for the second, Overpass-baked
   // basemap until task unqqplrl removed that feature outright.)
-  // The mivport server a mivport POI dataset bakes from
-  // (mivnav.features.poi.mivport.config). Not modelled yet: set in
-  // config.json until the mivport account/settings panel lands.
-  "Config.mivport": "mivport server URL (+ optional web-client URL); edited in config.json for now",
   "Config.osm_world":
     "osm_world build-host/zoom/pmtiles-binary tuning; the client uses /osm_world/catalog + /osm_world/tiles + /datasets and the shared showOsmBase overlay toggle, not server config",
   // The shared search index's SQLite path — a data-LOCATION tuning, the exact
@@ -169,6 +172,7 @@ const SECTIONS: { py: string; fields: string[] }[] = [
   { py: "SignalKConfig", fields: tsInterfaceFields(tsSrc, "SignalKServerConfig") },
   { py: "TrackConfig", fields: tsInterfaceFields(tsSrc, "TrackServerConfig") },
   { py: "UpdatesConfig", fields: tsInterfaceFields(tsSrc, "UpdatesServerConfig") },
+  { py: "MivportConfig", fields: tsInterfaceFields(tsSrc, "MivportServerConfig") },
   { py: "Config", fields: tsInterfaceFields(tsSrc, "ServerConfig") },
   { py: "OchartsCredentials", fields: tsInterfaceFields(tsSrc, "OchartsCredentialsView") },
   { py: "CredentialsConfig", fields: tsInlineObjectKeys(tsSrc, "ServerConfig", "credentials") },

@@ -169,6 +169,17 @@ export interface UpdatesServerConfig {
   include_prereleases: boolean;
 }
 
+/** The mivport server (mivnav.features.poi.mivport.config.MivportConfig):
+ * a mivport POI dataset bakes from it, and the boat's mivport account and
+ * outbox talk to it — Settings → mivport. */
+export interface MivportServerConfig {
+  /** The mivport API: `/v1/...` and `/exports/...` hang off it. */
+  base_url: string;
+  /** A mivport web client; when set, a place's details link to it. Empty:
+   * no link. */
+  web_url: string;
+}
+
 export interface SignalKServerConfig {
   enabled: boolean;
   host: string;
@@ -202,6 +213,8 @@ export interface ServerConfig {
   shallow: ShallowServerConfig;
   track: TrackServerConfig;
   updates: UpdatesServerConfig;
+  /** Absent from a server older than the mivport source. */
+  mivport?: MivportServerConfig;
   /** Boat-wide named areas of interest (mivnav.config.model.Region), shared
    * by POI/satellite bake pickers — settings/regions.tsx owns the
    * read-modify-write for this list. */
@@ -265,6 +278,7 @@ export interface ConfigPatch {
   shallow?: Partial<ShallowServerConfig>;
   track?: Partial<TrackServerConfig>;
   updates?: Partial<UpdatesServerConfig>;
+  mivport?: Partial<MivportServerConfig>;
   /** Whole-list replace. Entries must be in the country-XOR-bbox wire shape
    * — see `regionPatch` (settings/regions.tsx), every writer's path. */
   regions?: object[];

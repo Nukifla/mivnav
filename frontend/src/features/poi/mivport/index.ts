@@ -6,6 +6,7 @@
 import type { InfoNote } from "../../../core/info/types";
 import type { PoiFeatureProps, PoiSourcePlugin } from "../sources";
 import { fetchMivportDetail, type MivportPlaceDetail } from "./detail";
+import { mivportHooks, type MivportSourceHooks } from "./hooks";
 import { MIVPORT_KIND_GLYPHS, MIVPORT_TYPES } from "./icons";
 import { MivportDetail } from "./MivportDetail";
 import { MIVPORT_DESCRIPTION, MIVPORT_PARAM_KEYS, MivportParams } from "./params";
@@ -26,26 +27,49 @@ export function mivportDetailNote(
   setId: string,
   ref: string,
   load: MivportDetailLoader = fetchMivportDetail,
+  hooks: () => MivportSourceHooks | undefined = () => undefined,
 ): InfoNote {
   return {
     label: "mivport details",
     display: "inline",
     load: async () => {
-      const detail = await load(setId, ref);
-      return () => MivportDetail({ detail });
+      const h = hooks();
+      const detail = await (h ? h.loadDetail(setId, ref) : load(setId, ref));
+      // With editing bound, the body follows the boat's own later writes
+      // (the remembered detail is refetched after each).
+      return () =>
+        MivportDetail({
+          get detail() {
+            return h?.cachedDetail(setId, ref) ?? detail;
+          },
+        });
     },
   };
 }
 
+/** The set a point's detail is read from: the bake it came from, or "local"
+ * for a place only known on the boat (the local layer). */
+export const detailSet = (props: PoiFeatureProps): string | undefined =>
+  str(props.set) ?? (str(props.local) ? "local" : undefined);
+
 /** The info panel's extras for one mivport point: the details note, when the
  * point carries the place id and the set it was baked into. */
-export function mivportDetailExtras(props: PoiFeatureProps, load?: MivportDetailLoader) {
+export function mivportDetailExtras(
+  props: PoiFeatureProps,
+  load?: MivportDetailLoader,
+  hooks?: () => MivportSourceHooks | undefined,
+) {
   const ref = str(props.ref);
-  const set = str(props.set);
-  return ref && set ? { notes: [mivportDetailNote(set, ref, load)] } : {};
+  const set = detailSet(props);
+  return ref && set ? { notes: [mivportDetailNote(set, ref, load, hooks)] } : {};
 }
 
-export function mivportPoiSource(load?: MivportDetailLoader): PoiSourcePlugin {
+/** `load`: the read-only detail loader (tests); `hooks`: the editing state
+ * (default: whatever the app bound, ./hooks.ts). */
+export function mivportPoiSource(
+  load?: MivportDetailLoader,
+  hooks: () => MivportSourceHooks | undefined = mivportHooks,
+): PoiSourcePlugin {
   return {
     id: MIVPORT_SRC,
     label: "mivport",
@@ -62,6 +86,9 @@ export function mivportPoiSource(load?: MivportDetailLoader): PoiSourcePlugin {
     // Keyed by the mivport place id, so the same place from two baked sets
     // is ONE hit.
     hitId: (props) => str(props.ref),
-    detail: (props) => mivportDetailExtras(props, load),
+    detail: (props) => mivportDetailExtras(props, load, hooks),
+    // Editing (./editing.ts): Edit, Delete, Write review … while bound.
+    actions: (props) => hooks()?.actions(props) ?? {},
+    hiddenRefs: () => hooks()?.hiddenRefs() ?? [],
   };
 }

@@ -109,16 +109,46 @@ export const markerKinds = (): ExpressionSpecification => [
   ],
 ];
 
-function poiFilter(
+/** The refs each source wants left out of the baked layers
+ * (`PoiSourcePlugin.hiddenRefs`) — reading it subscribes the caller. */
+export function hiddenPoiRefs(): { src: string; refs: readonly string[] }[] {
+  return poiSources().flatMap((s) => {
+    const refs = s.hiddenRefs?.() ?? [];
+    return refs.length ? [{ src: s.id, refs }] : [];
+  });
+}
+
+/** "Not one of these sources' hidden places": a point is dropped when its
+ * `src` is the source's and its `ref` is in that source's list. `undefined`
+ * when nothing is hidden. */
+export function hiddenRefsClause(
+  hidden: readonly { src: string; refs: readonly string[] }[],
+): ExpressionSpecification | undefined {
+  const clauses = hidden
+    .filter((h) => h.refs.length > 0)
+    .map(
+      (h): ExpressionSpecification => [
+        "all",
+        ["==", ["get", "src"], h.src],
+        ["in", ["get", "ref"], ["literal", [...h.refs]]],
+      ],
+    );
+  if (!clauses.length) return undefined;
+  return ["!", clauses.length === 1 ? clauses[0] : ["any", ...clauses]];
+}
+
+export function poiFilter(
   base: ExpressionSpecification,
   disabledSets: readonly string[],
+  hidden: readonly { src: string; refs: readonly string[] }[] = [],
 ): ExpressionSpecification {
-  if (disabledSets.length === 0) return base;
-  const notDisabled: ExpressionSpecification = [
-    "!",
-    ["in", ["get", "set"], ["literal", [...disabledSets]]],
-  ];
-  return ["all", base, notDisabled];
+  const parts: ExpressionSpecification[] = [base];
+  if (disabledSets.length > 0) {
+    parts.push(["!", ["in", ["get", "set"], ["literal", [...disabledSets]]]]);
+  }
+  const notHidden = hiddenRefsClause(hidden);
+  if (notHidden) parts.push(notHidden);
+  return parts.length === 1 ? base : ["all", ...parts];
 }
 
 /** Union's minzoom/maxzoom — max, not min (see poi-overlay-design.md).
@@ -138,6 +168,7 @@ function installUnion(
   sets: readonly ChartSet[],
   disabledSets: readonly string[],
   palette: Palette,
+  hidden: readonly { src: string; refs: readonly string[] }[],
 ): void {
   if (!map.getSource(POI_ALL_SOURCE_ID)) {
     const { min, max } = poiUnionZoom(sets);
@@ -157,7 +188,12 @@ function installUnion(
   if (!map.getLayer(POI_MARKER_LAYER_ID)) {
     addLayer(
       map,
-      poiMarkerLayer(POI_MARKER_LAYER_ID, POI_ALL_SOURCE_ID, poiFilter(markerKinds(), disabledSets), palette),
+      poiMarkerLayer(
+        POI_MARKER_LAYER_ID,
+        POI_ALL_SOURCE_ID,
+        poiFilter(markerKinds(), disabledSets, hidden),
+        palette,
+      ),
     );
   }
 }
@@ -199,9 +235,13 @@ function removeUnion(map: MLMap): void {
 }
 
 /** Filter swap, not a reinstall, so toggling a set on/off costs no refetch. */
-function refreshPoiFilters(map: MLMap, disabledSets: readonly string[]): void {
+function refreshPoiFilters(
+  map: MLMap,
+  disabledSets: readonly string[],
+  hidden: readonly { src: string; refs: readonly string[] }[],
+): void {
   if (map.getLayer(POI_MARKER_LAYER_ID)) {
-    map.setFilter(POI_MARKER_LAYER_ID, poiFilter(markerKinds(), disabledSets));
+    map.setFilter(POI_MARKER_LAYER_ID, poiFilter(markerKinds(), disabledSets, hidden));
   }
 }
 
@@ -225,8 +265,11 @@ function reconcile(
     .sort()
     .join(",");
   if (signature !== nextSignature) removeUnion(map); // stale bounds/zoom — force a fresh install
-  installUnion(map, sets, disabledSets, palette);
-  refreshPoiFilters(map, disabledSets);
+  // Read here, in `update`'s effect: a source's hidden refs change as places
+  // are edited on the boat, and the filter follows without a refetch.
+  const hidden = hiddenPoiRefs();
+  installUnion(map, sets, disabledSets, palette, hidden);
+  refreshPoiFilters(map, disabledSets, hidden);
   return nextSignature;
 }
 

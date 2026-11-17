@@ -9,7 +9,7 @@
 
 import type { Component } from "solid-js";
 import type { DatasetParamsProps } from "../../core/settings/datasetParams";
-import type { InfoLink, InfoNote } from "../../core/info/types";
+import type { InfoAction, InfoLink, InfoNote } from "../../core/info/types";
 import type { Prim } from "./icons";
 
 /** One place type (`kind_detail`) of a source as the frontend shows it. */
@@ -51,6 +51,16 @@ export interface PoiSourcePlugin {
   hitId?: (props: PoiFeatureProps) => string | undefined;
   /** Extra info-panel content for one of its points. */
   detail?: (props: PoiFeatureProps) => { notes?: InfoNote[]; links?: InfoLink[] };
+  /** Action buttons for one of its points (an editable source's Edit,
+   * Delete …): `actions` under the header, `footerActions` under the record.
+   * Read inside the provider's `watch` scope too, so a source whose actions
+   * depend on live state (a login, a loaded record) re-resolves the panel
+   * when that state changes — read every such signal here. */
+  actions?: (props: PoiFeatureProps) => { actions?: InfoAction[]; footerActions?: InfoAction[] };
+  /** Refs (the points' own `ref`) of this source's points the baked layers
+   * must not draw — places the source draws from a layer of its own now
+   * (changed on the boat). Reactive: read inside the overlay's update. */
+  hiddenRefs?: () => readonly string[];
 }
 
 const registry = new Map<string, PoiSourcePlugin>();

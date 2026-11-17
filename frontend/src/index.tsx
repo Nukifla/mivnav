@@ -10,13 +10,17 @@ import { prefetchDefaultProfile } from "./core/profiles";
 import { seedChartDetail } from "./core/serverConfig";
 import { prefetchOsmWorldCatalog } from "./features/osm_world/catalog";
 import { mivportPoiSource } from "./features/poi/mivport";
-import { registerPoiSource } from "./features/poi/sources";
+import { MIVPORT_LOCAL_LAYER_ID } from "./features/poi/mivport/localLayer";
+import { registerPoiQueryLayers, registerPoiSource } from "./features/poi/sources";
 import { loadThemes } from "./core/style/themes/source";
 import { describeFetchError, faultHint, setSplashFault, setSplashStatus } from "./core/splash";
 import "./index.css";
 
 // Built-in POI sources besides OpenStreetMap, before any plugin's.
 registerPoiSource(mivportPoiSource());
+// The boat's own mivport changes (features/poi/mivport/localLayer.ts) answer
+// taps like the baked POIs.
+registerPoiQueryLayers([MIVPORT_LOCAL_LAYER_ID]);
 
 // Every plugin present under <repo>/plugins (none: an empty object) but the
 // ones switched off in Settings → Plugins, registered before anything reads

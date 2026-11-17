@@ -49,6 +49,8 @@ import { createBuddies } from "./features/buddies";
 import BuddyList from "./features/buddies/BuddyList";
 import { createMarks } from "./features/marks";
 import MarkList from "./features/marks/MarkList";
+import { createMivportEditing } from "./features/poi/mivport/editing";
+import MivportPanel from "./features/poi/mivport/MivportPanel";
 import type { BBox } from "./core/settings/regions";
 import ModePill from "./core/chrome/ModePill";
 import { createModeState, tapRadius } from "./core/chrome/modes";
@@ -408,6 +410,7 @@ const App: Component = () => {
       setRoutesOpen(false);
       buddies.list.setOpen(false);
       marks.list.setOpen(false);
+      mivport.closePanel();
     },
   });
   const buddies = createBuddies({
@@ -419,6 +422,7 @@ const App: Component = () => {
       setRoutesOpen(false);
       noticesToMariners.list.setOpen(false);
       marks.list.setOpen(false);
+      mivport.closePanel();
     },
     notify: (title) => notices.push({ id: "buddy-add", title }),
   });
@@ -433,8 +437,30 @@ const App: Component = () => {
       setRoutesOpen(false);
       noticesToMariners.list.setOpen(false);
       buddies.list.setOpen(false);
+      mivport.closePanel();
     },
     notify: (title) => notices.push({ id: "mark-save", title }),
+    // "Add to mivport" on a mark (prefilled name and position).
+    extraActions: (m) => mivport.markActions({ name: m.name, lat: m.lat, lon: m.lon }),
+  });
+  // mivport editing (docs/architecture/mivport-editing.md): the account and
+  // outbox (Settings → mivport), the info-panel actions on mivport points,
+  // the place editor and its pin mode, and the boat's own changes drawn
+  // from a local layer the baked POIs make way for.
+  const mivport = createMivportEditing({
+    showHits: (hits) => setInfoHitRequest(hits),
+    notify: (title, detail) => notices.push({ id: "mivport", title, ...(detail ? { detail } : {}) }),
+    boat: () => {
+      const s = signalk.self();
+      return s ? { lng: s.lng, lat: s.lat } : undefined;
+    },
+    beforeOpenPanel: () => {
+      setSidebarOpen(false);
+      setRoutesOpen(false);
+      noticesToMariners.list.setOpen(false);
+      buddies.list.setOpen(false);
+      marks.list.setOpen(false);
+    },
   });
   // THE ONE LIST: every registry below is a projection of this array (the
   // `feature*` collectors in chrome/feature.ts). Adding a feature is one
@@ -465,6 +491,9 @@ const App: Component = () => {
     createAutopilot({ signalk }),
     anchor.feature,
     poi.feature,
+    // Right after the baked POIs: its local layer shares their z band and
+    // must draw above them.
+    mivport.feature,
     // Plugins' own features, right after POI so a plugin's POI layer row
     // sits next to the POI toggle.
     ...pluginFeatures(pluginInstances),
@@ -506,6 +535,7 @@ const App: Component = () => {
   // must reopen on every exit, not just a completed box.
   anchor.bindMode({ enter: modes.enter, leave: () => modes.leave() });
   marks.bindMode({ enter: modes.enter, leave: () => modes.leave(), active: modes.active });
+  mivport.bindMode({ enter: modes.enter, leave: () => modes.leave(), active: modes.active });
   regionDraw.model.bindEnter(() => modes.enter("region-draw"));
   regionDraw.model.bindExit(() => modes.leave());
   regionDraw.model.bindLeft(() => setSidebarOpen(true));
@@ -545,6 +575,7 @@ const App: Component = () => {
   // `beforeOpenList`). The dashboard board (right) is independent. Moot on a
   // phone (bottom sheets).
   const openSettings = () => {
+    mivport.closePanel();
     setRoutesOpen(false);
     noticesToMariners.list.setOpen(false);
     buddies.list.setOpen(false);
@@ -552,6 +583,7 @@ const App: Component = () => {
     setSidebarOpen(true);
   };
   const openRoutes = () => {
+    mivport.closePanel();
     setSidebarOpen(false);
     noticesToMariners.list.setOpen(false);
     buddies.list.setOpen(false);
@@ -906,6 +938,7 @@ const App: Component = () => {
         onUpdate={(m, patch) => void marks.update(m, patch)}
         onRemove={(m) => void marks.remove(m)}
       />
+      <MivportPanel editing={mivport} />
       <div class="relative min-h-0 min-w-0 flex-1">
         <MapView
           sets={drawnSets}

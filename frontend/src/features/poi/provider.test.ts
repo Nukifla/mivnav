@@ -201,8 +201,15 @@ describe("a plugin POI source", () => {
       types: { shower: { label: "Shower block", glyph: [["circle", 12, 12, 4]] } },
       hitId: (props) => (typeof props.ref === "string" ? props.ref : undefined),
       detail: (props) => ({ links: [{ label: "Open on fake", href: `https://fake/${String(props.ref)}` }] }),
+      actions: (props) => {
+        actionReads++;
+        return props.ref === "7"
+          ? { actions: [{ label: "Edit", run: () => {} }], footerActions: [{ label: "Delete", run: () => {} }] }
+          : {};
+      },
     }),
   );
+  let actionReads = 0;
   afterAll(resetPoiSources);
 
   const osm = JSON.stringify([{ name: "Aarhus Lystbådehavn", kind: "marina", set: "osm-dk" }]);
@@ -231,6 +238,21 @@ describe("a plugin POI source", () => {
     expect(d.subtitle).toBe("Shower block");
     expect(d.links).toEqual([{ label: "Open on fake", href: "https://fake/7" }]);
     expect(typeof p.icon?.(hit)).toBe("function");
+  });
+
+  test("the source's actions: under the header and the record; read in `watch` so live state re-resolves", () => {
+    const p = providerOver([feat(POI_MARKER_LAYER_ID, { kind: "other", src: "fake", ref: "7", set: "dk" }, 9)]);
+    const [hit] = p.queryAt(QUERY);
+    const d = p.detail(hit) as InfoDetail;
+    expect(d.actions?.map((a) => a.label)).toEqual(["Edit"]);
+    expect(d.footerActions?.map((a) => a.label)).toEqual(["Delete"]);
+    const before = actionReads;
+    p.watch?.(hit);
+    expect(actionReads).toBe(before + 1);
+    // None offered: the keys stay absent.
+    const other = p.detail({ ...hit, payload: { kind: "other", src: "fake", ref: "8" } }) as InfoDetail;
+    expect(other.actions).toBeUndefined();
+    expect(other.footerActions).toBeUndefined();
   });
 
   test("a malformed or absent osm prop adds nothing and never throws", () => {
