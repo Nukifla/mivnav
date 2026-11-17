@@ -117,6 +117,11 @@ def normalize(feature: Any) -> tuple[float, float, dict] | None:
         detail["osm"] = {"type": osm_type, "id": osm_id}
     if isinstance(props.get("updated_at"), str):
         detail["updated_at"] = props["updated_at"]
+    # The stored revision: an edit's ``base_rev``. OSM-only places have none.
+    if isinstance(props.get("rev"), int) and not isinstance(props.get("rev"), bool):
+        detail["rev"] = props["rev"]
+    if props.get("status") == "deleted":
+        detail["deleted"] = True
     return coords[0], coords[1], detail
 
 

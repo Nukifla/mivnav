@@ -405,6 +405,9 @@ def _photo_pass(job: PoiBakeJob, places: dict[str, Place], download: bool) -> No
 
 
 def bake(job: PoiBakeJob) -> None:
+    #: When this bake started: a place edited on the boat and uploaded
+    #: before it is in it, so the boat's local copy can go (``local.py``).
+    started_at = time.time()
     params = job.params if isinstance(job.params, MivportDatasetParams) else MivportDatasetParams()
     base_url = (job.app_config.mivport if job.app_config is not None else MivportConfig()).base_url
     job.fetching()
@@ -446,15 +449,30 @@ def bake(job: PoiBakeJob) -> None:
     meta = {
         "attribution": attribution if isinstance(attribution, str) and attribution else DEFAULT_ATTRIBUTION,
         "fetched_at": str(time.time()),
+        "started_at": str(started_at),
         "export": str(entry["path"]),
     }
     stored = mp_store.write_details(
         mp_store.details_path(job.root, job.set_id),
-        (detail for _, _, detail in places.values()),
+        # The position too: an edit made on the boat redraws the place
+        # from its stored detail (``local.py``).
+        ({**detail, "lon": lon, "lat": lat} for lon, lat, detail in places.values()),
         meta,
     )
     job.stats(detail_count=stored, review_count=reviews)
+    if job.app_config is not None:
+        _refresh_registry(job, base_url, job.app_config.data_root)
     _photo_pass(job, places, params.download_photos)
+
+
+def _refresh_registry(job: PoiBakeJob, base_url: str, data_root: Path) -> None:
+    """The kinds/attrs registry the place editor needs, cached for offline."""
+    from .account import RegistryCache  # noqa: PLC0415 — editing side, kept out of import time
+
+    try:
+        RegistryCache(data_root).refresh(job.http, base_url)
+    except MivportError as e:
+        job.log(f"warning: kinds/attrs registry not refreshed: {e}")
 
 
 def extra_files(dataset_dir: Path, set_id: str) -> list[Path]:

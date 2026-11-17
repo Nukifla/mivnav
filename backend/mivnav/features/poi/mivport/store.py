@@ -105,6 +105,32 @@ def read_detail(path: Path, ref: str) -> tuple[dict, dict[str, str]] | None:
     return (json.loads(row[0]), meta) if row is not None else None
 
 
+def read_meta(path: Path) -> dict[str, str]:
+    """The details file's meta (attribution, ``fetched_at``, ``started_at``)."""
+    db = _open_ro(path)
+    if db is None:
+        return {}
+    try:
+        return dict(db.execute("SELECT key, value FROM meta").fetchall())
+    except sqlite3.Error as e:
+        log.warning("cannot read mivport details %s: %s", path, e)
+        return {}
+    finally:
+        db.close()
+
+
+def has_ref(path: Path, ref: str) -> bool:
+    db = _open_ro(path)
+    if db is None:
+        return False
+    try:
+        return db.execute("SELECT 1 FROM details WHERE ref = ?", (ref,)).fetchone() is not None
+    except sqlite3.Error:
+        return False
+    finally:
+        db.close()
+
+
 def read_all(path: Path) -> dict[str, dict]:
     """Every stored detail by ref (the photo pass and tests)."""
     db = _open_ro(path)

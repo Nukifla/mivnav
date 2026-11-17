@@ -14,6 +14,10 @@ What a bake reads (see mivport's README / ``/openapi.yaml``):
 - ``/v1/changes?since=<core_seq>`` — what changed after the export;
 - ``/v1/places/{id}`` and ``/v1/places/{id}/photos`` — one place / its
   photos with their URLs and attribution.
+
+The editing side (``account.py``, ``sync.py``) sends through :func:`send`,
+which tells "mivport is unreachable" (:class:`MivportUnreachable`) apart from
+an answer the caller has to read.
 """
 
 from __future__ import annotations
@@ -30,6 +34,7 @@ import httpx
 
 __all__ = [
     "MivportError",
+    "MivportUnreachable",
     "USER_AGENT",
     "fetch_changes",
     "fetch_export_lines",
@@ -51,8 +56,16 @@ CHANGES_PAGE = 5000
 MAX_CHANGE_PAGES = 50
 
 
+#: Timeout for one write (an edit batch, a photo upload over a slow link).
+WRITE_TIMEOUT_S = 60.0
+
+
 class MivportError(Exception):
     """A mivport request failed: transport, HTTP status, checksum or bad JSON."""
+
+
+class MivportUnreachable(MivportError):
+    """No answer from mivport at all (offline, DNS, refused, timed out)."""
 
 
 def _url(base_url: str, path: str) -> str:
@@ -185,3 +198,41 @@ def fetch_bytes(http: httpx.Client, url: str, max_bytes: int) -> tuple[bytes, st
     if not body or len(body) > max_bytes:
         raise MivportError(f"{url}: bad size {len(body)}")
     return body, resp.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+
+
+def send(
+    http: httpx.Client,
+    method: str,
+    base_url: str,
+    path: str,
+    *,
+    token: str | None = None,
+    timeout: float = WRITE_TIMEOUT_S,
+    **kwargs: Any,
+) -> httpx.Response:
+    """One request to ``base_url + path`` with the bearer ``token``; any
+    answer is returned, a transport failure raises :class:`MivportUnreachable`.
+    ``kwargs`` go to ``httpx`` (``json=``, ``files=``, ``data=``)."""
+    headers = {"User-Agent": USER_AGENT}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    url = _url(base_url, path)
+    try:
+        return http.request(method, url, headers=headers, timeout=timeout, **kwargs)
+    except httpx.HTTPError as exc:
+        raise MivportUnreachable(f"{url}: {exc}") from exc
+
+
+def error_text(resp: httpx.Response) -> str:
+    """mivport's ``{"error": ...}``, else the status line."""
+    try:
+        body = resp.json()
+    except ValueError:
+        body = None
+    if isinstance(body, dict) and isinstance(body.get("error"), str) and body["error"]:
+        return body["error"]
+    return f"HTTP {resp.status_code}"
+
+
+def place_path(place_id: str, suffix: str = "") -> str:
+    return "/v1/places/" + quote(place_id, safe=":") + suffix

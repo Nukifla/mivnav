@@ -538,10 +538,33 @@ class RouteIQCredentials(Frozen):
         return _reveal_or_mask(value, info)
 
 
+class MivportCredentials(Frozen):
+    """The boat-wide mivport login (``features/poi/mivport/account.py``): a
+    bearer token from ``POST /v1/auth/token`` or the device flow, never a
+    password. ``server`` is the ``Config.mivport.base_url`` the token was
+    issued by — a token is only ever sent back there, so pointing the
+    config at another server logs out instead of leaking it. ``role`` is
+    cached for the UI (who may delete what), not a secret.
+
+    Stored in plaintext in its own 0600 file, same posture as the other
+    credentials beside it.
+    """
+
+    username: str = ""
+    token: SecretStr = SecretStr("")
+    role: str = ""
+    server: str = ""
+
+    @field_serializer("token", when_used="json")
+    def _serialise_token(self, value: SecretStr, info: SerializationInfo) -> str:
+        return _reveal_or_mask(value, info)
+
+
 class CredentialsConfig(Frozen):
     ocharts: OchartsCredentials = Field(default_factory=OchartsCredentials)
     signalk: SignalKCredentials = Field(default_factory=SignalKCredentials)
     routeiq: RouteIQCredentials = Field(default_factory=RouteIQCredentials)
+    mivport: MivportCredentials = Field(default_factory=MivportCredentials)
 
 
 CREDENTIALS_KEY = "credentials"
@@ -553,6 +576,7 @@ SECRET_FIELDS: tuple[tuple[str, ...], ...] = (
     (CREDENTIALS_KEY, "ocharts", "password"),
     (CREDENTIALS_KEY, "signalk", "token"),
     (CREDENTIALS_KEY, "routeiq", "token"),
+    (CREDENTIALS_KEY, "mivport", "token"),
 )
 
 

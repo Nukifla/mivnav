@@ -838,6 +838,344 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/mivport/account": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Account
+         * @description The boat's mivport login and the outbox state. Answers from what the
+         *     boat knows (``online`` is how the last contact went), never waits.
+         */
+        get: operations["get_account_mivport_account_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mivport/account/device": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Device Login
+         * @description Start a device login: show ``user_code`` and ``verification_url``;
+         *     the backend polls mivport until it is approved (``GET /mivport/account``
+         *     shows ``logged_in`` then).
+         */
+        post: operations["device_login_mivport_account_device_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mivport/account/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Login */
+        post: operations["login_mivport_account_login_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mivport/account/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Logout */
+        post: operations["logout_mivport_account_logout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mivport/account/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Register */
+        post: operations["register_mivport_account_register_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mivport/edits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Edit
+         * @description Queue one place edit (answered at once). ``place_id`` may be an OSM
+         *     ref for ``modify``: that becomes a ``create`` linked to it.
+         */
+        post: operations["post_edit_mivport_edits_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mivport/outbox": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Outbox
+         * @description Everything written on the boat, newest first; uploaded (``done``)
+         *     items stay 7 days.
+         */
+        get: operations["get_outbox_mivport_outbox_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mivport/outbox/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Discard Item
+         * @description Discard a pending or failed item and undo its effect on the boat
+         *     (409 while it is being sent or once uploaded).
+         */
+        delete: operations["discard_item_mivport_outbox__item_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mivport/outbox/{item_id}/{part}.jpg": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Outbox Photo
+         * @description A photo queued (or recently uploaded) from the boat.
+         */
+        get: operations["outbox_photo_mivport_outbox__item_id___part__jpg_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mivport/photos/{photo_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Photo
+         * @description Delete one of the boat user's photos (mivport's id, or the local id
+         *     of one still in the outbox).
+         */
+        delete: operations["delete_photo_mivport_photos__photo_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mivport/places/{place_id}/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Place History
+         * @description mivport's history of one of its places, as-is (503 offline).
+         */
+        get: operations["place_history_mivport_places__place_id__history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mivport/places/{place_id}/photos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Photo
+         * @description Queue a photo: the two JPEGs the client made (``view`` ≤ 1600 px,
+         *     2 MB; ``thumb`` ≤ 320 px, 200 KB), published under CC BY-SA 4.0.
+         */
+        post: operations["post_photo_mivport_places__place_id__photos_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mivport/places/{place_id}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put Review
+         * @description Queue the boat user's review of a place (one per place: it replaces
+         *     the earlier one).
+         */
+        put: operations["put_review_mivport_places__place_id__review_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mivport/registry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Registry
+         * @description mivport's kinds and attributes, cached on the boat. 503 only when
+         *     never fetched (log in, sync or bake once while online).
+         */
+        get: operations["get_registry_mivport_registry_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mivport/removal-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Removal
+         * @description Ask mivport's moderators to remove a review, photo or place.
+         */
+        post: operations["post_removal_mivport_removal_requests_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mivport/reviews/{review_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Review */
+        delete: operations["delete_review_mivport_reviews__review_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mivport/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sync Now
+         * @description One sync attempt now (also refreshes the registry and the role).
+         */
+        post: operations["sync_now_mivport_sync_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/mob": {
         parameters: {
             query?: never;
@@ -1630,13 +1968,38 @@ export interface paths {
         };
         /**
          * Place Detail
-         * @description One mivport place as the bake stored it: attributes, OSM attributes,
+         * @description One mivport place as the bake stored it — attributes, OSM attributes,
          *     reviews, photos (pointing at the boat's copies where downloaded) and the
-         *     data attribution. 404 when the set or the place is unknown. ``set_id``
+         *     data attribution — with the boat's own changes merged over it: ``local``
+         *     (``pending``/``synced``/``failed``) when the place was changed here, and
+         *     reviews/photos still in the outbox. ``set_id`` ``local`` reads a place
+         *     only the boat knows yet. 404 when neither knows the place. ``set_id``
          *     resolves through the store's scan and ``ref`` is only a bound SQL
          *     parameter, so neither reaches outside the store.
          */
         get: operations["place_detail_poi_mivport_details__set_id___ref__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/poi/mivport/local": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Local Overlay
+         * @description The places changed on the boat, for their own map layer, and what the
+         *     baked layers must hide. A place's entry goes once a bake that started
+         *     after its upload holds it (``local.droppable``).
+         */
+        get: operations["local_overlay_poi_mivport_local_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2408,6 +2771,21 @@ export interface components {
             /** Degrees */
             degrees: number;
         };
+        /** Body_post_photo_mivport_places__place_id__photos_post */
+        Body_post_photo_mivport_places__place_id__photos_post: {
+            /** Caption */
+            caption?: string | null;
+            /** Lat */
+            lat?: number | null;
+            /** Lon */
+            lon?: number | null;
+            /** Taken At */
+            taken_at?: string | null;
+            /** Thumb */
+            thumb: string;
+            /** View */
+            view: string;
+        };
         /** Body_set_plugin_enabled_plugins__plugin_id__put */
         Body_set_plugin_enabled_plugins__plugin_id__put: {
             /** Enabled */
@@ -2626,6 +3004,218 @@ export interface components {
         LicencesOut: {
             /** Sets */
             sets: components["schemas"]["LicenceOut"][];
+        };
+        /** MivportAccount */
+        MivportAccount: {
+            device?: components["schemas"]["MivportDeviceState"] | null;
+            /** Last Error */
+            last_error?: string | null;
+            /** Last Sync */
+            last_sync?: number | null;
+            /** Logged In */
+            logged_in: boolean;
+            /** Online */
+            online: boolean;
+            outbox: components["schemas"]["MivportOutboxCounts"];
+            /** Role */
+            role?: string | null;
+            /** Server */
+            server: string;
+            /** Username */
+            username?: string | null;
+        };
+        /** MivportDeviceStart */
+        MivportDeviceStart: {
+            /** Expires In */
+            expires_in: number;
+            /** User Code */
+            user_code: string;
+            /** Verification Url */
+            verification_url: string;
+        };
+        /** MivportDeviceState */
+        MivportDeviceState: {
+            /** Expires At */
+            expires_at: number;
+            /** User Code */
+            user_code: string;
+            /** Verification Url */
+            verification_url: string;
+        };
+        /** MivportDiscarded */
+        MivportDiscarded: {
+            /** Discarded */
+            discarded: string[];
+        };
+        /** MivportEditConflict */
+        MivportEditConflict: {
+            /** Field */
+            field: string;
+            /** Won */
+            won: boolean;
+        };
+        /** MivportEditIn */
+        MivportEditIn: {
+            /** Base Rev */
+            base_rev?: number | null;
+            /**
+             * Op
+             * @enum {string}
+             */
+            op: "create" | "modify" | "delete" | "restore";
+            /** Place Id */
+            place_id?: string | null;
+            set?: components["schemas"]["MivportPlaceSet"] | null;
+        };
+        /** MivportEditOut */
+        MivportEditOut: {
+            /** Item Id */
+            item_id: string | null;
+            /** Place Id */
+            place_id: string;
+        };
+        /** MivportItemOut */
+        MivportItemOut: {
+            /** Item Id */
+            item_id: string | null;
+        };
+        /** MivportLatLon */
+        MivportLatLon: {
+            /** Lat */
+            lat: number;
+            /** Lon */
+            lon: number;
+        };
+        /** MivportLocalOverlay */
+        MivportLocalOverlay: {
+            /** Features */
+            features: {
+                [key: string]: unknown;
+            }[];
+            /** Hide */
+            hide: string[];
+        };
+        /** MivportLoginIn */
+        MivportLoginIn: {
+            /** Password */
+            password: string;
+            /** Username */
+            username: string;
+        };
+        /** MivportOsmLink */
+        MivportOsmLink: {
+            /** Id */
+            id: number;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "node" | "way" | "relation";
+        };
+        /** MivportOutboxCounts */
+        MivportOutboxCounts: {
+            /** Failed */
+            failed: number;
+            /** Pending */
+            pending: number;
+        };
+        /** MivportOutboxItem */
+        MivportOutboxItem: {
+            /** Conflicts */
+            conflicts?: components["schemas"]["MivportEditConflict"][] | null;
+            /** Created At */
+            created_at: number;
+            /** Error */
+            error?: string | null;
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "edit" | "review" | "review_delete" | "photo" | "photo_delete" | "removal";
+            /** Place Id */
+            place_id?: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "pending" | "sending" | "failed" | "done";
+            /** Summary */
+            summary: string;
+        };
+        /** MivportOutboxList */
+        MivportOutboxList: {
+            /** Items */
+            items: components["schemas"]["MivportOutboxItem"][];
+        };
+        /** MivportPhotoOut */
+        MivportPhotoOut: {
+            /** Item Id */
+            item_id: string;
+            /** Photo Id */
+            photo_id: string;
+        };
+        /**
+         * MivportPlaceSet
+         * @description mivport's ``set``: absent = unchanged, ``null`` = remove.
+         */
+        MivportPlaceSet: {
+            /** Attrs */
+            attrs?: {
+                [key: string]: unknown;
+            } | null;
+            geom?: components["schemas"]["MivportLatLon"] | null;
+            /** Kind */
+            kind?: string | null;
+            /** Name */
+            name?: string | null;
+            osm?: components["schemas"]["MivportOsmLink"] | null;
+            /** Parent Id */
+            parent_id?: string | null;
+        };
+        /** MivportRegisterIn */
+        MivportRegisterIn: {
+            /** Email */
+            email?: string | null;
+            /** Password */
+            password: string;
+            /** Username */
+            username: string;
+        };
+        /** MivportRegistry */
+        MivportRegistry: {
+            /** Attrs */
+            attrs: {
+                [key: string]: unknown;
+            }[];
+            /** Fetched At */
+            fetched_at: number;
+            /** Kinds */
+            kinds: {
+                [key: string]: unknown;
+            }[];
+        };
+        /** MivportRemovalIn */
+        MivportRemovalIn: {
+            /** Reason */
+            reason: string;
+            /** Target Id */
+            target_id: string;
+            /**
+             * Target Type
+             * @enum {string}
+             */
+            target_type: "review" | "photo" | "place";
+        };
+        /** MivportReviewIn */
+        MivportReviewIn: {
+            /** Body */
+            body?: string | null;
+            /** Stars */
+            stars: number;
+            /** Visited On */
+            visited_on?: string | null;
         };
         /** MobAckBody */
         MobAckBody: {
@@ -4329,6 +4919,486 @@ export interface operations {
             };
         };
     };
+    get_account_mivport_account_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MivportAccount"];
+                };
+            };
+        };
+    };
+    device_login_mivport_account_device_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MivportDeviceStart"];
+                };
+            };
+        };
+    };
+    login_mivport_account_login_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MivportLoginIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MivportAccount"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    logout_mivport_account_logout_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MivportAccount"];
+                };
+            };
+        };
+    };
+    register_mivport_account_register_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MivportRegisterIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MivportAccount"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_edit_mivport_edits_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MivportEditIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MivportEditOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_outbox_mivport_outbox_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MivportOutboxList"];
+                };
+            };
+        };
+    };
+    discard_item_mivport_outbox__item_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MivportDiscarded"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    outbox_photo_mivport_outbox__item_id___part__jpg_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+                part: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_photo_mivport_photos__photo_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                photo_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MivportItemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    place_history_mivport_places__place_id__history_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                place_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_photo_mivport_places__place_id__photos_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                place_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_post_photo_mivport_places__place_id__photos_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MivportPhotoOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_review_mivport_places__place_id__review_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                place_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MivportReviewIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MivportItemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_registry_mivport_registry_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MivportRegistry"];
+                };
+            };
+        };
+    };
+    post_removal_mivport_removal_requests_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MivportRemovalIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MivportItemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_review_mivport_reviews__review_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                review_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MivportItemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sync_now_mivport_sync_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MivportAccount"];
+                };
+            };
+        };
+    };
     get_active_mob_get: {
         parameters: {
             query?: never;
@@ -5483,6 +6553,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    local_overlay_poi_mivport_local_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MivportLocalOverlay"];
                 };
             };
         };
