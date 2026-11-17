@@ -20,25 +20,21 @@
 //! this determinism, but it costs nothing to keep and removes one more
 //! thing a future caller has to think about.
 
+/// `u32` parents: half the memory of `usize` on the national-scale
+/// `mivnav::topology` labelling (~10⁹ cells), the one caller where that
+/// matters. Element counts must fit `u32` (`new` asserts it).
 pub(crate) struct UnionFind {
-    parent: Vec<usize>,
+    parent: Vec<u32>,
 }
 
 impl UnionFind {
     pub(crate) fn new(n: usize) -> UnionFind {
+        assert!(
+            n <= u32::MAX as usize,
+            "UnionFind: {n} elements do not fit u32"
+        );
         UnionFind {
-            parent: (0..n).collect(),
-        }
-    }
-
-    /// Return every element to its own singleton set, keeping the backing
-    /// allocation. A caller that runs many disjoint-set passes over the
-    /// same element count (`mivnav::topology`'s ten depth bands) resets
-    /// one buffer instead of allocating — and faulting in — a fresh
-    /// `Vec` each time. Element count is unchanged.
-    pub(crate) fn reset(&mut self) {
-        for (i, p) in self.parent.iter_mut().enumerate() {
-            *p = i;
+            parent: (0..n as u32).collect(),
         }
     }
 
@@ -50,19 +46,27 @@ impl UnionFind {
     /// (`parent[i] == i`); a worker that only ever links indices inside
     /// its own range keeps the "a group's root is its smallest member"
     /// invariant this type's `union` maintains, so the ranges recombine
-    /// with no fix-up. Linking across the `&mut [usize]` slices handed
+    /// with no fix-up. Linking across the `&mut [u32]` slices handed
     /// out here would break that invariant — the caller is responsible
     /// for the disjointness.
-    pub(crate) fn parent_mut(&mut self) -> &mut [usize] {
+    pub(crate) fn parent_mut(&mut self) -> &mut [u32] {
         &mut self.parent
     }
 
-    pub(crate) fn find(&mut self, mut x: usize) -> usize {
-        while self.parent[x] != x {
-            self.parent[x] = self.parent[self.parent[x]]; // path halving
-            x = self.parent[x];
+    /// Give up the `parent` column, e.g. to relabel it in place. Every
+    /// entry satisfies `parent[i] <= i` (min-root union plus path halving
+    /// only ever move a pointer to a smaller index).
+    pub(crate) fn into_parent(self) -> Vec<u32> {
+        self.parent
+    }
+
+    pub(crate) fn find(&mut self, x: usize) -> usize {
+        let mut x = x as u32;
+        while self.parent[x as usize] != x {
+            self.parent[x as usize] = self.parent[self.parent[x as usize] as usize]; // path halving
+            x = self.parent[x as usize];
         }
-        x
+        x as usize
     }
 
     pub(crate) fn union(&mut self, a: usize, b: usize) {
@@ -71,7 +75,7 @@ impl UnionFind {
             // Deterministic: the larger root always attaches under the
             // smaller, so the final root of any group is its own
             // smallest member, independent of union order.
-            self.parent[ra.max(rb)] = ra.min(rb);
+            self.parent[ra.max(rb)] = ra.min(rb) as u32;
         }
     }
 }

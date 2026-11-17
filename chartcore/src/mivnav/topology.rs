@@ -109,67 +109,14 @@ pub struct Components {
     pub count: u32,
 }
 
-/// The `O(cell count)` working buffers [`label_band_with`] needs — the
-/// union-find column plus [`canonicalize`]'s three scratch `Vec`s.
-///
-/// Building all ten of [`super::field::BAND_LADDER_M`]'s bands allocates
-/// (and first-touch-faults) ~40 bytes per cell of these per band. Sizing
-/// them once and RESETTING between bands pays that ~O(n) cost once per
-/// worker thread instead — [`super::persist::build_all_bands_reporting`]
-/// drives it through `rayon::map_init`, so a serial national sweep reuses
-/// one set and a parallel fixture sweep gets one per thread. The band's
-/// output labelling is still a fresh `Vec` each time; only the transient
-/// scratch is shared.
-pub struct BandScratch {
-    uf: UnionFind,
-    /// Smallest member index seen per root; `u32::MAX` means "none yet".
-    min_by_root: Vec<u32>,
-    /// Each cell's root as a `u32`, or [`NO_COMPONENT`].
-    root_of: Vec<u32>,
-    /// Root index → canonical id. Only entries for actual roots are ever
-    /// written, and [`canonicalize`] only ever reads those, so this is
-    /// the one buffer that needs NO per-band reset.
-    canon: Vec<u32>,
-}
-
-impl BandScratch {
-    /// Buffers sized for `built`'s cell count. Reused across every band
-    /// of one region; pass the SAME `built` to [`label_band_with`].
-    pub fn for_region(built: &BuiltRegion) -> BandScratch {
-        let n = built.depth_min.len();
-        BandScratch {
-            uf: UnionFind::new(n),
-            min_by_root: vec![u32::MAX; n],
-            root_of: vec![NO_COMPONENT; n],
-            canon: vec![NO_COMPONENT; n],
-        }
-    }
-
-    fn reset(&mut self) {
-        self.uf.reset();
-        self.min_by_root.fill(u32::MAX);
-        self.root_of.fill(NO_COMPONENT);
-        // `canon` deliberately not reset — see the field docs.
-    }
-}
-
 /// Build [`Components`] for `band_m` over `built`.
 ///
-/// Allocates its own [`BandScratch`]; a caller building the whole ladder
-/// should reuse one via [`label_band_with`].
+/// Peak transient memory is the union-find's `u32` parent column and
+/// nothing else: [`canonicalize`] relabels that same column in place and
+/// hands it back as [`Components::label`], so a band costs 4 bytes per
+/// region cell (it was ~28 with `usize` parents and three separate
+/// canonicalize buffers — too much for a national set on a 16 GB box).
 pub fn label_band(built: &BuiltRegion, band_m: f64) -> Components {
-    let mut scratch = BandScratch::for_region(built);
-    label_band_with(built, band_m, &mut scratch)
-}
-
-/// [`label_band`] reusing a caller-owned [`BandScratch`].
-///
-/// `scratch` MUST have been sized for THIS `built` ([`BandScratch::
-/// for_region`]); it is reset on entry, so its prior contents do not
-/// matter. Output is byte-for-byte identical to [`label_band`] — the
-/// scratch is transient working memory, nothing about a band's result
-/// depends on whether the buffers were fresh or recycled.
-pub fn label_band_with(built: &BuiltRegion, band_m: f64, scratch: &mut BandScratch) -> Components {
     // `BuiltRegion`'s fields are all public and hand-constructible (this
     // module's own tests do exactly that) — a mismatched SoA column
     // length is a caller bug, not something a corrupted FILE could ever
@@ -177,14 +124,12 @@ pub fn label_band_with(built: &BuiltRegion, band_m: f64, scratch: &mut BandScrat
     // catches it in tests without paying for the check in release.
     debug_assert_eq!(built.flags.len(), built.depth_min.len());
     debug_assert_eq!(built.depth_max.len(), built.depth_min.len());
-    debug_assert_eq!(scratch.root_of.len(), built.depth_min.len());
-
-    scratch.reset();
+    let n = built.depth_min.len();
+    let mut uf = UnionFind::new(n);
 
     // Converted exactly ONCE per call, not once per cell — see
     // `bands::navigable`'s own doc comment for why this matters.
     let band_dm = super::bands::band_to_dm(band_m);
-    let n = built.depth_min.len();
 
     // Within-tile pass, in parallel. A tile's cells occupy the
     // contiguous global range `[payload_offset, payload_offset +
@@ -199,8 +144,8 @@ pub fn label_band_with(built: &BuiltRegion, band_m: f64, scratch: &mut BandScrat
     // byte-for-byte what the serial `for tile in &built.tiles` loop
     // produced. The cross-tile `stitch` pass and `canonicalize` below
     // then run on it exactly as before.
-    let mut ranges: Vec<(&mut [usize], &TileEntry)> = Vec::with_capacity(built.tiles.len());
-    let mut rest: &mut [usize] = scratch.uf.parent_mut();
+    let mut ranges: Vec<(&mut [u32], &TileEntry)> = Vec::with_capacity(built.tiles.len());
+    let mut rest: &mut [u32] = uf.parent_mut();
     let mut cursor = 0usize;
     for tile in &built.tiles {
         // `build::finish` assigns `payload_offset` while concatenating
@@ -231,13 +176,13 @@ pub fn label_band_with(built: &BuiltRegion, band_m: f64, scratch: &mut BandScrat
     // judgment call). Processing both is redundant work, not a
     // correctness risk: union is idempotent.
     for run in &built.stitch {
-        union_stitch_run(&mut scratch.uf, built, run, band_dm);
+        union_stitch_run(&mut uf, built, run, band_dm);
     }
     // No third pass for tiles that touch only at a point — see the
     // module docs for the proof that ordinary edge stitching through
     // the shared orthogonal sibling already covers it.
 
-    canonicalize(scratch, n, &built.flags, &built.depth_max, band_dm)
+    canonicalize(uf, &built.flags, &built.depth_max, band_dm)
 }
 
 // ---------------------------------------------------------------------------
@@ -258,10 +203,10 @@ const FORWARD_DIRS: [(i64, i64); 4] = [(1, 0), (0, 1), (1, 1), (-1, 1)];
 /// the shared implementation, only the indexing is offset. Kept in step
 /// with [`crate::union_find`] by [`slice_matches_unionfind`] in the
 /// tests below.
-fn slice_find(parent: &mut [usize], base: usize, mut x: usize) -> usize {
-    while parent[x - base] != x {
-        parent[x - base] = parent[parent[x - base] - base];
-        x = parent[x - base];
+fn slice_find(parent: &mut [u32], base: usize, mut x: usize) -> usize {
+    while parent[x - base] as usize != x {
+        parent[x - base] = parent[parent[x - base] as usize - base];
+        x = parent[x - base] as usize;
     }
     x
 }
@@ -269,10 +214,10 @@ fn slice_find(parent: &mut [usize], base: usize, mut x: usize) -> usize {
 /// [`UnionFind::union`], byte-for-byte, over one tile's slice — the
 /// larger root always attaches under the smaller, so the merged column
 /// is independent of which order the tiles' workers finished in.
-fn slice_union(parent: &mut [usize], base: usize, a: usize, b: usize) {
+fn slice_union(parent: &mut [u32], base: usize, a: usize, b: usize) {
     let (ra, rb) = (slice_find(parent, base, a), slice_find(parent, base, b));
     if ra != rb {
-        parent[ra.max(rb) - base] = ra.min(rb);
+        parent[ra.max(rb) - base] = ra.min(rb) as u32;
     }
 }
 
@@ -364,70 +309,40 @@ fn union_stitch_run(uf: &mut UnionFind, built: &BuiltRegion, run: &StitchRun, ba
 // Canonical numbering
 // ---------------------------------------------------------------------------
 
-fn canonicalize(
-    scratch: &mut BandScratch,
-    n: usize,
-    flags: &[u8],
-    depth_max: &[u16],
-    band_dm: u16,
-) -> Components {
-    let BandScratch {
-        uf,
-        min_by_root,
-        root_of,
-        canon,
-    } = scratch;
-
-    // Each navigable cell's root, and each root's smallest member index.
-    // `uf.find` path-compresses as it goes, so this one stays a serial
-    // sweep; a blocked cell keeps the `NO_COMPONENT` `reset()` left it.
-    for (i, slot) in root_of.iter_mut().enumerate() {
+/// Relabel the union-find's parent column, IN PLACE, into canonical
+/// component ids: ascending by each component's smallest member index
+/// (§13.1's "canonical, not an accident of build order").
+///
+/// Two invariants of [`UnionFind`]'s min-root union with path halving
+/// make this one serial ascending pass with no `find` and no extra
+/// buffer: a component's root IS its smallest member, and every parent
+/// pointer goes to a smaller index (`parent[i] <= i`). So when the sweep
+/// reaches cell `i`, its parent `p < i` has already been overwritten with
+/// its component id (`p` is a member of the same component, hence
+/// navigable), and a root (`p == i`) is the first cell of its component
+/// the sweep sees — the next id. Blocked cells were never unioned, so
+/// nothing points at them and they can be overwritten with
+/// [`NO_COMPONENT`] freely. Ids come out identical to the earlier
+/// root-gather-and-sort version, which [`canonicalize_matches_the_sort_
+/// based_reference`] pins.
+fn canonicalize(uf: UnionFind, flags: &[u8], depth_max: &[u16], band_dm: u16) -> Components {
+    let mut label = uf.into_parent();
+    let mut count: u32 = 0;
+    for i in 0..label.len() {
         if !navigable_at(flags, depth_max, i, band_dm) {
+            label[i] = NO_COMPONENT;
             continue;
         }
-        let r = uf.find(i);
-        *slot = r as u32;
-        // Ascending `i`, so the first cell seen for a root is its minimum
-        // — no comparison against a running minimum. `u32::MAX` is the
-        // "none yet" sentinel and can't collide with a real index (`n`
-        // fits `u32` on any machine a build runs on).
-        if min_by_root[r] == u32::MAX {
-            min_by_root[r] = i as u32;
+        let p = label[i] as usize;
+        if p == i {
+            label[i] = count;
+            count += 1;
+        } else {
+            debug_assert!(p < i, "parent pointer {p} not below {i}");
+            label[i] = label[p];
         }
     }
-
-    // Canonical id order: ascending by each root's own minimum member —
-    // §13.1's "not an accident of build order". The gather is a parallel
-    // indexed filter (so `roots` still comes out ascending by index); the
-    // sort key is unique per root (two roots cannot share a minimum
-    // member), so the ordering is total and identical to a stable sort.
-    let mut roots: Vec<usize> = (0..n)
-        .into_par_iter()
-        .filter(|&r| min_by_root[r] != u32::MAX)
-        .collect();
-    roots.sort_unstable_by_key(|&r| min_by_root[r]);
-    for (id, &r) in roots.iter().enumerate() {
-        canon[r] = id as u32;
-    }
-
-    // One `u32` per cell, ten bands, a national region — the biggest
-    // single buffer this function produces, so build it in parallel.
-    // Reads only `root_of` and the roots' own `canon` entries, both
-    // fully written above.
-    let label: Vec<u32> = root_of
-        .par_iter()
-        .map(|&r| {
-            if r == NO_COMPONENT {
-                NO_COMPONENT
-            } else {
-                canon[r as usize]
-            }
-        })
-        .collect();
-    Components {
-        label,
-        count: roots.len() as u32,
-    }
+    Components { label, count }
 }
 
 // ---------------------------------------------------------------------------
@@ -962,7 +877,7 @@ mod tests {
             reference.union(a, b);
         }
 
-        let mut slice: Vec<usize> = (base..base + n).collect();
+        let mut slice: Vec<u32> = (base as u32..(base + n) as u32).collect();
         for &(a, b) in &pairs {
             slice_union(&mut slice, base, base + a, base + b);
         }
@@ -973,6 +888,79 @@ mod tests {
                 reference.find(i),
                 "element {i} resolves to a different root than the shared UnionFind"
             );
+        }
+    }
+
+    /// The pre-in-place `canonicalize`: gather each component's root and
+    /// smallest member, sort roots by it, then label through a root→id
+    /// map. Kept only as the reference the in-place relabel must match.
+    fn sort_based_reference(built: &BuiltRegion, band_m: f64) -> Components {
+        let band_dm = super::super::bands::band_to_dm(band_m);
+        let n = built.depth_min.len();
+        let mut uf = UnionFind::new(n);
+        for tile in &built.tiles {
+            union_within_tile(
+                |a, b| uf.union(a, b),
+                tile,
+                &built.flags,
+                &built.depth_max,
+                band_dm,
+            );
+        }
+        for run in &built.stitch {
+            union_stitch_run(&mut uf, built, run, band_dm);
+        }
+        let mut min_by_root = vec![u32::MAX; n];
+        let mut root_of = vec![NO_COMPONENT; n];
+        for i in 0..n {
+            if !navigable_at(&built.flags, &built.depth_max, i, band_dm) {
+                continue;
+            }
+            let r = uf.find(i);
+            root_of[i] = r as u32;
+            min_by_root[r] = min_by_root[r].min(i as u32);
+        }
+        let mut roots: Vec<usize> = (0..n).filter(|&r| min_by_root[r] != u32::MAX).collect();
+        roots.sort_by_key(|&r| min_by_root[r]);
+        let mut canon = vec![NO_COMPONENT; n];
+        for (id, &r) in roots.iter().enumerate() {
+            canon[r] = id as u32;
+        }
+        let label = root_of
+            .iter()
+            .map(|&r| {
+                if r == NO_COMPONENT {
+                    NO_COMPONENT
+                } else {
+                    canon[r as usize]
+                }
+            })
+            .collect();
+        Components {
+            label,
+            count: roots.len() as u32,
+        }
+    }
+
+    #[test]
+    fn canonicalize_matches_the_sort_based_reference() {
+        // Several shapes (multi-tile stitching, blocked quadrants, an
+        // obstruction splitting water) across the band ladder, including
+        // bands where everything or nothing is navigable.
+        let regions = [
+            quadrants_meeting_at_a_point(&[]),
+            quadrants_meeting_at_a_point(&["nw"]),
+            quadrants_meeting_at_a_point(&["ne", "sw"]),
+            built_with_obstruction(0.0, 0.0),
+        ];
+        for built in &regions {
+            for &band_m in super::super::field::BAND_LADDER_M.iter() {
+                assert_eq!(
+                    label_band(built, band_m),
+                    sort_based_reference(built, band_m),
+                    "band {band_m}"
+                );
+            }
         }
     }
 

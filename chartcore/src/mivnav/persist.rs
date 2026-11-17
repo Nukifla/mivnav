@@ -39,14 +39,9 @@
 //! CPU, not bandwidth (CLAUDE.md) — that is the entire reason this module
 //! tree exists.
 //!
-//! The ten-band sweep no longer reallocates [`super::topology::label_band`]'s
-//! `O(cell count)` working buffers per band: [`build_all_bands_reporting`]
-//! hands each rayon worker one [`super::topology::BandScratch`] via
-//! `map_init` and [`build_band_topology_with`] resets it between bands, so
-//! a serial national sweep pays that allocation (and its first-touch page
-//! faults) once, not ten times. Still not shared: each tile's own
-//! `TILE_CELLS`-sized navigability grid inside `union_within_tile`, which
-//! is small and rebuilt per tile per band.
+//! Each band's [`super::topology::label_band`] allocates one `u32` per
+//! region cell — its union-find column, which it then relabels in place
+//! and returns as the band's labelling — and nothing else `O(cells)`.
 //!
 //! # The loader is eager and owned, on purpose
 //!
@@ -163,9 +158,7 @@ use super::landmarks::{build_band_landmarks, decode_landmarks, encode_landmarks,
 use super::portals::{decode_portals, detect_portals, encode_portals, Portal};
 use super::shortcuts::{build_shortcuts, decode_shortcuts, encode_shortcuts, Shortcut};
 use super::stitch::{decode_stitch, encode_stitch};
-use super::topology::{
-    decode_components, encode_components, label_band_with, BandScratch, Components,
-};
+use super::topology::{decode_components, encode_components, label_band, Components};
 use crate::routing::buoyage::LateralSide;
 
 /// One band's whole precomputed topology: §8.1's labelling, §8.2's
@@ -298,27 +291,11 @@ pub fn select_band_index(required_m: f64) -> u8 {
 /// `None` for a `band_index` off [`BAND_LADDER_M`]'s end — there is no
 /// such band to build.
 ///
-/// Allocates a fresh [`BandScratch`]; the ten-band sweep in
-/// [`build_all_bands_reporting`] reuses one via
-/// [`build_band_topology_with`].
-///
 /// [`BAND_LADDER_M`]: super::field::BAND_LADDER_M
 pub fn build_band_topology(built: &BuiltRegion, band_index: u8) -> Option<BandTopology> {
-    let mut scratch = BandScratch::for_region(built);
-    build_band_topology_with(built, band_index, &mut scratch)
-}
-
-/// [`build_band_topology`] reusing a caller-owned [`BandScratch`] sized
-/// for `built` — the ten-band sweep's per-band allocation, paid once.
-/// Byte-identical output; `scratch` is transient working memory only.
-pub fn build_band_topology_with(
-    built: &BuiltRegion,
-    band_index: u8,
-    scratch: &mut BandScratch,
-) -> Option<BandTopology> {
     let tag = band_tag(band_index)?;
     let band_m = BAND_LADDER_M[band_index as usize];
-    let components = label_band_with(built, band_m, scratch);
+    let components = label_band(built, band_m);
     let portals = detect_portals(built, &components);
     let shortcuts = build_shortcuts(built, &portals);
     let landmarks = build_band_landmarks(built, &portals);
@@ -332,17 +309,13 @@ pub fn build_band_topology_with(
 }
 
 /// Rough peak transient heap ONE [`build_band_topology`] holds live, per
-/// region cell. [`label_band`]'s `UnionFind` is `size_of::<usize>()` (8),
-/// and `canonicalize` then holds `min_by_root` (`Vec<Option<u32>>`, 8),
-/// `root_of` (4), `canon` (4) and the `label` column it collects (4) all
-/// at once — ~28 B/cell before the portal / shortcut / landmark tables,
-/// which are far smaller than the labelling. Rounded to 32 as the
-/// divisor for [`band_pass_concurrency`]: a deliberate over-estimate,
-/// because guessing high only serialises a build that is already a
-/// manual, minutes-long, once-per-chart-set job, whereas guessing low
-/// OOM-kills it hours in (`MIVNAV_NEXT_TASKS.md`'s national-scale
-/// measurement — ten of these through `rayon` swap-killed a 16 GB box).
-const BAND_PASS_BYTES_PER_CELL: u64 = 32;
+/// region cell: [`label_band`]'s `u32` union-find column, relabelled in
+/// place into the band's `label` column (4), plus the portal / shortcut /
+/// landmark tables, which are far smaller than the labelling. Rounded up
+/// to 8 as the divisor for [`band_pass_concurrency`]: guessing high only
+/// serialises a manual, minutes-long, once-per-chart-set job, whereas
+/// guessing low swap-kills it (a 16 GB box, `MIVNAV_NEXT_TASKS.md`).
+const BAND_PASS_BYTES_PER_CELL: u64 = 8;
 
 /// Fraction of currently-*available* RAM the band pass may commit to its
 /// concurrent per-band working sets. The remainder is headroom for the
@@ -411,8 +384,8 @@ pub fn build_all_bands(built: &BuiltRegion) -> Vec<BandTopology> {
 /// increment and an optional callback are added.
 ///
 /// Band concurrency is capped by [`band_pass_concurrency`] to a memory
-/// budget — each per-band pass allocates `O(region cells)` structures
-/// (`UnionFind` + the `canonicalize` temporaries), so on a national set
+/// budget — each per-band pass allocates an `O(region cells)` labelling
+/// column (see [`BAND_PASS_BYTES_PER_CELL`]), so on a national set
 /// the ten bands through the full-width rayon pool need more RAM than a
 /// 16 GB box has. When the cap is below the pool width the sweep runs in
 /// a scoped pool of that size; a fixture-scale region is unaffected
@@ -467,22 +440,14 @@ pub fn build_all_bands_reporting(
     // for any `concurrency`. Only the `done` counter and the `report`
     // call order vary, and neither feeds the output.
     //
-    // `map_init` gives each rayon WORKER one `BandScratch` (the `O(cell
-    // count)` union-find + canonicalize buffers), reused across every
-    // band that worker handles — so a serial national sweep allocates
-    // and first-touch-faults them once, not once per band, while a
-    // parallel fixture sweep still gets one set per thread.
     let sweep = || {
         (0..BAND_LADDER_M.len())
             .into_par_iter()
-            .map_init(
-                || BandScratch::for_region(built),
-                |scratch, i| {
-                    let bt = build_band_topology_with(built, i as u8, scratch);
-                    report_band(&bt, i);
-                    bt
-                },
-            )
+            .map(|i| {
+                let bt = build_band_topology(built, i as u8);
+                report_band(&bt, i);
+                bt
+            })
             .collect::<Vec<Option<BandTopology>>>()
     };
 

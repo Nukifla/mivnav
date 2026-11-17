@@ -85,9 +85,8 @@
 //! query-time path.
 //!
 //! **National-scale band pass:** [`super::persist::build_all_bands`] is
-//! `O(bands × region cells)` and each band's `UnionFind` plus its
-//! `canonicalize` temporaries over a ~4×10⁸-cell national region are
-//! multiple GB — running all ten through the full-width `rayon` pool
+//! `O(bands × region cells)` and each band's labelling column (4 B/cell)
+//! over a ~10⁹-cell national region is several GB — running all ten through the full-width `rayon` pool
 //! needs more RAM than a 16 GB box has (`MIVNAV_NEXT_TASKS.md` measured
 //! it swap-killed). [`super::persist::build_all_bands_reporting`] now
 //! caps band concurrency to a `/proc/meminfo` budget
