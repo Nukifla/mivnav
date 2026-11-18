@@ -40,6 +40,10 @@ gdal = { git = "https://github.com/georust/gdal", rev = "c0a6266b987a2c2d44aea99
 # overlay built for self-intersecting input, so it subsumes the `make_valid`
 # repair GEOS needed for our rect-clipped rings — see mvt/mask.rs.
 geo = "0.33"
+# Direct, newer i_overlay for the routing union only (routing::hazards::
+# union_polys): geo 0.33 bundles 4.5.x, which loops forever on some real
+# clipped inputs; 9.2 does not. Drop when geo moves to i_overlay >= 9.
+i_overlay = "9.2"
 # `abi3-py312`: build against the stable ABI, so ONE wheel per arch (tagged
 # cp312-abi3) loads on any CPython >= 3.12. Release bundles ship a prebuilt
 # wheel; without abi3 it would be pinned to the exact minor version of the

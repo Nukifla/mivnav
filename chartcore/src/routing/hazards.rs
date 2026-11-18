@@ -577,7 +577,7 @@ pub(crate) fn finish_union(polys: Vec<geo::Polygon<f64>>) -> Option<HazardIndex>
         return None;
     }
 
-    let unioned = geo::unary_union(&polys);
+    let unioned = union_polys(&polys);
 
     // Round every vertex to world-unit (≈7cm) precision, THEN self-union
     // again before flattening to rings. Rounding each float vertex of a
@@ -595,7 +595,7 @@ pub(crate) fn finish_union(polys: Vec<geo::Polygon<f64>>) -> Option<HazardIndex>
     // correctly-computed geometry (a bigger buffer can only ever grow a
     // hazard). See `ROUTING_TODO.md`.
     let rounded: Vec<geo::Polygon<f64>> = unioned.0.iter().map(round_to_world_precision).collect();
-    let cleaned = geo::unary_union(&rounded);
+    let cleaned = union_polys(&rounded);
 
     let mut rings = Vec::new();
     let mut extent = Extent::invalid();
@@ -606,6 +606,56 @@ pub(crate) fn finish_union(polys: Vec<geo::Polygon<f64>>) -> Option<HazardIndex>
         }
     }
     (!rings.is_empty()).then_some(HazardIndex { rings, extent })
+}
+
+/// `geo::unary_union`, but on `i_overlay` 9 directly: geo 0.33's bundled
+/// `i_overlay` 4.5 loops forever on some real ring-clipped inputs (a
+/// 179-polygon DK leg never finished; 9.2 unions it in ~13 ms, and agrees
+/// with 4.5 to <1e-6 relative area on every input 4.5 does finish).
+///
+/// Each polygon is oriented first (exterior CCW, holes CW) and unioned
+/// under `NonZero`, so the result never depends on which ring comes first
+/// — `geo::unary_union` picks `Positive`/`Negative` from the first ring
+/// alone, silently dropping any polygon wound the other way.
+pub(crate) fn union_polys(polys: &[geo::Polygon<f64>]) -> geo::MultiPolygon<f64> {
+    use geo::orient::{Direction, Orient};
+    use i_overlay::core::fill_rule::FillRule;
+    use i_overlay::core::overlay_rule::OverlayRule;
+    use i_overlay::float::overlay::{FloatOverlay, OverlayOptions};
+
+    fn open_ring(ls: &geo::LineString<f64>) -> Vec<[f64; 2]> {
+        let mut v: Vec<[f64; 2]> = ls.coords().map(|c| [c.x, c.y]).collect();
+        if v.len() > 1 && v.first() == v.last() {
+            v.pop();
+        }
+        v
+    }
+    fn closed_ring(r: Vec<[f64; 2]>) -> geo::LineString<f64> {
+        geo::LineString::new(r.into_iter().map(|[x, y]| geo::Coord { x, y }).collect())
+    }
+
+    let mut subj: Vec<Vec<[f64; 2]>> = Vec::new();
+    for poly in polys {
+        let poly = poly.orient(Direction::Default);
+        subj.push(open_ring(poly.exterior()));
+        subj.extend(poly.interiors().iter().map(open_ring));
+    }
+    subj.retain(|r| r.len() >= 3);
+    if subj.is_empty() {
+        return geo::MultiPolygon::new(vec![]);
+    }
+    let shapes = FloatOverlay::with_subj_custom(&subj, OverlayOptions::ogc(), Default::default())
+        .overlay(OverlayRule::Subject, FillRule::NonZero);
+    geo::MultiPolygon::new(
+        shapes
+            .into_iter()
+            .filter(|s| !s.is_empty())
+            .map(|mut s| {
+                let exterior = closed_ring(s.remove(0));
+                geo::Polygon::new(exterior, s.into_iter().map(closed_ring).collect())
+            })
+            .collect(),
+    )
 }
 
 /// Round every vertex of `poly` to the nearest whole world unit — see
@@ -1124,6 +1174,80 @@ mod tests {
 
     const LAT: f64 = 55.0;
     const LON: f64 = 12.0;
+
+    /// Parses `testdata/union_hang_dk.txt` (see its header).
+    fn load_union_hang_fixture() -> Vec<geo::Polygon<f64>> {
+        let text = include_str!("testdata/union_hang_dk.txt");
+        let mut polys = Vec::new();
+        let mut rings: Vec<geo::LineString<f64>> = Vec::new();
+        let flush = |rings: &mut Vec<geo::LineString<f64>>, polys: &mut Vec<geo::Polygon<f64>>| {
+            if !rings.is_empty() {
+                let exterior = rings.remove(0);
+                polys.push(geo::Polygon::new(exterior, std::mem::take(rings)));
+            }
+        };
+        for line in text.lines().filter(|l| !l.starts_with('#')) {
+            if line == "P" {
+                flush(&mut rings, &mut polys);
+                continue;
+            }
+            let nums: Vec<f64> = line
+                .strip_prefix('R')
+                .expect("ring line")
+                .split_whitespace()
+                .map(|t| t.parse().expect("number"))
+                .collect();
+            rings.push(geo::LineString::new(
+                nums.chunks(2).map(|c| geo::Coord { x: c[0], y: c[1] }).collect(),
+            ));
+        }
+        flush(&mut rings, &mut polys);
+        polys
+    }
+
+    /// The real DK input geo 0.33's `unary_union` (i_overlay 4.5) never
+    /// returns on. Run on a worker with a deadline so a regression fails
+    /// this test instead of hanging the whole suite.
+    #[test]
+    fn finish_union_returns_on_the_real_dk_input_that_hung_geos_union() {
+        let polys = load_union_hang_fixture();
+        assert_eq!(polys.len(), 179);
+        let input_area: f64 = {
+            use geo::Area;
+            polys.iter().map(|p| p.unsigned_area()).fold(0.0, f64::max)
+        };
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = tx.send(finish_union(polys));
+        });
+        let idx = rx
+            .recv_timeout(std::time::Duration::from_secs(60))
+            .expect("finish_union did not return within 60 s")
+            .expect("non-empty union");
+        assert!(!idx.rings.is_empty());
+        // The union covers at least its largest input polygon.
+        let union_area: f64 = idx.rings.iter().map(|r| signed_area2_world(r) as f64 / 2.0).sum();
+        assert!(union_area >= input_area * 0.999, "{union_area} < {input_area}");
+    }
+
+    /// `union_polys` must not depend on input ring orientation — a CW
+    /// square overlapping a CCW one still unions to their full extent.
+    #[test]
+    fn union_polys_ignores_input_winding() {
+        use geo::Area;
+        let sq = |x0: f64, cw: bool| {
+            let mut c = vec![(x0, 0.0), (x0 + 10.0, 0.0), (x0 + 10.0, 10.0), (x0, 10.0), (x0, 0.0)];
+            if cw {
+                c.reverse();
+            }
+            geo::Polygon::new(geo::LineString::from(c), vec![])
+        };
+        let u = union_polys(&[sq(0.0, false), sq(5.0, true)]);
+        assert_eq!(u.0.len(), 1);
+        assert!((u.unsigned_area() - 150.0).abs() < 1e-6);
+        let u = union_polys(&[sq(0.0, true), sq(5.0, false)]);
+        assert!((u.unsigned_area() - 150.0).abs() < 1e-6);
+    }
 
     fn cell(features: Vec<Feature>) -> Cell {
         let mut extent = Extent::invalid();
