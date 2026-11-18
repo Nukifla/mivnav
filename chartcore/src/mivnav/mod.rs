@@ -196,9 +196,10 @@ pub use persist::{
     band_tag, build_all_bands, build_all_bands_reporting, build_and_publish_region,
     build_and_publish_region_reporting, build_and_publish_region_streaming, build_artifact,
     build_artifact_reporting, build_band_topology, decode_hazard_rings, decode_semantics,
-    encode_hazard_rings, encode_semantics, load_artifact, load_band, load_hazard_rings,
-    load_region, load_semantics, publish_artifact, publish_region_streaming, region_hazard_rings,
-    select_band_index, write_artifact_body, BandTopology, RegionArtifact, StreamedArtifactSummary,
+    encode_hazard_rings, encode_semantics, load_artifact, load_band, load_band_for_query,
+    load_hazard_rings, load_region, load_region_lattice, load_semantics, publish_artifact,
+    publish_region_streaming, region_hazard_rings, select_band_index, write_artifact_body,
+    BandTopology, RegionArtifact, StreamedArtifactSummary,
 };
 pub use portals::{
     decode_portals, detect_portals, encode_portals, portal_crossing_point, Portal,
@@ -224,5 +225,6 @@ pub use stitch::{
     STITCH_RUN_LEN,
 };
 pub use topology::{
-    decode_components, encode_components, label_band, Components, COMPONENT_RUN_LEN, NO_COMPONENT,
+    decode_components, decode_components_count, encode_components, label_band, Components,
+    COMPONENT_RUN_LEN, NO_COMPONENT,
 };

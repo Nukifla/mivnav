@@ -66,6 +66,7 @@ ureq = "3"
 usvg = { version = "0.47", default-features = false }
 roxmltree = "0.21"
 pathfinding = "4.15.0"
+memmap2 = "0.9"
 
 # The ingest CLI depends on the s57 module, so it only builds when the
 # S-57 feature is on. `cargo build` without it simply skips the bin (no

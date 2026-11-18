@@ -158,7 +158,9 @@ use super::landmarks::{build_band_landmarks, decode_landmarks, encode_landmarks,
 use super::portals::{decode_portals, detect_portals, encode_portals, Portal};
 use super::shortcuts::{build_shortcuts, decode_shortcuts, encode_shortcuts, Shortcut};
 use super::stitch::{decode_stitch, encode_stitch};
-use super::topology::{decode_components, encode_components, label_band, Components};
+use super::topology::{
+    decode_components, decode_components_count, encode_components, label_band, Components,
+};
 use crate::routing::buoyage::LateralSide;
 
 /// One band's whole precomputed topology: §8.1's labelling, §8.2's
@@ -984,6 +986,26 @@ fn check_payload_partition(tiles: &[TileEntry]) -> Result<usize, FormatError> {
 /// the precondition [`load_band`] relies on before handing that number to
 /// [`decode_components`].
 pub fn load_region(reader: &ArtifactReader<'_>) -> Result<BuiltRegion, FormatError> {
+    load_region_impl(reader, true)
+}
+
+/// [`load_region`] for the QUERY side: the tile index and boundary
+/// stitch, with every length check [`load_region`] makes, but the three
+/// per-cell SoA columns (`depth_min`, `depth_max`, `flags`) left EMPTY.
+/// Nothing a route query runs reads them — topology search, snapping,
+/// coarse polylines and refinement all work off the tile lattice and the
+/// band's portals — and decoding them cost ~5 bytes per region cell
+/// (~4.8 GB on the national DK artifact). Pair with
+/// [`load_band_for_query`], never [`load_band`] (which cross-checks the
+/// columns).
+pub fn load_region_lattice(reader: &ArtifactReader<'_>) -> Result<BuiltRegion, FormatError> {
+    load_region_impl(reader, false)
+}
+
+fn load_region_impl(
+    reader: &ArtifactReader<'_>,
+    with_columns: bool,
+) -> Result<BuiltRegion, FormatError> {
     let tiles = decode_tile_index(
         reader
             .find_section(SectionKind::TileIndex)
@@ -996,6 +1018,19 @@ pub fn load_region(reader: &ArtifactReader<'_>) -> Result<BuiltRegion, FormatErr
 
     let column = |kind: SectionKind, name: &str| -> Result<Vec<u16>, FormatError> {
         let bytes = reader.find_section(kind).ok_or_else(|| missing(kind))?;
+        if !with_columns {
+            // Same length check, no decode.
+            return if bytes.len() as u64 == cells as u64 * 2 {
+                Ok(Vec::new())
+            } else {
+                Err(FormatError::Format(format!(
+                    "{name} column is {} bytes, {} expected for {} tiles",
+                    bytes.len(),
+                    cells.saturating_mul(2),
+                    tiles.len()
+                )))
+            };
+        }
         decode_u16_column(bytes, cells).ok_or_else(|| {
             FormatError::Format(format!(
                 "{name} column is {} bytes, {} expected for {} tiles",
@@ -1030,7 +1065,11 @@ pub fn load_region(reader: &ArtifactReader<'_>) -> Result<BuiltRegion, FormatErr
         tiles,
         depth_min,
         depth_max,
-        flags: flags.to_vec(),
+        flags: if with_columns {
+            flags.to_vec()
+        } else {
+            Vec::new()
+        },
         stitch,
         report: Default::default(),
     })
@@ -1063,6 +1102,28 @@ pub fn load_band(
     reader: &ArtifactReader<'_>,
     built: &BuiltRegion,
     band_index: u8,
+) -> Result<BandTopology, FormatError> {
+    load_band_impl(reader, built, band_index, true)
+}
+
+/// [`load_band`] for the QUERY side, over a [`load_region_lattice`]
+/// region: identical band-tag and structural validation, but the
+/// components section is checked run by run without expanding its
+/// per-cell `label` (see [`decode_components_count`]) — the returned
+/// [`Components`] has the real `count` and an empty `label`.
+pub fn load_band_for_query(
+    reader: &ArtifactReader<'_>,
+    built: &BuiltRegion,
+    band_index: u8,
+) -> Result<BandTopology, FormatError> {
+    load_band_impl(reader, built, band_index, false)
+}
+
+fn load_band_impl(
+    reader: &ArtifactReader<'_>,
+    built: &BuiltRegion,
+    band_index: u8,
+    expand_labels: bool,
 ) -> Result<BandTopology, FormatError> {
     let expect = band_tag(band_index).ok_or_else(|| {
         FormatError::Format(format!(
@@ -1098,14 +1159,21 @@ pub fn load_band(
 
     let cells = total_cells(&built.tiles)
         .ok_or_else(|| undecodable("tile index (cell count overflows)"))?;
-    if cells != built.flags.len() {
-        return Err(FormatError::Format(format!(
-            "region's tile index claims {cells} cells but its flags column holds {}",
-            built.flags.len()
-        )));
+    let components = if expand_labels {
+        // Bounds the allocation below by a real, materialised buffer.
+        if cells != built.flags.len() {
+            return Err(FormatError::Format(format!(
+                "region's tile index claims {cells} cells but its flags column holds {}",
+                built.flags.len()
+            )));
+        }
+        decode_components(section(SectionKind::Components)?, cells)
+    } else {
+        // Allocates nothing per cell, so the tile index's own (already
+        // partition-checked) count needs no materialised cross-check.
+        decode_components_count(section(SectionKind::Components)?, cells)
     }
-    let components = decode_components(section(SectionKind::Components)?, cells)
-        .ok_or_else(|| undecodable("components"))?;
+    .ok_or_else(|| undecodable("components"))?;
     let portals =
         decode_portals(section(SectionKind::Portals)?).ok_or_else(|| undecodable("portals"))?;
     let shortcuts =
@@ -2021,6 +2089,35 @@ mod tests {
         // A band past this build's ladder is refused by name, not by an
         // opaque "missing section".
         let err = load_band(&reader, &loaded.built, BAND_LADDER_M.len() as u8).unwrap_err();
+        assert!(err.to_string().contains("ladder"), "{err}");
+    }
+
+    #[test]
+    fn the_query_loaders_keep_everything_but_the_per_cell_columns() {
+        let dir = TestDir::new("query-loaders");
+        let path = dir.0.join("region.mivnav");
+        let built = artifact();
+        publish_artifact(&path, identity(), built).expect("publish succeeds");
+        let reader = ArtifactReader::from_file(&path).expect("published file parses");
+
+        let full = load_region(&reader).unwrap();
+        let lattice = load_region_lattice(&reader).unwrap();
+        assert_eq!(lattice.tiles, full.tiles);
+        assert_eq!(lattice.stitch, full.stitch);
+        assert!(lattice.depth_min.is_empty() && lattice.depth_max.is_empty());
+        assert!(lattice.flags.is_empty());
+
+        for i in 0..BAND_LADDER_M.len() as u8 {
+            let want = load_band(&reader, &full, i).unwrap();
+            let got = load_band_for_query(&reader, &lattice, i).unwrap();
+            assert_eq!(got.components.count, want.components.count, "band {i}");
+            assert!(got.components.label.is_empty(), "band {i}");
+            assert_eq!(got.portals, want.portals, "band {i}");
+            assert_eq!(got.shortcuts, want.shortcuts, "band {i}");
+            assert_eq!(got.landmarks, want.landmarks, "band {i}");
+            assert_eq!(got.tag, want.tag, "band {i}");
+        }
+        let err = load_band_for_query(&reader, &lattice, BAND_LADDER_M.len() as u8).unwrap_err();
         assert!(err.to_string().contains("ladder"), "{err}");
     }
 

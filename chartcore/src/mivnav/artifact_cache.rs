@@ -8,42 +8,39 @@
 //!
 //! The served `"mivnav"` path ([`crate::python`]'s `topology_from_artifact`)
 //! used to call [`ArtifactReader::from_file`] — a full owned
-//! `std::fs::read` of the whole artifact — then [`load_region`] and
-//! [`load_band`] on **every** `/routing/plan` request. On the one small
+//! `std::fs::read` of the whole artifact — then [`super::persist::load_region`] and
+//! [`super::persist::load_band`] on **every** `/routing/plan` request. On the one small
 //! fixture that was 7× faster than rebuilding the region; on a real
 //! national set the artifact is gigabytes and the measurement (see
 //! `MIVNAV_ARTIFACT_TODO.md`, "What's explicitly NOT proven" item 2) put
 //! it at ~2 s and ~6 GB resident **per request**. §0's whole promise is
 //! an `O(1)` load, not an `O(region)` one.
 //!
-//! This module makes the load `O(1)` in the steady state: the file bytes
-//! are read once per `(path, identity)`, the spatial field decoded once,
-//! and each band / the hazard rings / the semantics decoded at most once
-//! and then shared behind an [`Arc`]. A rebuild publishes at the same
+//! This module makes the load `O(1)` in the steady state: the file is
+//! memory-mapped once per `(path, identity)`, its tile lattice decoded
+//! once, and each band / the hazard rings / the semantics decoded at most
+//! once and then shared behind an [`Arc`]. A rebuild publishes at the same
 //! path with a new `dir_sequence`, so the key changes, the miss reloads,
-//! and the old [`OpenArtifact`] (with its owned file buffer) drops.
+//! and the old [`OpenArtifact`] (and its mapping) drops.
+//!
+//! # Resident memory
+//!
+//! Only what a query reads is decoded: [`load_region_lattice`] (tiles +
+//! stitch, NOT the per-cell `flags`/`depth_*` columns) and
+//! [`load_band_for_query`] (portals, shortcuts, landmarks and the
+//! component COUNT, NOT the per-cell component labels). On the national
+//! DK artifact (~9.7×10⁸ cells) the full decode was ~4.8 GB of region
+//! columns plus ~3.9 GB per cached band on top of a 4.9 GB owned file
+//! buffer — enough for the OOM killer on a 16 GB desktop, and impossible
+//! on the Pi. The file itself is mapped, so its pages are reclaimable
+//! page cache, faulted in only where a query reads.
 //!
 //! # What it deliberately does NOT do yet
 //!
-//! - **No mmap.** It still does one owned `std::fs::read` per
-//!   `(path, identity)`. [`ArtifactReader::from_slice`] over an mmap
-//!   would drop even that one copy to lazy pages, but it saves nothing
-//!   *per request* and needs the file mapped somewhere that outlives the
-//!   reader — a `MivnavArtifact` handle the backend opens and holds, its
-//!   own design piece. Noted in `MIVNAV_NEXT_TASKS.md`.
 //! - **No config byte-budget.** Capacity is one artifact plus
-//!   [`MAX_CACHED_BANDS`] decoded bands — a boat cycles through one or
-//!   two drafts, so this is almost always 1–2 bands. Trading the
-//!   per-request read+decode spike for a bounded steady resident set
-//!   (the owned file buffer + the region + a couple of bands) is the
-//!   accepted shape; a tunable budget like the RAM tile cache's can come
-//!   later if a real deployment needs it.
-//! - **No `load_band` slimming.** [`load_band`] still expands the
-//!   run-length component labelling and every shortcut chain even though
-//!   the served path reads only portals + landmarks + the two header
-//!   counts. That waste is now paid once per band per `(path, identity)`
-//!   rather than per request, so slimming it is lower priority and pairs
-//!   with the mmap move.
+//!   [`MAX_CACHED_BANDS`] decoded bands; with the per-cell labels gone a
+//!   band is portals + shortcuts + landmarks, small next to the old
+//!   footprint.
 //!
 //! # Staleness
 //!
@@ -62,8 +59,8 @@ use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 use crate::coords::WorldXy;
 
 use super::directional::DirectionalSemantics;
-use super::format::{ArtifactReader, ArtifactVersions, ChartSetIdentity, FormatError};
-use super::persist::{load_band, load_hazard_rings, load_region, load_semantics};
+use super::format::{ArtifactReader, ArtifactVersions, ChartSetIdentity};
+use super::persist::{load_band_for_query, load_hazard_rings, load_region_lattice, load_semantics};
 use super::{BandTopology, BuiltRegion};
 
 /// How many decoded [`BandTopology`]s one [`OpenArtifact`] keeps. The
@@ -83,14 +80,17 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
-/// One opened, staleness-checked `.mivnav`: the file bytes owned once,
-/// the spatial field decoded once, bands / hazard rings / semantics
+/// One opened, staleness-checked `.mivnav`: the file mapped once,
+/// the tile lattice decoded once, bands / hazard rings / semantics
 /// decoded lazily and shared.
 ///
 /// `Debug` prints only shapes and counts, never the gigabyte payload —
 /// [`ArtifactReader`]'s own `Debug` already elides its bytes.
 #[derive(Debug)]
 pub struct OpenArtifact {
+    /// Borrows `_map` (declared AFTER it so it drops first — Rust drops
+    /// fields in declaration order). `'static` only because the map is
+    /// owned right here and outlives every borrow; see [`open`].
     reader: ArtifactReader<'static>,
     region: Arc<BuiltRegion>,
     /// Decoded bands, newest last — a plain `Vec` because there are at
@@ -98,6 +98,10 @@ pub struct OpenArtifact {
     bands: Mutex<Vec<(u8, Arc<BandTopology>)>>,
     hazard_rings: OnceLock<Arc<Vec<Vec<WorldXy>>>>,
     semantics: OnceLock<Arc<DirectionalSemantics>>,
+    /// The file, memory-mapped read-only. Pages are faulted in on demand
+    /// and are reclaimable page cache, not process heap — the national DK
+    /// artifact is ~4.9 GB and a query touches a small fraction of it.
+    _map: Box<memmap2::Mmap>,
 }
 
 impl OpenArtifact {
@@ -111,7 +115,7 @@ impl OpenArtifact {
     /// The topology for one band of [`super::BAND_LADDER_M`], decoded on
     /// first use and shared after. `Err` carries the same
     /// `"artifact band N is unusable: …"` string the direct
-    /// [`load_band`] path produced.
+    /// [`super::persist::load_band`] path produced.
     pub fn band(&self, band_index: u8) -> Result<Arc<BandTopology>, String> {
         // Held across the decode: `load_band` on this fixture is a few
         // ms, the whole point of the artifact is that a request does NOT
@@ -123,7 +127,7 @@ impl OpenArtifact {
             return Ok(Arc::clone(b));
         }
         let decoded = Arc::new(
-            load_band(&self.reader, &self.region, band_index)
+            load_band_for_query(&self.reader, &self.region, band_index)
                 .map_err(|e| format!("artifact band {band_index} is unusable: {e}"))?,
         );
         if bands.len() >= MAX_CACHED_BANDS {
@@ -241,27 +245,40 @@ pub fn get(path: &Path, identity: ChartSetIdentity) -> Result<Arc<OpenArtifact>,
 /// Read, staleness-check and partly decode one artifact. Never touches
 /// the cache — [`get`] owns that.
 fn open(path: &Path, identity: ChartSetIdentity) -> Result<OpenArtifact, String> {
-    // "Never built" and "built but damaged" get different text on
-    // purpose: the first is the ordinary state of a boat that has not
-    // run a build and warrants no alarm, the second is a real fault. The
-    // caller's user-facing warning gate depends on telling them apart.
-    let reader = ArtifactReader::from_file(path).map_err(|e| match &e {
-        FormatError::Io(io) if io.kind() == std::io::ErrorKind::NotFound => {
-            format!("no .mivnav has been built at {}", path.to_string_lossy())
-        }
+    let not_built = || format!("no .mivnav has been built at {}", path.to_string_lossy());
+    let file = std::fs::File::open(path).map_err(|e| match e.kind() {
+        std::io::ErrorKind::NotFound => not_built(),
         _ => format!("artifact could not be opened: {e}"),
     })?;
+    // SAFETY: the map is read-only and only ever read through `reader`.
+    // A `.mivnav` is published by atomic rename (`write_artifact_atomically`),
+    // never rewritten in place, so the mapped inode's bytes do not change
+    // under us; a rebuild replaces the path and is picked up on the next
+    // `(path, sequence)` cache miss.
+    let map = Box::new(
+        unsafe { memmap2::Mmap::map(&file) }
+            .map_err(|e| format!("artifact could not be mapped: {e}"))?,
+    );
+    // SAFETY: `map` is boxed (its address is stable) and stored in the same
+    // `OpenArtifact` as `reader`, declared after it, so it outlives every
+    // borrow `reader` (and anything decoded from it, which is all owned)
+    // can hold.
+    let bytes: &'static [u8] = unsafe { std::slice::from_raw_parts(map.as_ptr(), map.len()) };
+    let reader = ArtifactReader::from_slice(bytes)
+        .map_err(|e| format!("artifact could not be opened: {e}"))?;
     if let Some(stale) = reader.staleness(identity, &ArtifactVersions::CURRENT) {
         return Err(stale.to_string());
     }
-    let region =
-        Arc::new(load_region(&reader).map_err(|e| format!("artifact region is unusable: {e}"))?);
+    let region = Arc::new(
+        load_region_lattice(&reader).map_err(|e| format!("artifact region is unusable: {e}"))?,
+    );
     Ok(OpenArtifact {
         reader,
         region,
         bands: Mutex::new(Vec::new()),
         hazard_rings: OnceLock::new(),
         semantics: OnceLock::new(),
+        _map: map,
     })
 }
 

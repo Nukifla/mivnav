@@ -523,6 +523,49 @@ pub fn decode_components(bytes: &[u8], expected_cells: usize) -> Option<Componen
     Some(Components { label, count })
 }
 
+/// [`decode_components`] without materialising the per-cell `label`
+/// column: the same header and run-table validation (cell count, run
+/// stride, every run's length and value), but the result carries only
+/// `count` and an EMPTY `label`. For the query side, which reads a band's
+/// component count for diagnostics and never a per-cell label — expanding
+/// it cost 4 bytes per region cell per cached band (~3.9 GB per band on
+/// the national DK artifact).
+pub fn decode_components_count(bytes: &[u8], expected_cells: usize) -> Option<Components> {
+    let head = bytes.get(..COMPONENTS_HEADER_LEN)?;
+    let cell_count = u64::from_le_bytes(head[8..16].try_into().unwrap());
+    let count = u32::from_le_bytes(head[16..20].try_into().unwrap());
+    let run_stride = u32::from_le_bytes(head[20..24].try_into().unwrap()) as usize;
+    let run_count = u64::from_le_bytes(head[24..32].try_into().unwrap());
+    if cell_count != expected_cells as u64 || run_stride < COMPONENT_RUN_LEN {
+        return None;
+    }
+    let run_count = usize::try_from(run_count).ok()?;
+    let need = run_count
+        .checked_mul(run_stride)?
+        .checked_add(COMPONENTS_HEADER_LEN)?;
+    if bytes.len() < need {
+        return None;
+    }
+    let mut covered = 0usize;
+    for i in 0..run_count {
+        let at = COMPONENTS_HEADER_LEN + i * run_stride;
+        let r = &bytes[at..at + COMPONENT_RUN_LEN];
+        let value = u32::from_le_bytes(r[0..4].try_into().unwrap());
+        let length = u32::from_le_bytes(r[4..8].try_into().unwrap()) as usize;
+        if length == 0 || (value != NO_COMPONENT && value >= count) {
+            return None;
+        }
+        if length > expected_cells - covered {
+            return None;
+        }
+        covered += length;
+    }
+    (covered == expected_cells).then_some(Components {
+        label: Vec::new(),
+        count,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
