@@ -212,22 +212,16 @@ pub(crate) fn build_query_constraints(
     params: &ConstraintParams,
 ) -> ArtifactConstraints {
     let filtered = authority_filtered(cells);
-    // TEMPORARILY BACK TO PLAIN `build`, not `build_ring_clipped`: live on
-    // the real DK set, `build_ring_clipped`'s `coverage_region` call —
-    // `geo::unary_union` over EVERY positive M_COVR ring in a cell, no
-    // cheap bbox pre-filter, no caching, rerun from scratch on every
-    // single query — pegged CPU/RAM and never returned. A country-wide
-    // overview cell's own coverage is plausibly hundreds of disjoint
-    // island patches; unioning that fresh per candidate cell, per leg,
-    // doubled by `collect_debug`, across a multi-leg coarse-stitch route,
-    // is exactly the expensive shape `clip_to_authority`'s own docs warn
-    // `i_overlay` about. Reverted the WIRING only — `build_ring_clipped`
-    // itself, its tests, and `coverage_region` are untouched below,
-    // pending a real fix (a cheap extent gate before `unary_union` at
-    // minimum; caching the per-cell coverage region across queries is the
-    // bigger win, matching how the bake already amortises this same
-    // pass). See MIVNAV_ARTIFACT_TODO.md.
-    constraints::build(&filtered, params)
+    // Whole-cell drop first (`authority_filtered`), then the per-ring
+    // clip of what survives (`build_ring_clipped`): without the second, a
+    // coarse cell that is only PARTLY redundant lays its generalised
+    // coastline over the finer charts in full — measured live: the whole
+    // Copenhagen approach and every German estuary hard-blocked by
+    // overview-scale LNDARE. Was unwired once for a CPU/RAM blow-up on
+    // the DK set; `build_ring_clipped` now skips the coverage union for
+    // cells nothing later can be clipped by and bbox-gates every
+    // difference (see its docs).
+    constraints::build_ring_clipped(&filtered, params)
 }
 
 /// The shared soft-cost dials, straight off `RoutingConfig` — this
@@ -1242,14 +1236,8 @@ mod tests {
              LNDARE along with it"
         );
 
-        // NOT `build_query_constraints` — it does not wire in
-        // `build_ring_clipped` right now (a live CPU/RAM regression on
-        // the real DK set; see that function's own docs and
-        // MIVNAV_ARTIFACT_TODO.md). Exercised directly so this still
-        // pins `build_ring_clipped`'s own correctness pending a
-        // performant version being wired back in.
-        let fully_filtered =
-            constraints::build_ring_clipped(&authority_filtered(&[&fine, &coarse]), &p);
+        // The real query path: whole-cell filter, then the per-ring clip.
+        let fully_filtered = build_query_constraints(&[&fine, &coarse], &p);
         assert!(
             fully_filtered.hard.is_empty(),
             "the per-ring pass must still remove the coarse cell's own LNDARE \

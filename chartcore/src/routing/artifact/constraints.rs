@@ -85,7 +85,7 @@
 //!   `RESTRN=8` rather than getting an override of their own. One knob
 //!   for the whole MVP; splitting it later is additive.
 
-use geo::{BooleanOps, Buffer};
+use geo::{BooleanOps, BoundingRect, Buffer, Intersects};
 
 use crate::coords::{Extent, WorldXy};
 use crate::coverage::{cell_coverage, signed_area2_world, Coverage};
@@ -406,18 +406,41 @@ impl CellConstraints {
 /// `MultiPolygon`s at once (`routing::hazards::clip_to_authority`'s own
 /// docs have the measured `i_overlay` non-monotonicity this fold
 /// pattern avoids). A no-op on an empty `polys` — nothing to clip.
+///
+/// Bbox-gated per polygon: a polygon is only differenced against the
+/// regions whose bounding rect touches its own, and one that touches
+/// none is kept as-is without entering the overlay engine at all — the
+/// cheap "a ring whose own bbox misses the accumulator cannot touch any
+/// ground it might still hold" gate `clip_to_authority` relies on.
 fn clip_polys(polys: &mut Vec<geo::Polygon<f64>>, finer_regions: &[geo::MultiPolygon<f64>]) {
-    if polys.is_empty() {
+    if polys.is_empty() || finer_regions.is_empty() {
         return;
     }
-    let mut acc = geo::MultiPolygon::new(std::mem::take(polys));
-    for region in finer_regions {
-        if acc.0.is_empty() {
-            break;
+    let region_boxes: Vec<Option<geo::Rect<f64>>> =
+        finer_regions.iter().map(|r| r.bounding_rect()).collect();
+    let mut out: Vec<geo::Polygon<f64>> = Vec::with_capacity(polys.len());
+    for poly in std::mem::take(polys) {
+        let Some(pbox) = poly.bounding_rect() else {
+            continue;
+        };
+        let mut acc: Option<geo::MultiPolygon<f64>> = None;
+        for (region, rbox) in finer_regions.iter().zip(&region_boxes) {
+            let Some(rbox) = rbox else { continue };
+            if !pbox.intersects(rbox) {
+                continue;
+            }
+            let cur = acc.get_or_insert_with(|| geo::MultiPolygon::new(vec![poly.clone()]));
+            if cur.0.is_empty() {
+                break;
+            }
+            *cur = cur.difference(region);
         }
-        acc = acc.difference(region);
+        match acc {
+            None => out.push(poly),
+            Some(mp) => out.extend(mp.0),
+        }
     }
-    *polys = acc.0;
+    *polys = out;
 }
 
 /// One cell's own charted region — `Coverage`'s nonzero-winding rule
@@ -516,12 +539,23 @@ pub(crate) fn build_ring_clipped(
 
     let mut parts: Vec<CellConstraints> = Vec::with_capacity(cells.len());
     let mut finer_regions: Vec<geo::MultiPolygon<f64>> = Vec::new();
-    for i in order {
+    for (k, &i) in order.iter().enumerate() {
         let mut part = build_one_cell(cells[i], params);
         part.clip_hazard_classes(&finer_regions);
-        if let Some(cov) = cell_coverage(cells[i]) {
-            if let Some(region) = coverage_region(&cov) {
-                finer_regions.push(region);
+        // A cell's coverage region only ever clips cells LATER in this
+        // order, and only where their extents meet — so skip the
+        // `unary_union` entirely when no later cell overlaps this one.
+        // That always skips the coarsest cell (typically a national
+        // overview whose coverage is hundreds of island patches — the
+        // union that made this pass unaffordable per query).
+        let clips_something = order[k + 1..]
+            .iter()
+            .any(|&j| cells[j].extent.intersects(&cells[i].extent));
+        if clips_something {
+            if let Some(cov) = cell_coverage(cells[i]) {
+                if let Some(region) = coverage_region(&cov) {
+                    finer_regions.push(region);
+                }
             }
         }
         parts.push(part);
