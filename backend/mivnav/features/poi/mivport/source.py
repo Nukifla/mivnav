@@ -4,9 +4,9 @@ dataset (:class:`mivnav.features.poi.sources.PoiSource`).
 
 A bake, all of it while online, none of it needed at sea:
 
-1. the export manifest, then the smallest ``<region>.geojsonl.gz`` that
-   covers the target (``all`` unless the manifest gives region boxes), culled
-   to the region in chunks so the world file never sits in RAM whole;
+1. the export manifest, then the fewest bytes that hold the target: the
+   ``grid/`` cells its bbox touches, a region file whose bbox covers it, or
+   ``all`` — culled to the region in chunks, so no file sits in RAM whole;
 2. ``/v1/changes`` since the export's ``core_seq``: every place changed
    since is fetched fresh, so a bake shows edits made minutes ago;
 3. reviews and photo records from the dumps, attached to their places;
@@ -19,6 +19,7 @@ used INSTEAD of an OpenStreetMap one, never beside it: no merge ``family``.
 
 from __future__ import annotations
 
+import itertools
 import time
 from collections.abc import Iterator
 from pathlib import Path
@@ -98,25 +99,45 @@ def _covers(outer: tuple[float, float, float, float], inner: tuple[float, float,
     return outer[0] <= inner[0] and outer[1] <= inner[1] and outer[2] >= inner[2] and outer[3] >= inner[3]
 
 
-def pick_export(manifest: dict, target: tuple[float, float, float, float] | None) -> dict:
-    """The manifest entry to download: the smallest ``*.geojsonl.gz`` whose
-    ``bbox`` (when the manifest gives one) covers ``target``, else ``all``."""
-    best: dict | None = None
-    if target is not None:
-        for entry in manifest.get("files") or ():
-            if not isinstance(entry, dict):
-                continue
-            path, box = entry.get("path"), _bbox_of(entry.get("bbox"))
-            if not isinstance(path, str) or not path.endswith(".geojsonl.gz") or box is None:
-                continue
-            if _covers(box, target) and (best is None or entry.get("bytes", 0) < best.get("bytes", 0)):
-                best = entry
-    if best is not None:
-        return best
+def _overlaps(a: tuple[float, float, float, float], b: tuple[float, float, float, float]) -> bool:
+    return a[0] <= b[2] and a[2] >= b[0] and a[1] <= b[3] and a[3] >= b[1]
+
+
+def _size(entries: list[dict]) -> int:
+    return sum(e["bytes"] if isinstance(e.get("bytes"), int) else 0 for e in entries)
+
+
+def pick_exports(manifest: dict, target: tuple[float, float, float, float] | None) -> list[dict]:
+    """The manifest entries to download for ``target``, the fewest bytes of:
+
+    - the ``grid/`` cells whose ``bbox`` touches it — complete by
+      construction (mivport writes every cell that has a place, and says so
+      with ``grid_deg``), so no cell at all means no place there;
+    - the smallest region ``*.geojsonl.gz`` whose ``bbox`` covers it;
+    - ``all``.
+
+    The region cull afterwards drops whatever lies outside the target."""
     entry = mp_client.manifest_file(manifest, "all.geojsonl.gz")
     if entry is None:
         raise PoiIngestError("mivport exports have no all.geojsonl.gz")
-    return entry
+    best = [entry]
+    if target is None:
+        return best
+    grid: list[dict] = []
+    for entry in manifest.get("files") or ():
+        if not isinstance(entry, dict):
+            continue
+        path, box = entry.get("path"), _bbox_of(entry.get("bbox"))
+        if not isinstance(path, str) or not path.endswith(".geojsonl.gz") or box is None:
+            continue
+        if path.startswith("grid/"):
+            if _overlaps(box, target):
+                grid.append(entry)
+        elif _covers(box, target) and _size([entry]) < _size(best):
+            best = [entry]
+    if "grid_deg" in manifest and _size(grid) < _size(best):
+        best = sorted(grid, key=lambda e: e["path"])
+    return best
 
 
 def _target_bbox(job: PoiBakeJob) -> tuple[float, float, float, float] | None:
@@ -414,11 +435,16 @@ def bake(job: PoiBakeJob) -> None:
     try:
         with job.heartbeat():
             manifest = mp_client.fetch_manifest(job.http, base_url)
-        entry = pick_export(manifest, _target_bbox(job))
-        job.log(f"export {entry['path']} ({entry.get('bytes', 0) / 1e6:.1f} MB), core_seq {manifest.get('core_seq')}")
+        entries = pick_exports(manifest, _target_bbox(job))
+        names = entries[0]["path"] if len(entries) == 1 else f"{len(entries)} grid cells"
+        job.log(f"export {names} ({_size(entries) / 1e6:.1f} MB), core_seq {manifest.get('core_seq')}")
         with job.heartbeat("downloading the export"):
             places, seen = _cull_stream(
-                mp_client.fetch_export_lines(job.http, base_url, entry), cull, job
+                itertools.chain.from_iterable(
+                    mp_client.fetch_export_lines(job.http, base_url, e) for e in entries
+                ),
+                cull,
+                job,
             )
     except MivportError as e:
         job.log(f"fetch failed: {e}")
@@ -448,7 +474,7 @@ def bake(job: PoiBakeJob) -> None:
         "attribution": attribution if isinstance(attribution, str) and attribution else DEFAULT_ATTRIBUTION,
         "fetched_at": str(time.time()),
         "started_at": str(started_at),
-        "export": str(entry["path"]),
+        "export": " ".join(str(e["path"]) for e in entries),
     }
     stored = mp_store.write_details(
         mp_store.details_path(job.root, job.set_id),

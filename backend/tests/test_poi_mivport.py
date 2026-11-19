@@ -8,6 +8,7 @@ from __future__ import annotations
 import gzip
 import hashlib
 import json
+import math
 import time
 from pathlib import Path
 
@@ -22,7 +23,7 @@ from mivnav.features.poi.sources import implementations
 from mivnav.features.poi.mivport import source as mp_source
 from mivnav.features.poi.mivport import store as mp_store
 from mivnav.features.poi.mivport.mapping import host_kind, normalize, point_feature
-from mivnav.features.poi.mivport.source import MivportDatasetParams, pick_export
+from mivnav.features.poi.mivport.source import MivportDatasetParams, pick_exports
 
 BASE = "http://mivport.test"
 P1 = "11111111-1111-1111-1111-111111111111"  # core marina, Aarhus, links osm:w5
@@ -81,13 +82,36 @@ class FakeMivport:
         }
         self.requests: list[str] = []
         self.fail_media = False
+        #: Also export ``all`` cut into GRID-degree cells, as mivport does.
+        self.grid = False
+
+    GRID = 2
+
+    def _cells(self) -> dict[str, list[dict]]:
+        cells: dict[str, list[dict]] = {}
+        for f in self.export:
+            if f.get("geometry"):
+                lon, lat = f["geometry"]["coordinates"]
+                x, y = math.floor(lon / self.GRID) * self.GRID, math.floor(lat / self.GRID) * self.GRID
+                cells.setdefault(f"grid/{x}_{y}.geojsonl.gz", []).append(f)
+        return cells
 
     def files(self) -> dict[str, bytes]:
-        return {
+        out = {
             "all.geojsonl.gz": _gz_lines(self.export),
             "dump/reviews.jsonl.gz": _gz_lines(self.reviews),
             "dump/photos.jsonl.gz": _gz_lines(self.photos),
         }
+        if self.grid:
+            out.update({path: _gz_lines(rows) for path, rows in self._cells().items()})
+        return out
+
+    def _entry(self, path: str, body: bytes) -> dict:
+        entry = {"path": path, "bytes": len(body), "sha256": hashlib.sha256(body).hexdigest()}
+        if path.startswith("grid/"):
+            x, y = (int(v) for v in path.removeprefix("grid/").removesuffix(".geojsonl.gz").split("_"))
+            entry["bbox"] = [x, y, x + self.GRID, y + self.GRID]
+        return entry
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         path = request.url.path
@@ -97,10 +121,8 @@ class FakeMivport:
             return httpx.Response(200, json={
                 "core_seq": 10,
                 "attribution": "© OSM; © mivport",
-                "files": [
-                    {"path": p, "bytes": len(b), "sha256": hashlib.sha256(b).hexdigest()}
-                    for p, b in files.items()
-                ],
+                **({"grid_deg": self.GRID} if self.grid else {}),
+                "files": [self._entry(p, b) for p, b in files.items()],
             })
         if path.startswith("/exports/"):
             body = files.get(path.removeprefix("/exports/"))
@@ -228,16 +250,54 @@ def test_normalize_reads_both_the_export_and_the_api_shape():
                      "min_zoom": 14, "src": "mivport", "ref": "osm:n3"}
 
 
-def test_pick_export_prefers_the_smallest_covering_region_box():
+def _paths(entries):
+    return [e["path"] for e in entries]
+
+
+def test_pick_exports_prefers_the_smallest_covering_region_box():
     manifest = {"files": [
         {"path": "all.geojsonl.gz", "bytes": 100},
         {"path": "denmark.geojsonl.gz", "bytes": 10, "bbox": [7.5, 54.4, 15.3, 57.9]},
         {"path": "nordic.geojsonl.gz", "bytes": 50, "bbox": [4, 54, 32, 72]},
     ]}
-    assert pick_export(manifest, (8, 55, 12, 57))["path"] == "denmark.geojsonl.gz"
-    assert pick_export(manifest, (5, 58, 30, 70))["path"] == "nordic.geojsonl.gz"
-    assert pick_export(manifest, (-10, 40, 0, 50))["path"] == "all.geojsonl.gz"
-    assert pick_export(manifest, None)["path"] == "all.geojsonl.gz"
+    assert _paths(pick_exports(manifest, (8, 55, 12, 57))) == ["denmark.geojsonl.gz"]
+    assert _paths(pick_exports(manifest, (5, 58, 30, 70))) == ["nordic.geojsonl.gz"]
+    assert _paths(pick_exports(manifest, (-10, 40, 0, 50))) == ["all.geojsonl.gz"]
+    assert _paths(pick_exports(manifest, None)) == ["all.geojsonl.gz"]
+
+
+def test_pick_exports_takes_the_grid_cells_the_target_touches():
+    manifest = {"grid_deg": 2, "files": [
+        {"path": "all.geojsonl.gz", "bytes": 30},
+        {"path": "grid/8_54.geojsonl.gz", "bytes": 10, "bbox": [8, 54, 10, 56]},
+        {"path": "grid/10_56.geojsonl.gz", "bytes": 10, "bbox": [10, 56, 12, 58]},
+        {"path": "grid/-2_-34.geojsonl.gz", "bytes": 10, "bbox": [-2, -34, 0, -32]},
+        {"path": "grid/30_70.geojsonl.gz", "bytes": 10, "bbox": [30, 70, 32, 72]},
+    ]}
+    # Edges count: a point on a cell's west/south edge is in that cell.
+    assert _paths(pick_exports(manifest, (8.1, 54.6, 10, 57.7))) == [
+        "grid/10_56.geojsonl.gz", "grid/8_54.geojsonl.gz"]
+    assert _paths(pick_exports(manifest, (-1, -33, -0.5, -32.5))) == ["grid/-2_-34.geojsonl.gz"]
+    # No cell there: no places there, nothing to download.
+    assert pick_exports(manifest, (100, 0, 101, 1)) == []
+    # More grid bytes than "all": take "all".
+    assert _paths(pick_exports(manifest, (-180, -90, 180, 90))) == ["all.geojsonl.gz"]
+    # Grid cells without "grid_deg" are not known to be complete.
+    del manifest["grid_deg"]
+    assert _paths(pick_exports(manifest, (8.1, 54.6, 10, 57.7))) == ["all.geojsonl.gz"]
+
+
+def test_bake_downloads_only_the_grid_cells_of_the_region(tmp_path, fake, builds):
+    fake.grid = True
+    fake.export.append(_feature("osm:n8", "marina", 18.07, 59.33, source="osm"))  # Stockholm
+    runner, _ = _runner(tmp_path, fake)
+    assert _bake(runner)["state"] == "done"
+    fetched = {p for p in fake.requests if p.endswith(".geojsonl.gz")}
+    assert "/exports/all.geojsonl.gz" not in fetched
+    assert "/exports/grid/18_58.geojsonl.gz" not in fetched
+    assert "/exports/grid/10_56.geojsonl.gz" in fetched
+    # Same places as the "all" bake: Gothenburg shares DK's cell and is culled.
+    assert {props["ref"] for _, _, props in builds[0]} == {P1, P3, "osm:n1", "osm:n3"}
 
 
 # -- the bake ------------------------------------------------------------------
