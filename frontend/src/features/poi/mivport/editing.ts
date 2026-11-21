@@ -34,6 +34,7 @@ import {
 } from "./form";
 import { bindMivportHooks } from "./hooks";
 import { detailSet, MIVPORT_SRC } from "./index";
+import { createMivportLiveOverlay, type MivportLiveOverlay, type MivportLiveOverlayDeps } from "./liveLayer";
 import { createMivportLocalOverlay } from "./localLayer";
 import { canDeletePlace, cleanHide, placeActions, reviewBody, today } from "./model";
 import { MivportSettingsSection } from "./Settings";
@@ -75,10 +76,16 @@ export interface MivportEditingDeps {
   bind?: boolean;
   setInterval?: (fn: () => void, ms: number) => unknown;
   clearInterval?: (id: unknown) => void;
+  /** The live layer's seams (tests). */
+  live?: MivportLiveOverlayDeps;
 }
 
 export interface MivportEditing {
   feature: AppFeature;
+  /** The live layer (every mivport place in the world, while online) — its
+   * own feature, since a feature carries one overlay. */
+  liveFeature: AppFeature;
+  live: MivportLiveOverlay;
   api: MivportApi;
   account: Accessor<MivportAccount | undefined>;
   registry: Accessor<MivportRegistry | undefined>;
@@ -633,6 +640,9 @@ export function createMivportEditing(deps: MivportEditingDeps = {}): MivportEdit
     },
   });
 
+  const live = createMivportLiveOverlay(deps.live);
+  const liveFeature = defineFeature({ id: "mivport-live", overlay: live });
+
   const section = defineSettingsSection<SettingsCtx>({
     id: "mivport",
     title: "mivport",
@@ -713,6 +723,8 @@ export function createMivportEditing(deps: MivportEditingDeps = {}): MivportEdit
 
   const editing: MivportEditing = {
     feature,
+    liveFeature,
+    live,
     api,
     account,
     registry,

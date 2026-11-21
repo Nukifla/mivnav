@@ -494,6 +494,8 @@ const App: Component = () => {
     // Right after the baked POIs: its local layer shares their z band and
     // must draw above them.
     mivport.feature,
+    // Every mivport place in the world while online (Settings → mivport).
+    mivport.liveFeature,
     // Plugins' own features, right after POI so a plugin's POI layer row
     // sits next to the POI toggle.
     ...pluginFeatures(pluginInstances),

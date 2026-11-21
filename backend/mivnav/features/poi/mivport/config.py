@@ -25,6 +25,9 @@ class MivportConfig(Frozen):
     #: A mivport web client; when set, a place's details link to
     #: ``<web_url>/#place=<id>``. Empty: no link.
     web_url: str = DEFAULT_BASE_URL
+    #: Draw every mivport place in the world, fetched live per viewport
+    #: while the boat is online (``live.py``), beside the baked sets.
+    live: bool = False
 
     @field_validator("base_url", "web_url")
     @classmethod

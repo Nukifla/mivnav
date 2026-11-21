@@ -17,7 +17,7 @@ import logging
 import re
 import shutil
 import sqlite3
-from collections.abc import Iterable
+from collections.abc import Collection, Iterable
 from pathlib import Path
 
 log = logging.getLogger(__name__)
@@ -127,6 +127,27 @@ def has_ref(path: Path, ref: str) -> bool:
         return db.execute("SELECT 1 FROM details WHERE ref = ?", (ref,)).fetchone() is not None
     except sqlite3.Error:
         return False
+    finally:
+        db.close()
+
+
+def present_refs(path: Path, refs: Collection[str]) -> set[str]:
+    """Which of ``refs`` the details file stores (one indexed query)."""
+    if not refs:
+        return set()
+    db = _open_ro(path)
+    if db is None:
+        return set()
+    try:
+        out: set[str] = set()
+        refs = list(refs)
+        for i in range(0, len(refs), 500):
+            chunk = refs[i : i + 500]
+            marks = ",".join("?" * len(chunk))
+            out.update(r for (r,) in db.execute(f"SELECT ref FROM details WHERE ref IN ({marks})", chunk))
+        return out
+    except sqlite3.Error:
+        return set()
     finally:
         db.close()
 

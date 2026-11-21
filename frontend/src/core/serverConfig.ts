@@ -178,6 +178,9 @@ export interface MivportServerConfig {
   /** A mivport web client; when set, a place's details link to it. Empty:
    * no link. */
   web_url: string;
+  /** Draw every mivport place in the world live while online
+   * (features/poi/mivport/liveLayer.ts). */
+  live: boolean;
 }
 
 export interface SignalKServerConfig {

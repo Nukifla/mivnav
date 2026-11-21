@@ -4,6 +4,8 @@
 - ``/poi/mivport/...`` — reading: a baked set's offline place details and
   photos, with the boat's own changes merged in, and the local overlay
   (``/poi/mivport/local``);
+- ``/poi/live/mivport/...`` — the live layer (``live.py``): every place in
+  the world, per viewport tile, while online and ``Config.mivport.live``;
 - ``/mivport/...`` — editing (docs/architecture/mivport-editing.md): the
   boat-wide account, the kinds/attrs registry, the writes (queued in the
   outbox and answered at once), the outbox itself and history.
@@ -11,16 +13,18 @@
 
 from __future__ import annotations
 
+import gzip
 import time
 from collections import defaultdict
 from datetime import date, datetime
 from typing import Any, Literal
 
 import httpx
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field
 
+from mivnav.api.charts import MVT_CONTENT_TYPE, NO_STORE, _accepts_gzip
 from mivnav.api.deps import Runtime, get_runtime
 from mivnav.config.derived import Derived
 from mivnav.feature import Feature
@@ -32,6 +36,7 @@ from . import local
 from . import store as mp_store
 from .account import Account, AccountError, RegistryCache
 from .client import MivportError, MivportUnreachable
+from .live import LIVE_SET, MAX_ZOOM, MIN_ZOOM, MivportLive, MivportOffline, encode_tile
 from .outbox import Outbox, OutboxError
 from .sync import Syncer
 
@@ -39,6 +44,7 @@ FEATURE_ID = "mivport"
 
 router = APIRouter(prefix="/poi/mivport")
 edit_router = APIRouter(prefix="/mivport")
+live_router = APIRouter(prefix="/poi/live/mivport")
 
 #: A stored photo's name is its mivport photo id, and mivport photos are
 #: never edited in place (a new photo gets a new id).
@@ -77,6 +83,7 @@ class MivportRuntime:
             close=lambda o: o.close(),
         )
         self.account = Account(ctx.config, self.http, clock)
+        self.live = MivportLive(self.http, lambda: self._config.get().mivport.base_url, clock)
         self.syncer = Syncer(self.account, self.outbox, self.registry, self.http, clock)
         if start:
             self.syncer.start()
@@ -92,6 +99,9 @@ class MivportRuntime:
 
     def web_url(self) -> str:
         return self._config.get().mivport.web_url
+
+    def live_enabled(self) -> bool:
+        return self._config.get().mivport.live
 
     def account_summary(self) -> dict:
         out = self.account.summary()
@@ -201,17 +211,31 @@ def place_detail(
         if directory is not None
         else None
     )
-    if found is None and set_id == LOCAL_SET:
+    live_attribution = None
+    if found is None and set_id in (LOCAL_SET, LIVE_SET):
         # Tapped on the local layer, which doesn't say which bake the place
         # came from: its stored reviews and photos are in whichever set has it.
         set_id, directory, found = _set_holding(store, ref)
+    if found is None and set_id == LOCAL_SET and rt.live_enabled() and local.is_place_id(ref):
+        # Not baked anywhere: a place from the live layer, as mivport has it now.
+        try:
+            got = rt.live.detail(ref)
+        except MivportOffline as e:
+            got = None
+            if rt.outbox().place(rt.outbox().alias(ref)) is None:
+                raise HTTPException(status_code=503, detail=f"mivport unreachable (offline?): {e}") from e
+        except MivportError as e:
+            raise HTTPException(status_code=502, detail=str(e)) from e
+        if got is not None:
+            found = (got[0], {"attribution": got[1], "fetched_at": str(time.time())})
+            live_attribution = got[1]
     outbox = rt.outbox()
     key = outbox.alias(ref)
     entry = outbox.place(key)
     if found is None and entry is None:
         raise HTTPException(status_code=404, detail=f"no stored detail for {set_id}/{ref}")
     stored, meta = (found if found is not None else (None, {}))
-    if stored is not None:
+    if stored is not None and live_attribution is None:
         stored = mp_store.with_local_photos(stored, mp_store.photos_dir(directory, set_id), set_id)  # type: ignore[arg-type]
     place = local.view(entry, outbox.items(kind="edit", place_ids=[key])) if entry is not None else None
     refs = outbox.aliases(ref)
@@ -291,6 +315,88 @@ def local_overlay(
             features.append(feat)
         hide.extend(local.hide_refs(ref, entry, detail))
     return MivportLocalOverlay(features=features, hide=sorted(set(hide)))
+
+
+# -- live ---------------------------------------------------------------------
+
+#: Live tiles change under the same URL; the backend's own cache holds them
+#: for ``live.TILE_TTL_S``, so the browser need not hold them longer.
+LIVE_CACHE_CONTROL = "public, max-age=60"
+
+
+class MivportLiveStatus(BaseModel):
+    #: ``Config.mivport.live``.
+    enabled: bool
+    #: ``off`` (not enabled), ``offline`` (mivport didn't answer lately),
+    #: ``ready``.
+    state: Literal["off", "offline", "ready"]
+    error: str | None = None
+    last_ok: float | None = None
+    min_zoom: int
+    max_zoom: int
+    #: Relative to the API root.
+    tiles: str
+
+
+@live_router.get("", response_model=MivportLiveStatus)
+def live_status(rt: MivportRuntime = Depends(_runtime)) -> dict:
+    """Whether the live layer is on, and where its tiles are. Never asks
+    mivport itself."""
+    return rt.live.status(rt.live_enabled())
+
+
+def _live_hidden(rt: MivportRuntime, store: PoiStore, refs: list[str]) -> set[str]:
+    """Of ``refs``, the ones a baked set already draws (baked wins: its
+    details work offline) and the ones the boat changed (the local layer
+    draws those)."""
+    out: set[str] = set()
+    for _, path in _details_files(store):
+        out |= mp_store.present_refs(path, refs)
+    outbox = rt.outbox()
+    places = outbox.places()
+    if places:
+        edits: dict[str, list[dict]] = defaultdict(list)
+        for item in outbox.items(kind="edit"):
+            edits[item["place_id"]].append(item)
+        for ref, entry in places.items():
+            out.add(ref)
+            out.update(local.hide_refs(ref, entry, local.view(entry, edits.get(ref, []))))
+    return out
+
+
+@live_router.get(
+    "/tiles/{z}/{x}/{y}",
+    responses={200: {"content": {MVT_CONTENT_TYPE: {}}}, 204: {"description": "empty"}},
+)
+def live_tile(
+    z: int,
+    x: int,
+    y: int,
+    request: Request,
+    store: PoiStore = Depends(get_poi_store),
+    rt: MivportRuntime = Depends(_runtime),
+) -> Response:
+    """One live tile: mivport's places in it, asked of mivport (or its
+    short RAM cache). 204 when the layer is off, below its min zoom, while
+    mivport is unreachable (at once during the offline backoff) and for an
+    empty tile."""
+    if not (0 <= z <= MAX_ZOOM and 0 <= x < (1 << z) and 0 <= y < (1 << z)):
+        return Response(status_code=404, headers={"Cache-Control": NO_STORE})
+    if not rt.live_enabled() or z < MIN_ZOOM:
+        return Response(status_code=204, headers={"Cache-Control": NO_STORE})
+    try:
+        points = rt.live.tile_points(z, x, y)
+    except MivportError:
+        return Response(status_code=204, headers={"Cache-Control": NO_STORE})
+    hidden = _live_hidden(rt, store, [p[2]["ref"] for p in points])
+    data = encode_tile(points, z, x, y, exclude=hidden)
+    headers = {"Cache-Control": LIVE_CACHE_CONTROL, "Vary": "Accept-Encoding"}
+    if not data:
+        return Response(status_code=204, headers=headers)
+    if _accepts_gzip(request):
+        data = gzip.compress(data, 1)
+        headers["Content-Encoding"] = "gzip"
+    return Response(content=data, media_type=MVT_CONTENT_TYPE, headers=headers)
 
 
 # -- account ------------------------------------------------------------------
@@ -748,6 +854,6 @@ def place_history(place_id: str, rt: MivportRuntime = Depends(_runtime)) -> dict
 
 FEATURE: Feature[MivportRuntime] = Feature(
     id=FEATURE_ID,
-    routers=(router, edit_router),
+    routers=(router, edit_router, live_router),
     build_runtime=MivportRuntime,
 )

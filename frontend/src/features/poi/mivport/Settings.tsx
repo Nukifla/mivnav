@@ -11,6 +11,7 @@ import UserRound from "lucide-solid/icons/user-round";
 import { createSignal, For, onCleanup, Show, type Component } from "solid-js";
 import { AccordionSection } from "../../../core/ui/Accordion";
 import { Button } from "../../../core/ui/Button";
+import { Toggle } from "../../../core/ui/Controls";
 import { Segmented } from "../../../core/ui/SegmentedControl";
 import type { SettingsCtx } from "../../../core/settings/ctx";
 import type { MivportEditing } from "./editing";
@@ -25,11 +26,13 @@ const LINK = "break-all text-accent underline decoration-dotted underline-offset
 const message = (e: unknown) => (e instanceof Error && e.message ? e.message : "The boat’s server didn’t answer.");
 
 /** The mivport server URLs, written to the boat's config. */
-const ServerFields: Component<{ ctx: SettingsCtx }> = (props) => {
+const ServerFields: Component<{ ctx: SettingsCtx; onSaved?: () => void }> = (props) => {
   const cfg = () => props.ctx.cfg;
   const mv = () => cfg()?.config()?.mivport;
-  const save = (patch: { base_url?: string; web_url?: string }) =>
-    void cfg().patch({ mivport: patch }, { scope: SCOPE, done: "Saved." });
+  const save = (patch: { base_url?: string; web_url?: string; live?: boolean }) =>
+    void cfg()
+      .patch({ mivport: patch }, { scope: SCOPE, done: "Saved." })
+      .then(() => props.onSaved?.());
   return (
     <Show
       when={cfg()?.config()}
@@ -60,6 +63,13 @@ const ServerFields: Component<{ ctx: SettingsCtx }> = (props) => {
           onChange={(e) => save({ web_url: e.currentTarget.value.trim() })}
         />
       </label>
+      <Toggle
+        label="Show the whole world live"
+        hint="While the boat is online, draw every mivport place from the server, like the mivport web client — beside your downloaded regions, which still work offline."
+        checked={mv()?.live ?? false}
+        disabled={cfg().busy()}
+        onChange={(live) => save({ live })}
+      />
       <Show when={cfg().scope() === SCOPE}>
         <Show when={cfg().error()}>
           <p class="text-xs text-alarm">{cfg().error()}</p>
@@ -68,6 +78,20 @@ const ServerFields: Component<{ ctx: SettingsCtx }> = (props) => {
           <p class="text-xs text-ok">{cfg().status()}</p>
         </Show>
       </Show>
+    </Show>
+  );
+};
+
+/** The live layer's state, while it is switched on. */
+const LiveState: Component<{ editing: MivportEditing }> = (props) => {
+  const st = () => props.editing.live.status();
+  return (
+    <Show when={st()?.enabled}>
+      <p class={`text-xs ${st()?.state === "offline" ? "text-fg-3" : "text-fg-2"}`}>
+        {st()?.state === "offline"
+          ? "Live: mivport can’t be reached — showing your downloaded regions only."
+          : `Live: on (from zoom ${st()?.min_zoom}).`}
+      </p>
     </Show>
   );
 };
@@ -330,7 +354,8 @@ export const MivportSettingsSection: Component<{ ctx: SettingsCtx; editing: Mivp
         write reviews and add photos from the boat — changes are kept on the boat and uploaded when mivport can be
         reached.
       </p>
-      <ServerFields ctx={props.ctx} />
+      <ServerFields ctx={props.ctx} onSaved={() => props.editing.live.refresh()} />
+      <LiveState editing={props.editing} />
       <div class="space-y-2 border-t border-line-2 pt-2">
         <p class="text-xs text-fg-2">{accountStatus(acct())}</p>
         <Show when={acct()?.last_error}>

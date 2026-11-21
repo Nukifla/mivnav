@@ -1959,6 +1959,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/poi/live/mivport": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Live Status
+         * @description Whether the live layer is on, and where its tiles are. Never asks
+         *     mivport itself.
+         */
+        get: operations["live_status_poi_live_mivport_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/poi/live/mivport/tiles/{z}/{x}/{y}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Live Tile
+         * @description One live tile: mivport's places in it, asked of mivport (or its
+         *     short RAM cache). 204 when the layer is off, below its min zoom, while
+         *     mivport is unreachable (at once during the offline backoff) and for an
+         *     empty tile.
+         */
+        get: operations["live_tile_poi_live_mivport_tiles__z___x___y__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/poi/mivport/details/{set_id}/{ref}": {
         parameters: {
             query?: never;
@@ -3085,6 +3129,26 @@ export interface components {
             lat: number;
             /** Lon */
             lon: number;
+        };
+        /** MivportLiveStatus */
+        MivportLiveStatus: {
+            /** Enabled */
+            enabled: boolean;
+            /** Error */
+            error?: string | null;
+            /** Last Ok */
+            last_ok?: number | null;
+            /** Max Zoom */
+            max_zoom: number;
+            /** Min Zoom */
+            min_zoom: number;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "off" | "offline" | "ready";
+            /** Tiles */
+            tiles: string;
         };
         /** MivportLocalOverlay */
         MivportLocalOverlay: {
@@ -6519,6 +6583,67 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    live_status_poi_live_mivport_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MivportLiveStatus"];
+                };
+            };
+        };
+    };
+    live_tile_poi_live_mivport_tiles__z___x___y__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                z: number;
+                x: number;
+                y: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                    "application/vnd.mapbox-vector-tile": unknown;
+                };
+            };
+            /** @description empty */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
