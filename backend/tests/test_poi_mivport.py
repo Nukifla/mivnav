@@ -423,7 +423,7 @@ def test_detail_and_photo_routes_serve_the_offline_copies(runtime, dc, fake):
     assert body["photos"][0]["thumb_url"] == f"/poi/mivport/photos/mpset/{PH}.thumb.jpg"
     assert body["photos"][0]["attribution"] == "© anna, CC BY-SA 4.0"
     assert "remote" not in body["photos"][0]
-    assert "web_url" not in body
+    assert body["web_url"] == f"https://mivport.nukifla.com/#place={P1}"
     assert dc.get("/poi/mivport/details/mpset/osm:n1").json()["photos"][0]["remote"] is True
 
     photo = dc.get(f"/poi/mivport/photos/mpset/{PH}.view.jpg")

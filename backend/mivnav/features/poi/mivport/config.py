@@ -9,7 +9,7 @@ from pydantic import Field, field_validator
 
 from mivnav.config.base import Frozen
 
-DEFAULT_BASE_URL = "http://localhost:8080"
+DEFAULT_BASE_URL = "https://mivport.nukifla.com"
 
 
 def _http_url(value: str) -> str:
@@ -24,7 +24,7 @@ class MivportConfig(Frozen):
     base_url: str = Field(default=DEFAULT_BASE_URL, min_length=1)
     #: A mivport web client; when set, a place's details link to
     #: ``<web_url>/#place=<id>``. Empty: no link.
-    web_url: str = ""
+    web_url: str = DEFAULT_BASE_URL
 
     @field_validator("base_url", "web_url")
     @classmethod
