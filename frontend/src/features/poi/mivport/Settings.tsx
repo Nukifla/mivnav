@@ -66,7 +66,7 @@ const ServerFields: Component<{ ctx: SettingsCtx; onSaved?: () => void }> = (pro
       <Toggle
         label="Show the whole world live"
         hint="While the boat is online, draw every mivport place from the server, like the mivport web client — beside your downloaded regions, which still work offline."
-        checked={mv()?.live ?? false}
+        checked={mv()?.live ?? true}
         disabled={cfg().busy()}
         onChange={(live) => save({ live })}
       />

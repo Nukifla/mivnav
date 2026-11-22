@@ -178,3 +178,9 @@ def test_live_detail(dc):
 def test_live_detail_offline_is_503(dc, fake):
     fake.offline = True
     assert dc.get(f"/poi/mivport/details/live/{LIVE}").status_code == 503
+
+
+def test_on_by_default():
+    from mivnav.features.poi.mivport.config import MivportConfig
+
+    assert MivportConfig().live is True

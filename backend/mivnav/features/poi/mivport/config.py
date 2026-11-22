@@ -27,7 +27,7 @@ class MivportConfig(Frozen):
     web_url: str = DEFAULT_BASE_URL
     #: Draw every mivport place in the world, fetched live per viewport
     #: while the boat is online (``live.py``), beside the baked sets.
-    live: bool = False
+    live: bool = True
 
     @field_validator("base_url", "web_url")
     @classmethod
