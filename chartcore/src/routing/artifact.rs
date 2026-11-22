@@ -1131,6 +1131,42 @@ mod tests {
         assert!(!d.constraints.coverage.is_empty());
     }
 
+    #[test]
+    fn debug_labels_the_blocked_endpoint_in_request_order() {
+        // `search_debug` runs in a canonical direction; a blocked
+        // destination must still read as `goal_blocked` (and a blocked
+        // start as `start_blocked`) whichever way that order falls.
+        // A 1 km island well past the 150 m grace radius on its inland
+        // endpoint.
+        let island = attributed_area("LNDARE", LAT, LON + 0.02, 1_000.0, &[]);
+        let c = covered_cell(vec![island], 20_000.0);
+        let water = (LON - 0.02, LAT);
+        let land = (LON + 0.02, LAT);
+        for (from, to, want) in [
+            (water, land, "goal_blocked"),
+            (land, water, "start_blocked"),
+        ] {
+            let d = debug_of(&c, from, to);
+            assert_eq!(d.search.reason, want, "{from:?} -> {to:?}");
+            let f = d.search.field.expect("a field was built");
+            let (walkable, blocked) = if want == "goal_blocked" {
+                (f.start_cell, f.goal_cell)
+            } else {
+                (f.goal_cell, f.start_cell)
+            };
+            assert!(
+                walkable.is_some() && blocked.is_none(),
+                "{from:?} -> {to:?}"
+            );
+            let (snap_ok, snap_none) = if want == "goal_blocked" {
+                (d.search.start_snap_m, d.search.goal_snap_m)
+            } else {
+                (d.search.goal_snap_m, d.search.start_snap_m)
+            };
+            assert!(snap_ok.is_finite() && snap_none.is_nan());
+        }
+    }
+
     /// The reported bug, reproduced directly: a coarse (overview-scale)
     /// cell's own `LNDARE` sits over ground a FINER cell, also in the
     /// candidate slice, fully covers and charts as open water. Both

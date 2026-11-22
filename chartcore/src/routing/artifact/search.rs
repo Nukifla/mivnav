@@ -626,6 +626,24 @@ pub(crate) fn search_debug(
         } else {
             reason
         };
+        // `a`/`b` are the canonical (possibly swapped) order; report in
+        // the caller's `from`/`to` terms, or a blocked destination reads
+        // as a blocked start.
+        if reversed {
+            let mut snapshot = snapshot;
+            std::mem::swap(&mut snapshot.start_cell, &mut snapshot.goal_cell);
+            let reason = match reason {
+                "start_blocked" => "goal_blocked",
+                "goal_blocked" => "start_blocked",
+                r => r,
+            };
+            return SearchDebug {
+                reason,
+                field: Some(snapshot),
+                start_snap_m: goal_snap_m,
+                goal_snap_m: start_snap_m,
+            };
+        }
         return SearchDebug {
             reason,
             field: Some(snapshot),
