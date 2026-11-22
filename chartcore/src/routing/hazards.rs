@@ -1198,7 +1198,9 @@ mod tests {
                 .map(|t| t.parse().expect("number"))
                 .collect();
             rings.push(geo::LineString::new(
-                nums.chunks(2).map(|c| geo::Coord { x: c[0], y: c[1] }).collect(),
+                nums.chunks(2)
+                    .map(|c| geo::Coord { x: c[0], y: c[1] })
+                    .collect(),
             ));
         }
         flush(&mut rings, &mut polys);
@@ -1226,8 +1228,15 @@ mod tests {
             .expect("non-empty union");
         assert!(!idx.rings.is_empty());
         // The union covers at least its largest input polygon.
-        let union_area: f64 = idx.rings.iter().map(|r| signed_area2_world(r) as f64 / 2.0).sum();
-        assert!(union_area >= input_area * 0.999, "{union_area} < {input_area}");
+        let union_area: f64 = idx
+            .rings
+            .iter()
+            .map(|r| signed_area2_world(r) as f64 / 2.0)
+            .sum();
+        assert!(
+            union_area >= input_area * 0.999,
+            "{union_area} < {input_area}"
+        );
     }
 
     /// `union_polys` must not depend on input ring orientation — a CW
@@ -1236,7 +1245,13 @@ mod tests {
     fn union_polys_ignores_input_winding() {
         use geo::Area;
         let sq = |x0: f64, cw: bool| {
-            let mut c = vec![(x0, 0.0), (x0 + 10.0, 0.0), (x0 + 10.0, 10.0), (x0, 10.0), (x0, 0.0)];
+            let mut c = vec![
+                (x0, 0.0),
+                (x0 + 10.0, 0.0),
+                (x0 + 10.0, 10.0),
+                (x0, 10.0),
+                (x0, 0.0),
+            ];
             if cw {
                 c.reverse();
             }
