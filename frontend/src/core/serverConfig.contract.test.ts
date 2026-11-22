@@ -33,6 +33,7 @@ const CLASS_FILE: Record<string, string> = {
   NavConfig: join(import.meta.dir, "../../../backend/mivnav/features/route/config.py"),
   TrackConfig: join(import.meta.dir, "../../../backend/mivnav/features/track/config.py"),
   MivportConfig: join(import.meta.dir, "../../../backend/mivnav/features/poi/mivport/config.py"),
+  PoiConfig: join(import.meta.dir, "../../../backend/mivnav/features/poi/config.py"),
 };
 
 /**
@@ -118,12 +119,14 @@ const BACKEND_ONLY: Record<string, string> = {
   // (features/poi/mivport), never through the config document.
   "CredentialsConfig.mivport":
     "mivport token + username, managed by the /mivport/account routes; the UI reads the account there",
-  // The POI PMTiles directory — a data-LOCATION tuning, a backend-only
-  // tuning. The client only toggles the overlay (the device
-  // setting `showPois`, ChartSettings); it does not manage where the boat's POI
-  // files live, so the server-config document models no poi slice.
-  "Config.poi":
-    "POI PMTiles data-location tuning; the client toggles the overlay via the device setting showPois, not server config",
+  // The POI slice is modelled for `osm_imports` alone (Settings →
+  // Advanced). The Overpass endpoints and bake zooms are backend tuning —
+  // hand-edit + POST /config/reload — no panel edits them.
+  "PoiConfig.overpass_url": "Overpass endpoint, backend tuning",
+  "PoiConfig.overpass_fallback_urls": "Overpass fallbacks, backend tuning",
+  "PoiConfig.overpass_use_area": "Overpass query shape, backend tuning",
+  "PoiConfig.min_zoom": "POI bake zoom range, backend tuning",
+  "PoiConfig.max_zoom": "POI bake zoom range, backend tuning",
   // Satellite imagery sources + the offline PMTiles data-location — the exact
   // parallel of the POI slice. The client drives satellite through the dedicated
   // /satellite/{catalog,tiles,sets} + /ingest/satellite endpoints (source picker,
@@ -173,6 +176,7 @@ const SECTIONS: { py: string; fields: string[] }[] = [
   { py: "TrackConfig", fields: tsInterfaceFields(tsSrc, "TrackServerConfig") },
   { py: "UpdatesConfig", fields: tsInterfaceFields(tsSrc, "UpdatesServerConfig") },
   { py: "MivportConfig", fields: tsInterfaceFields(tsSrc, "MivportServerConfig") },
+  { py: "PoiConfig", fields: tsInterfaceFields(tsSrc, "PoiServerConfig") },
   { py: "Config", fields: tsInterfaceFields(tsSrc, "ServerConfig") },
   { py: "OchartsCredentials", fields: tsInterfaceFields(tsSrc, "OchartsCredentialsView") },
   { py: "CredentialsConfig", fields: tsInlineObjectKeys(tsSrc, "ServerConfig", "credentials") },

@@ -37,3 +37,14 @@ export function paramsForSource(
 export function implementationFor(source: PoiSource): string | null {
   return source === OVERPASS ? null : source;
 }
+
+/** The source a draft should switch to, or `undefined` to leave it: a NEW
+ * draft on OpenStreetMap moves to the first other source while OSM imports
+ * are off (Settings → Advanced). A saved dataset is never switched. */
+export function sourceToSwitchTo(
+  current: PoiSource,
+  opts: { isNew: boolean; osmImports: boolean; others: readonly PoiSource[] },
+): PoiSource | undefined {
+  if (!opts.isNew || opts.osmImports || current !== OVERPASS) return undefined;
+  return opts.others[0];
+}

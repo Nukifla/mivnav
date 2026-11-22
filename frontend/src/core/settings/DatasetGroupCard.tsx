@@ -501,6 +501,7 @@ export const DatasetGroupEditForm: Component<
                     value={v().params}
                     onChange={(params: Record<string, unknown>) => updateVariant(i, { params })}
                     disabled={busy()}
+                    isNew={v().ids.length === 0}
                   />
                 )}
               </Show>

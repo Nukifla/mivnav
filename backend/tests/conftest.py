@@ -77,6 +77,10 @@ def isolated_runtime_at(root: Path, features=None):
             # provider's own directory (charts/poi/satellite/ocharts) is
             # `data_root/<provider>`, all still under `root`.
             "data_root": str(root / "data"),
+            # Off by default for a boat (Settings → Advanced); the test
+            # runtimes exist to exercise OSM bakes against stubbed Overpass.
+            # test_poi_osm_imports.py covers the default.
+            "poi": {"osm_imports": True},
             "ocharts": {
                 "daemon_dir": str(root / "ocharts" / "daemon"),
                 "work_dir": str(root / "ocharts" / "work"),

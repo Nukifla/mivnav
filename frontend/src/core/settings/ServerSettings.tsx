@@ -507,6 +507,18 @@ const AdvancedSection: Component<{ cfg: ServerConfigController }> = (props) => {
       <Feedback cfg={props.cfg} scope="chartdetail" />
 
       <div class="mt-1 flex items-center gap-2 border-t border-line-2 pt-2 text-fg-2">
+        <MapPin size={14} aria-hidden="true" class="shrink-0" />
+        <span class="text-xs font-medium">Points of interest</span>
+      </div>
+      <Toggle
+        label="OpenStreetMap POI imports"
+        hint="Allow baking POI datasets from OpenStreetMap (Overpass). Off: only other sources can be baked; POI sets already on the boat keep showing."
+        checked={props.cfg.config()!.poi?.osm_imports ?? false}
+        disabled={locked()}
+        onChange={(on) => save({ poi: { osm_imports: on } })}
+      />
+
+      <div class="mt-1 flex items-center gap-2 border-t border-line-2 pt-2 text-fg-2">
         <Route size={14} aria-hidden="true" class="shrink-0" />
         <span class="text-xs font-medium">Ship's track</span>
       </div>

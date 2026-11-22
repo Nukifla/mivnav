@@ -43,6 +43,14 @@ export { scaminBias };
  * for call sites that only ever cared about it. */
 export const chartDetail = (): number => scaminBias().detail;
 
+// `poi.osm_imports`, mirrored as a module global like the bias above, so the
+// POI dataset form (which gets no config controller) can hide the OSM source.
+// Off until the server says otherwise — the shipped default.
+const [osmPoiImports, setOsmPoiImports] = createSignal(false);
+export { osmPoiImports };
+const osmImportsFrom = (config: Partial<ServerConfig> | undefined): boolean =>
+  config?.poi?.osm_imports === true;
+
 /** Read the three bias numbers off a config payload, clamped, falling back
  * to neutral. One function so `seedChartDetail`/`accept` can't drift. */
 const biasFromConfig = (oc: Partial<OchartsServerConfig> | undefined): ScaminBias => ({
@@ -169,6 +177,14 @@ export interface UpdatesServerConfig {
   include_prereleases: boolean;
 }
 
+/** The POI slice (mivnav.features.poi.config.PoiConfig) — only the part the
+ * UI edits; the Overpass tuning stays backend-only. */
+export interface PoiServerConfig {
+  /** Allow baking POI datasets from OpenStreetMap. Off by default
+   * (Settings → Advanced). */
+  osm_imports: boolean;
+}
+
 /** The mivport server (mivnav.features.poi.mivport.config.MivportConfig):
  * a mivport POI dataset bakes from it, and the boat's mivport account and
  * outbox talk to it — Settings → mivport. */
@@ -218,6 +234,8 @@ export interface ServerConfig {
   updates: UpdatesServerConfig;
   /** Absent from a server older than the mivport source. */
   mivport?: MivportServerConfig;
+  /** Absent from a server older than the OSM-imports switch. */
+  poi?: PoiServerConfig;
   /** Boat-wide named areas of interest (mivnav.config.model.Region), shared
    * by POI/satellite bake pickers — settings/regions.tsx owns the
    * read-modify-write for this list. */
@@ -282,6 +300,7 @@ export interface ConfigPatch {
   track?: Partial<TrackServerConfig>;
   updates?: Partial<UpdatesServerConfig>;
   mivport?: Partial<MivportServerConfig>;
+  poi?: Partial<PoiServerConfig>;
   /** Whole-list replace. Entries must be in the country-XOR-bbox wire shape
    * — see `regionPatch` (settings/regions.tsx), every writer's path. */
   regions?: object[];
@@ -346,6 +365,7 @@ export async function seedChartDetail(): Promise<void> {
   try {
     const payload = await fetchServerConfig();
     setScaminBiasSignal(biasFromConfig(payload.config.ocharts));
+    setOsmPoiImports(osmImportsFrom(payload.config));
     noteBootId(payload.meta.boot_id);
   } catch {
     // unreachable server → keep the neutral default
@@ -430,6 +450,7 @@ export function createServerConfig(): ServerConfigController {
       setOffline("");
       // Keep the SCAMIN-bias global in step: style must use the same B/k/A the server drops features by.
       setScaminBiasSignal(biasFromConfig(payload.config.ocharts));
+      setOsmPoiImports(osmImportsFrom(payload.config));
         // Also a chance to notice the backend restarted mid-session
       // (`noteBootId`, shared module scope with `seedChartDetail`).
       noteBootId(payload.meta.boot_id);

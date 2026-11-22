@@ -116,7 +116,12 @@ def test_bake_runs_through_the_job_and_extra_files_go_with_a_source_switch(
     monkeypatch.setattr(chartcore, "build_pmtiles", fake_build)
     root = tmp_path / "poi"
     root.mkdir()
-    runner = PoiIngestRunner(PoiStore(root, rescan_interval=0), dataset_id="set")
+    from mivnav.features.poi.config import PoiConfig
+
+    runner = PoiIngestRunner(
+        PoiStore(root, rescan_interval=0), dataset_id="set",
+        poi_config=lambda: PoiConfig(osm_imports=True),  # it switches to OSM below
+    )
     runner.ingest(country="DK", implementation="fake", params=FakeParams(extra_point=True))
     st = _wait(runner)
     assert st["state"] == "done", st

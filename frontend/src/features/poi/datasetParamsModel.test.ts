@@ -3,7 +3,7 @@
 // source (the backend 422s a dataset carrying another source's params).
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { implementationFor, paramsForSource, poiSourceOf } from "./datasetParamsModel";
+import { implementationFor, paramsForSource, poiSourceOf, sourceToSwitchTo } from "./datasetParamsModel";
 import { registerPoiSource, resetPoiSources } from "./sources";
 
 beforeAll(() => registerPoiSource({ id: "fake", label: "Fake", paramKeys: ["a", "b"] }));
@@ -37,5 +37,20 @@ describe("paramsForSource", () => {
     const input = { ...draft };
     paramsForSource(input, "overpass");
     expect(input).toEqual(draft);
+  });
+});
+
+describe("sourceToSwitchTo (OSM POI imports switch)", () => {
+  const others = ["mivport"];
+  test("a new OSM draft moves to the first other source while imports are off", () => {
+    expect(sourceToSwitchTo("overpass", { isNew: true, osmImports: false, others })).toBe("mivport");
+  });
+  test("a saved OSM dataset is never switched", () => {
+    expect(sourceToSwitchTo("overpass", { isNew: false, osmImports: false, others })).toBeUndefined();
+  });
+  test("nothing moves while imports are on, or off OSM, or with no other source", () => {
+    expect(sourceToSwitchTo("overpass", { isNew: true, osmImports: true, others })).toBeUndefined();
+    expect(sourceToSwitchTo("mivport", { isNew: true, osmImports: false, others })).toBeUndefined();
+    expect(sourceToSwitchTo("overpass", { isNew: true, osmImports: false, others: [] })).toBeUndefined();
   });
 });

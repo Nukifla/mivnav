@@ -630,6 +630,7 @@ const DatasetEditForm: Component<DatasetEditFormProps> = (props) => {
               mode={mode()}
               implementation={implementation()}
               onImplementationChange={setImplementation}
+              isNew={isNew()}
               region={props.regions.find((r) => r.id === regionId())}
               value={params()}
               onChange={setParams}

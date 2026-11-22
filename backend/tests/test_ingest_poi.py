@@ -24,6 +24,20 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+@pytest.fixture(autouse=True)
+def _osm_imports_on(monkeypatch):
+    """These tests bake from (stubbed) Overpass: switch OSM imports on for a
+    runner built with no ``poi_config`` (tests/test_poi_osm_imports.py
+    covers the default, off)."""
+    from mivnav.features.poi import config as poi_config
+    from mivnav.features.poi import ingest
+
+    class _OsmOn(poi_config.PoiConfig):
+        osm_imports: bool = True
+
+    monkeypatch.setattr(ingest, "PoiConfig", _OsmOn)
+
+
 STUB_ELEMENTS = [
     {
         "type": "node",
@@ -200,6 +214,7 @@ def test_bake_uses_config_provided_url_and_zooms(tmp_path: Path, monkeypatch):
     from mivnav.features.poi.store import PoiStore
 
     cfg = PoiConfig(
+        osm_imports=True,
         overpass_url="https://overpass.example/api",
         min_zoom=7,
         max_zoom=9,
@@ -261,6 +276,7 @@ def test_runtime_wires_the_real_search_index_into_the_poi_ingest_runner(
             "data_root": str(tmp_path / "data"),
             "search": {"db_path": str(tmp_path / "search" / "index.sqlite3")},
             "signalk": {"enabled": False},
+            "poi": {"osm_imports": True},
         }
     )
     runtime = Runtime(
@@ -392,6 +408,7 @@ def _run_country_bake(tmp_path, monkeypatch, *, use_area: bool):
     from mivnav.features.poi.store import PoiStore
 
     cfg = PoiConfig(
+        osm_imports=True,
         overpass_use_area=use_area,
     )
     regions = (Region(id="denmark", name="Denmark", country="DK"),)
@@ -493,7 +510,7 @@ def test_bake_coast_filters_every_kind_and_drops_settlements(tmp_path, monkeypat
     from mivnav.features.poi.ingest import PoiIngestRunner
     from mivnav.features.poi.store import PoiStore
 
-    cfg = PoiConfig()
+    cfg = PoiConfig(osm_imports=True)
     regions = (Region(id="test", name="Test", min_lon=8.0, min_lat=48.0, max_lon=12.0, max_lat=58.0),)
     (tmp_path / "poi").mkdir()
     store = PoiStore(tmp_path / "poi", rescan_interval=0)
@@ -560,7 +577,7 @@ def region_client(tmp_path: Path, monkeypatch, isolated_runtime):
     poi_dir = tmp_path / "poi"
     poi_dir.mkdir()
     store = PoiStore(poi_dir, rescan_interval=0)
-    state = {"cfg": PoiConfig(), "regions": (Region(id="solent"),), "elements": [_DK_COASTAL]}
+    state = {"cfg": PoiConfig(osm_imports=True), "regions": (Region(id="solent"),), "elements": [_DK_COASTAL]}
     runner = PoiIngestRunner(
         store, poi_config=lambda: state["cfg"], regions=lambda: state["regions"]
     )
@@ -1013,7 +1030,7 @@ def test_the_next_tile_starts_on_the_server_that_answered(tmp_path: Path, monkey
     from mivnav.features.poi.ingest import PoiIngestRunner
     from mivnav.features.poi.store import PoiStore
 
-    cfg = PoiConfig(overpass_url="https://a/api", overpass_fallback_urls=("https://b/api", "https://c/api"))
+    cfg = PoiConfig(osm_imports=True, overpass_url="https://a/api", overpass_fallback_urls=("https://b/api", "https://c/api"))
     orders: list[list[str]] = []
 
     def fake_fetch(http, bbox, url, fallback_urls=(), on_server=None, **kwargs):

@@ -26,6 +26,9 @@ class PoiConfig(Frozen):
     that fill the pre-baked OSM-POI PMTiles directory (``data_root/poi``,
     not a field of this class any more — see docs/architecture/poi-ingest-config.md)."""
 
+    #: Allow baking POI datasets from OpenStreetMap (Overpass). Off by
+    #: default (Settings → Advanced); sets already baked keep showing.
+    osm_imports: bool = False
     overpass_url: str = Field(default=DEFAULT_OVERPASS_URL, min_length=1)
     #: Other Overpass instances, tried in order after ``overpass_url`` has
     #: used up its retries on one request (poi-overpass-fetch.md). ``[]``

@@ -87,6 +87,10 @@ def region_name(region: Region) -> str:
     return countries.country_name(iso) if iso is not None else region.name
 
 
+#: Why an OpenStreetMap bake was refused (``PoiConfig.osm_imports`` off).
+OSM_IMPORTS_OFF = "OpenStreetMap POI imports are turned off (Settings → Advanced)"
+
+
 class PoiIngestError(Exception):
     pass
 
@@ -350,6 +354,8 @@ class PoiIngestRunner(IngestRunner[JobStatus]):
             raise PoiIngestError("give either a bbox or a country, not both")
         impl = resolve_implementation(implementation)
         cfg = self._poi_config()
+        if impl == OVERPASS and not cfg.osm_imports:
+            raise PoiIngestError(OSM_IMPORTS_OFF)
         if bbox is None and country is None:
             # The default region (may be a country or a bbox region); its own
             # name/id drive the set.

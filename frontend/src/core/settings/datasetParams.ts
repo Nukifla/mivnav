@@ -19,6 +19,8 @@ export interface DatasetParamsProps {
   value: Record<string, unknown>;
   onChange: (value: Record<string, unknown>) => void;
   disabled: boolean;
+  /** A draft not saved yet (a form may pick a different default for it). */
+  isNew?: boolean;
 }
 
 /** Keyed by `DatasetConfig.provider`. A provider with no entry gets
